@@ -2,7 +2,7 @@
 
 The Router Support Tool collects a sanitized, point-in-time snapshot of Apollo Router and Kubernetes cluster state without requiring a router restart.
 
-The tool is built on [troubleshoot.sh](https://troubleshoot.sh), which provides the collection engine: the collectors themselves, the redaction pipeline, and assembly of collector output into a bundle.
+The tool is built on [troubleshoot.sh](https://troubleshoot.sh), which provides the collection engine: the collectors themselves, the redaction pipeline, and assembly of collector output into a bundle. **v1 uses their collectors and redactors; analyzers are deliberately out of scope** — see `specs/versions/v1.md` → Use of troubleshoot.sh for what we use, what we do not, and links into their documentation.
 
 **We define what runs through that engine** — which collectors, with which parameters, and which redaction rules — **and we own everything around it**: the Helm chart, the published spec artifact, and the Job image.
 
@@ -80,7 +80,7 @@ v1 ships **one spec** — a single base spec definition, authored once, and the 
 
 Additional specs are introduced in later milestones as new collection capabilities are added.
 
-Shipping capabilities as separate specs, rather than growing a single spec, is motivated by a concrete safety constraint: some collectors (notably `exec`-based ones) run commands inside the router's existing container and consume from its cgroup allocation rather than a separate budget. **The v1 base spec contains none of these** — it runs entirely against the API server, cAdvisor, and external endpoints. Heavier collection operations therefore warrant their own spec, with independent controls over when they run.
+Shipping capabilities as separate specs, rather than growing a single spec, is motivated by a concrete safety constraint: some collectors (notably `exec`-based ones) run commands inside the router's existing container and consume from its cgroup allocation rather than a separate budget. **The v1 base spec contains none of these** — it runs entirely against the API server, the kubelet, and external endpoints. Heavier collection operations therefore warrant their own spec, with independent controls over when they run.
 
 For example, a future `enhanced-memory` spec might use the router's diagnostics plugin to profile memory via jemalloc. Because triggering a heap dump above certain memory thresholds risks worsening the pressure it is trying to diagnose, that spec ships with its own schedule and threshold rules — independent of the base spec's cadence.
 
@@ -88,14 +88,16 @@ Collection degrades gracefully. A collector whose target does not exist — Prom
 
 #### base spec
 
-Almost all signal is gathered externally — via the k8s API, cAdvisor, or direct HTTP calls to the router's externally reachable endpoints. It is safe to run at any time, including against a degraded router. See `specs/collection/base_spec.md` for more information on what the base spec collects, including collector-level targeting details and why some previously-considered collectors (subgraph health checks, OTel reachability) were dropped.
+**All** signal is gathered externally — via the k8s API, the kubelet's Summary API, or direct HTTP calls to the router's externally reachable endpoints. Nothing in the base spec executes inside the router container, so none of its collection draws on the router's cgroup allocation. It is safe to run at any time, including against a degraded router.
+
+This is an invariant to preserve, not an incidental property of the current collector set. It became absolute when the last in-container collector was removed — the `exec` read of `APOLLO_GRAPH_REF` and `APOLLO_ROUTER_OFFICIAL_HELM_CHART`, now read from the pod spec instead (see `specs/collection/base_spec.md` → Router env vars). A collector that needs to run inside the container does not belong in the base spec; it belongs in a separate spec with its own trigger and threshold controls, for the reasons above. See `specs/collection/base_spec.md` for more information on what the base spec collects, including collector-level targeting details and why some previously-considered collectors (subgraph health checks, OTel reachability) were dropped.
 
 | Signal | Collector |
 | --- | --- |
 | Pod status, restart counts, resource limits | `clusterResources` |
 | Router version (container image tag) | `clusterResources` |
 | Runtime logs (all containers in the pod) | `logs` |
-| Container CPU and memory metrics (cAdvisor) | `containerMetrics` |
+| Container CPU and memory metrics, PSI | `nodeMetrics` (kubelet Summary API) |
 | Prometheus metrics snapshot | `http` |
 | `router.yaml` configuration | `helm` + `configMap` |
 | `APOLLO_GRAPH_REF`, `APOLLO_ROUTER_OFFICIAL_HELM_CHART` (from the pod spec) | `clusterResources` |

@@ -38,7 +38,7 @@ This reads as a semantic distinction rather than an implementation detail, and i
 | Prometheus metrics snapshot | `http` | `router-metrics` |
 | Helm values layer of the config | `helm` | `router-config-values` |
 | Rendered `router.yaml` | `configMap` | `router-config-rendered` |
-| Container CPU and memory metrics | `containerMetrics` | `router-container-metrics` |
+| Node, pod, and container CPU/memory from the kubelet | `nodeMetrics` | *(engine-fixed: `node-metrics/<node>.json`)* |
 
 The router env vars (`APOLLO_GRAPH_REF`, `APOLLO_ROUTER_OFFICIAL_HELM_CHART`) have no entry of their own: they arrive inside the pod objects `clusterResources` collects, so they land at that collector's engine-fixed path rather than one we name. See `specs/collection/base_spec.md` → Router env vars.
 

@@ -17,7 +17,7 @@ troubleshoot.sh does not assemble a metadata file for us. It is written by the *
 
 The consequence is the central design constraint here: **`meta.json` can only contain facts known when the spec is rendered** — by the Helm chart at install time, or by the Operator when it writes the spec. It cannot contain anything discovered during collection, because the content is a literal baked into the spec before any collector runs.
 
-This rules out the shape earlier design material assumed, where `meta.json` carried `router_version`, `graph_ref`, and a collection timestamp. Those are runtime facts. Nothing in the `mode: local` path assembles a file after collection completes, so they cannot be written there.
+This rules out a `meta.json` carrying `router_version`, `graph_ref`, or a collection timestamp. Those are runtime facts, and nothing in the `mode: local` path assembles a file after collection completes, so they cannot be written there.
 
 So `meta.json` does two things instead:
 
@@ -26,7 +26,7 @@ So `meta.json` does two things instead:
 
 ### Do not duplicate the engine version
 
-Every bundle already contains **`version.yaml`**, written by the engine, holding the troubleshoot.sh version that produced it (confirmed in `pkg/supportbundle/supportbundle.go`, using `constants.VERSION_FILENAME`). The collection-engine-version requirement in `specs/deployment/v1/v1.md` is satisfied by that file — `meta.json` should reference it, not restate it. A second copy could disagree with the first, and the engine's own copy is the authoritative one.
+Every bundle already contains **`version.yaml`**, [written by the engine](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/supportbundle/supportbundle.go#L163) with the troubleshoot.sh version that produced it (the filename comes from [`constants.VERSION_FILENAME`](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/constants/constants.go#L13)). The collection-engine-version requirement in `specs/deployment/v1/v1.md` is satisfied by that file — `meta.json` should reference it, not restate it. A second copy could disagree with the first, and the engine's own copy is the authoritative one.
 
 ## Contents
 
@@ -71,7 +71,7 @@ Rather than duplicating values it cannot see, `meta.json` records where they are
 
 **`meta.json` does not carry a collection timestamp.** A usable one is already inside the bundle, in a place that survives more handling than the archive filename does.
 
-troubleshoot.sh builds the bundle in a directory named from the same timestamped basename it uses for the archive (`pkg/supportbundle/supportbundle.go` — `basename = fmt.Sprintf("support-bundle-%s", time.Now().Format("2006-01-02T15_04_05"))`, and the bundle directory is that basename with the extension stripped). So the top-level directory *inside* the `.tar.gz` is `support-bundle-2026-08-11T14_23_00/`. Renaming the archive — which customers do routinely when attaching it to a ticket — does not lose it.
+troubleshoot.sh builds the bundle in a directory named from the same timestamped basename it uses for the archive — [`supportbundle.go#L91`](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/supportbundle/supportbundle.go#L91) sets `basename = fmt.Sprintf("support-bundle-%s", time.Now().Format("2006-01-02T15_04_05"))`, and the bundle directory is that basename with the extension stripped. So the top-level directory *inside* the `.tar.gz` is `support-bundle-2026-08-11T14_23_00/`. Renaming the archive — which customers do routinely when attaching it to a ticket — does not lose it.
 
 Two limits, both worth knowing before relying on it:
 

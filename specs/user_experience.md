@@ -1,5 +1,7 @@
 # User Experience
 
+This file covers both milestones, because it is written in the order a customer reads it rather than split by version. **Everything under *On-demand (flare-style) collection* is v1; everything under *Scheduled and threshold-triggered collection (v2)* is not yet built.** `specs/versions/v1.md` maps this section by section.
+
 ## The full lifecycle at a glance
 
 ```
@@ -139,11 +141,24 @@ The Job runs the collection automatically using a namespace-scoped ServiceAccoun
 
 The ServiceAccount needs the same namespace-scoped read permissions as the local path, applied by whoever has permission to create Jobs and RBAC objects in the namespace.
 
-#### Support tool output
+---
 
-A `support-bundle-<timestamp>.tar.gz` file appears in your current directory: a point-in-time snapshot of the router and cluster state. It includes router version, sanitized configuration, recent logs, metrics (if you've enabled the Prometheus endpoint), and pod status. It does not include a Redis connectivity check — connecting to Redis would mean handing the tool your Redis credentials, which we've chosen not to do. Your Redis configuration and any Redis errors in the router logs are captured, so support can still see how Redis is configured and whether the router is failing against it. Sensitive data is redacted automatically before the file is created — see [Redaction preferences](#redaction-preferences) below. You can inspect the bundle contents before sharing. Nothing persists in the cluster after collection completes, though the chart itself remains installed unless you remove it — see [Cluster footprint](#cluster-footprint) below.
+## What you get, whichever path you used
 
-#### Metrics require the Prometheus endpoint to be enabled
+The rest of this section applies to **every** v1 path — `mode: local`, `mode: job`, and the Apollo Operator. Only where a path differs is it called out.
+
+### Support tool output
+
+Collection produces a `support-bundle-<timestamp>.tar.gz`: a point-in-time snapshot of the router and cluster state. Where it lands depends on how you ran it:
+
+- **`mode: local` and the Apollo Operator** — the file appears in your current directory.
+- **`mode: job`** — the Job writes it in-cluster and your platform team retrieves it. *(Retrieval mechanism — mounted volume vs. object storage — is still being finalized.)*
+
+It includes router version, sanitized configuration, recent logs, metrics (if you've enabled the Prometheus endpoint), and pod status. It does not include a Redis connectivity check — connecting to Redis would mean handing the tool your Redis credentials, which we've chosen not to do. Your Redis configuration and any Redis errors in the router logs are captured, so support can still see how Redis is configured and whether the router is failing against it.
+
+Sensitive data is redacted automatically before the file is created — see [Redaction preferences](#redaction-preferences) below. You can inspect the bundle contents before sharing. Nothing persists in the cluster after collection completes, though the chart itself remains installed unless you remove it — see [Cluster footprint](#cluster-footprint) below.
+
+### Metrics require the Prometheus endpoint to be enabled
 
 The metrics collector targets the official chart's known metrics port (`9090`). Two settings in your `router.yaml` need to be in place for it to collect anything:
 
@@ -158,21 +173,23 @@ If the exporter is off, or bound somewhere the collector can't reach, that secti
 
 **If you're on the Apollo Operator**, see the Operator's own documentation for whether metrics are collected — the port is set by the Operator rather than by you, so it isn't something you configure.
 
-#### Redaction preferences
+### Redaction preferences
 
 By default, schema/SDL is included in the bundle since it's usually needed for diagnosis. If your schema is sensitive enough that even its presence shouldn't be shared, opt out:
 
 ```bash
 helm install router-diagnostics apollo/router-diagnostics \
-  --namespace production \
-  --set namespace=production \
-  --set mode=local \
-  --set redaction.includeSchema=false
+  --namespace production \
+  --set namespace=production \
+  --set mode=local \
+  --set redaction.includeSchema=false
 ```
 
 Everything else — JWT/auth config, header values, operation bodies in logs, subgraph URLs — is redacted automatically with no configuration available or needed. `APOLLO_KEY` is never collected under any circumstances.
 
-#### Cluster footprint
+**On the Apollo Operator** there is no chart to pass this value to. How Operator customers express the same preference is still being finalized — see `specs/deployment/v1/operator.md`.
+
+### Cluster footprint
 
 Installing the chart creates a persistent object in your cluster — the spec ConfigMap, plus Helm release metadata. This is minimal but not zero. If you'd rather leave nothing behind, remove the chart after collecting:
 
@@ -182,9 +199,15 @@ helm uninstall router-diagnostics --namespace production
 
 If you expect to run diagnostics more than once, you may prefer to leave it installed — subsequent collections then only need `kubectl support-bundle --load-cluster-specs`, with no reinstall.
 
-#### Permissions
+### Permissions for on-demand collection
 
-The chart install itself requires permission to create ConfigMaps, ServiceAccounts, and RBAC objects in the target namespace, plus (for `mode: job`) permission to create Jobs — the same level of access needed to install the router itself. `kubectl support-bundle --load-cluster-specs` (for `mode: local`) runs using your existing kubectl credentials; no additional ServiceAccount is created for that step. You need read access to pods, logs, ConfigMaps, and cluster resources in the router's namespace — standard permissions for anyone managing a k8s workload.
+The chart install itself requires permission to create ConfigMaps, ServiceAccounts, and RBAC objects in the target namespace, plus (for `mode: job`) permission to create Jobs — the same level of access needed to install the router itself. `kubectl support-bundle --load-cluster-specs` (for `mode: local`) runs using your existing kubectl credentials; no additional ServiceAccount is created for that step.
+
+Collection itself needs read access in the router's namespace to pods, pod logs, ConfigMaps, and deployments — standard permissions for anyone managing a k8s workload — plus `list` on `nodes` and `get` on `nodes/proxy`, which is how container memory and CPU are read from the kubelet. Node access is the only permission that reaches outside the namespace, and it is read-only.
+
+**`pods/exec` is not required** — nothing runs inside your router container.
+
+If you'd rather not grant `nodes/proxy`, you can decline it: you'll still get OOM kills, restart counts, configured limits, and node pressure conditions, and you'll lose container memory and CPU usage over time.
 
 ### Sharing with support
 
@@ -208,16 +231,16 @@ The chart deploys a CronJob (for scheduled collection) and a watcher Deployment 
 
 > **Open question:** this v2 chart has not yet gone through the same parameter-passing and deployment-tier analysis as the v1 chart above. Whether it can rely on the same official-chart label-based targeting, is still to be determined.
 
-### Permissions
+### Permissions for scheduled and threshold-triggered collection
 
 Installing the chart requires permission to create Deployments, CronJobs, ServiceAccounts, and RBAC objects in the target namespace — the same level of access needed to install the router itself.
 
 The chart's ServiceAccount needs:
 
 - **Namespace-scoped** (Role + RoleBinding in the router's namespace): read pods, deployments, logs, and ConfigMaps. `pods/exec` is **not** required — nothing runs inside the router container
-- **Cluster-scoped** (ClusterRole + ClusterRoleBinding): read-only access to `nodes`, since node objects are not namespaced and are required for node/container resource metrics
+- **Cluster-scoped** (ClusterRole + ClusterRoleBinding): `list` on `nodes` and `get` on `nodes/proxy`, since container memory and CPU come from the kubelet and node objects are not namespaced
 
-The only cluster-scoped permission is read-only access to node information. Everything else is confined to the router's namespace. Both are documented explicitly so customers with strict security review can approve exactly what's granted.
+Node access is the only permission that reaches beyond the router's namespace, and it is read-only. Everything else is confined to the namespace. Both are documented explicitly so customers with strict security review can approve exactly what's granted — and if you'd rather not grant `nodes/proxy`, you can decline it: you'll still get OOM kills, restart counts, configured limits, and node pressure conditions, and you'll lose container memory/CPU usage over time.
 
 ### Automatic collection
 
