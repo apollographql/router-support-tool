@@ -76,13 +76,15 @@ A collection is defined by a [troubleshoot.sh SupportBundle spec](https://troubl
 
 ### Specs
 
-v1 ships **one spec**. Additional specs are introduced in later milestones as new collection capabilities are added.
+v1 ships **one spec** — a single base spec definition, authored once, and the only collection artifact v1 produces. Deployment tiers differ only in who populates its targeting values (the Apollo Operator, or the Helm chart from customer-supplied values); they do not each get their own spec. See `specs/deployment/v1/v1.md` for why a per-tier spec was rejected.
 
-Shipping capabilities as separate specs, rather than growing a single spec, is motivated by a concrete safety constraint: some collectors (notably `exec`-based ones) run commands inside the router's existing container and consume from its cgroup allocation rather than a separate budget. Heavier collection operations therefore warrant their own spec, with independent controls over when they run.
+Additional specs are introduced in later milestones as new collection capabilities are added.
+
+Shipping capabilities as separate specs, rather than growing a single spec, is motivated by a concrete safety constraint: some collectors (notably `exec`-based ones) run commands inside the router's existing container and consume from its cgroup allocation rather than a separate budget. **The v1 base spec contains none of these** — it runs entirely against the API server, cAdvisor, and external endpoints. Heavier collection operations therefore warrant their own spec, with independent controls over when they run.
 
 For example, a future `enhanced-memory` spec might use the router's diagnostics plugin to profile memory via jemalloc. Because triggering a heap dump above certain memory thresholds risks worsening the pressure it is trying to diagnose, that spec ships with its own schedule and threshold rules — independent of the base spec's cadence.
 
-Collection degrades gracefully. A collector whose target does not exist — Prometheus not enabled, no Redis configured, no matching ConfigMap — returns empty rather than failing the run. `meta.json` records which collectors ran, so an empty section is explainable rather than mysterious.
+Collection degrades gracefully. A collector whose target does not exist — Prometheus not enabled, no matching ConfigMap, a Helm release the `helm` collector cannot find — returns empty rather than failing the run. `meta.json` records which collectors ran, so an empty section is explainable rather than mysterious.
 
 #### base spec
 
@@ -95,14 +97,15 @@ Almost all signal is gathered externally — via the k8s API, cAdvisor, or direc
 | Runtime logs (all containers in the pod) | `logs` |
 | Container CPU and memory metrics (cAdvisor) | `containerMetrics` |
 | Prometheus metrics snapshot | `http` |
-| Redis health | `redis` |
 | `router.yaml` configuration | `helm` + `configMap` |
-| `APOLLO_GRAPH_REF`, `APOLLO_ROUTER_OFFICIAL_HELM_CHART` | `exec` |
+| `APOLLO_GRAPH_REF`, `APOLLO_ROUTER_OFFICIAL_HELM_CHART` (from the pod spec) | `clusterResources` |
+
+Redis health was considered and is **not** collected in v1: the `redis` collector requires an inline connection URI, which no deployment tier can supply without placing a credential in the spec ConfigMap — and that ConfigMap is itself collected into the bundle. Redis remains visible through router logs and the collected `router.yaml`. See `specs/collection/base_spec.md`.
 
 Two of these collectors have deployment-tier-dependent behavior worth flagging here, with detail in `specs/collection/base_spec.md`:
 
 - **`router.yaml` configuration** — both `helm` and `configMap` run unconditionally; whichever matches the customer's deployment populates, the other returns empty. For the official Apollo Helm chart, the `configMap` collector targets by the chart's standard label rather than needing a release name.
-- **Prometheus metrics snapshot** — targets a fixed port known from the official Apollo Helm chart. For other supported deployment tiers, this returns empty if the port differs.
+- **Prometheus metrics snapshot** — targets a fixed port known from the official Apollo Helm chart, and requires the exporter to be both enabled and bound reachably. For raw-manifest and custom deployments the port cannot be inferred, so this returns empty by design. For the Apollo Operator the port is an Apollo-defined convention and therefore a fact to be confirmed rather than a variable to hedge — see `specs/collection/base_spec.md`.
 
 ### Redaction
 
@@ -159,7 +162,7 @@ The watcher is both trigger and circuit breaker. A two-tier model applies:
 
 Threshold rules are metric-agnostic by design. Memory and CPU are the metrics available today, but they are trailing indicators — by the time memory is climbing, the causal event has already happened. Leading indicators such as queue depth and concurrency saturation would fire earlier and point at cause rather than symptom. Because rules are metric-agnostic, adding those later is a configuration change, not a redesign.
 
-> **Note:** the v2 scheduled/threshold chart has not yet gone through the same parameter-passing and deployment-tier analysis as the v1 collection chart described in `specs/deployment/v1.md`. Whether it needs the same tiered targeting approach is still open.
+> **Note:** the v2 scheduled/threshold chart has not yet gone through the same parameter-passing and deployment-tier analysis as the v1 collection chart described in `specs/deployment/v1/v1.md`. Whether it needs the same tiered targeting approach is still open.
 
 ---
 
@@ -192,7 +195,7 @@ Deployment concerns include:
 - **Cluster footprint** — ranges from nothing (pure local invocation) to a persistent ConfigMap (chart-based invocation) to standing workloads (scheduled/threshold collection), depending on execution location
 - **Deployment tier** — how the customer deployed the router, which determines how much the tool can infer versus what the customer must supply
 
-Which tiers are supported, what each requires from the customer, and how execution location and deployment tier are actually implemented (the `router-diagnostics-spec` chart and its values) is specified per version rather than here — see `specs/deployment/v1.md` for v1's answer to all of the above.
+Which tiers are supported, what each requires from the customer, and how execution location and deployment tier are actually implemented (the `router-diagnostics` chart and its values) is specified per version rather than here — see `specs/deployment/v1/v1.md` for v1's answer to all of the above.
 
 Future delivery mechanisms belong here too. Ground Control's ClusterManager, for instance, is a way of delivering and managing these components in-cluster. This is another deployment mechanism, not a new layer.
 
