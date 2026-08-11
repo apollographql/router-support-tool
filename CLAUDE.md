@@ -64,7 +64,7 @@ When a design question arises that the specs do not answer, propose a spec chang
 These are load-bearing. Violating any of them is a correctness problem, not a style preference.
 
 - **`APOLLO_KEY` is never collected.** Not redacted — never read. It is structurally isolated in a separate Kubernetes Secret from the ConfigMap the tool reads. No redaction rule should be load-bearing for it.
-- **Empty is not failure.** A collector whose target does not exist (Prometheus disabled, no Redis configured, no matching ConfigMap) returns empty and the run continues. Collection degrades gracefully; `meta.json` records what ran so an empty section is explainable.
+- **Empty is not failure.** A collector whose target does not exist (Prometheus disabled, no matching ConfigMap, no locatable Helm release) returns empty and the run continues. Collection degrades gracefully; `meta.json` records what ran so an empty section is explainable.
 - **The tool must be safe to run against a degraded router.** Collection gathers signal externally wherever possible — k8s API, cAdvisor, external HTTP endpoints. Anything that runs *inside* the router container consumes its cgroup allocation and needs justification.
 - **`exec` collectors only run against one pod.** troubleshoot.sh's `exec` collector executes in a single arbitrarily-selected pod when a selector matches several. It is not fleet-wide. `logs` does not have this limitation.
 - **Bundles never go to Apollo.** Storage is customer-owned. Apollo has access only when a customer explicitly shares a bundle during a support engagement.
@@ -73,7 +73,52 @@ These are load-bearing. Violating any of them is a correctness problem, not a st
 
 ---
 
+## Testing and verification
+
+**Verification carries at least as much weight here as implementation, and treating it as a follow-up task is the single easiest way to ship something that looks finished and isn't.**
+
+The reason is structural. We author specs, not collection code — troubleshoot.sh already runs. So "the implementation" is a few hundred lines of YAML that will always *parse*, always produce a `.tar.gz`, and always look successful. Whether it collected the right signal, from the right pods, with sanitization actually applied, is not visible from the artifact. Only a run against a realistic cluster shows that. A spec that has never been executed against a real router is an untested hypothesis, however carefully reviewed.
+
+**The degraded case is the one that matters most.** A support bundle is often collected precisely when something is wrong, so verifying only against a healthy router validates the tool in only one condition. "Safe to run against a degraded router" is a claim in `specs/architecture.md`, and a claim is not evidence — it has to be demonstrated under real memory pressure, not reasoned about.
+
+### The verification matrix
+
+Scenarios to validate against. Not exhaustive — add cases as failure modes are found:
+
+- **All routers healthy** — baseline. Everything expected is collected, redaction runs, `meta.json` is accurate.
+- **Some routers misbehaving** — the affected pods are collected, and healthy neighbors are unaffected by collection running against degraded ones.
+- **All routers misbehaving** — the "safe to run at any time" claim holds under genuinely degraded conditions, and a bundle is still produced even when some collectors return empty.
+- **Routers under-resourced** — the negligible-resource-consumption claim holds when the container is already near its CPU or memory cgroup limit. This is where an in-container collector does damage if one is ever added.
+- **Router recently restarted** — previous-container logs are captured and startup errors appear in the bundle.
+- **OOM in progress** — for v2, that danger-zone suppression works and the tool does not trigger collection that would worsen the situation.
+
+### What every run must confirm, not just the happy path
+
+- **A bundle is produced even when collectors return empty.** Empty is not failure; a failed run is. Verify the distinction actually holds rather than assuming graceful degradation.
+- **Every empty section is empty for a known, named reason.** This is the sharper half of "empty is not failure," and the easier half to get wrong. Graceful degradation means a mis-targeted collector and a legitimately absent target produce *the same output*: nothing. So an empty section is not self-explanatory — it is either expected absence (Prometheus not enabled, no matching ConfigMap, tier without that capability) or a defect wearing the same clothes. Attribute each one. If you cannot say why a section is empty, treat it as a failure until you can, rather than reading it as graceful degradation working correctly.
+  - The defects that hide here are the ordinary ones: wrong namespace, or a namespace falling back to the kubectl context; a selector or label that does not match; a ConfigMap name that does not exist; a metrics port that differs from the spec's default, or an exporter bound to loopback; RBAC declined or never granted.
+  - **Test positive controls, not just graceful ones.** For every collector, run at least one scenario where the target definitely *does* exist and assert the section is populated with plausible content. A spec where every collector silently returns empty passes a "the bundle was produced" check perfectly and is worth nothing to support. That is the failure this repo is most likely to ship, because it looks identical to success.
+  - When absence *is* expected, `meta.json` is what records it — which is why the accuracy requirement below is load-bearing rather than cosmetic.
+- **Redaction ran.** Inspect the bundle contents. Redaction is the promise with the worst failure mode — a leak is unrecoverable once shared — and it is the one thing a customer cannot check on our behalf before sending.
+- **`meta.json` is accurate.** It is what makes an empty section explainable instead of mysterious, and what makes healthy-versus-incident bundle comparison possible. Wrong metadata is worse than absent metadata.
+- **`APOLLO_KEY` is absent.** Every scenario, every tier.
+
+### Collection engine version
+
+The engine is not ours to pin on the local paths — the customer installs the `support-bundle` binary themselves and `krew` installs latest, so only the `mode: job` image pins a version. Testing is therefore the only control available:
+
+- **Test the declared floor and a current release.** Drift cuts both ways: a plugin *older* than expected may not support a field the spec uses, and one *newer* than anything tested may change behavior or default redaction. The newer direction is unbounded, because `krew` moves on its own schedule.
+- **The declared minimum version comes from a verified run, never a guess.** If no run has established it, it is unknown — say so rather than picking a plausible number.
+- **Verify what an older plugin does with an unrecognized field** — hard error or silent ignore. A hard error is tolerable, since the customer sees it. A silent ignore means a quietly incomplete bundle nobody knows to question, which is the failure mode worth engineering against.
+- The `mode: job` image pins the engine, which makes it the reproducible path. Prefer it when a test needs a known-good collection.
+- **When a bundle looks wrong, check `version.yaml` first.** Every bundle carries it, written by troubleshoot.sh with the version that produced it — so the engine version behind any bundle is always knowable without asking the customer. Compare it against the declared floor in `meta.json`.
+
+See `specs/deployment/v1/v1.md` → Collection engine version for the requirements this implements.
+
+---
+
 ## Working in this repo
 
 - Specs are YAML consumed by troubleshoot.sh. Validate changes against the collector documentation at https://troubleshoot.sh/docs/collect/ rather than assuming a field exists.
+- **Adopting a collector or field that raises the minimum supported troubleshoot.sh version is a deliberate, reviewed change — call it out explicitly in the PR.** The collection engine is not ours to pin: for local invocation the customer supplies the `support-bundle` binary themselves and krew installs latest, so a spec field newer than their plugin fails on their machine, not ours. Treating a raised minimum as a normal edit is how an ambient compatibility risk becomes a silent one; treating it as a change-control step is the whole mitigation. See [Collection engine version](#collection-engine-version) above for what that requires in testing.
 - Customer-supplied values (namespace, selector, ConfigMap name) cannot be passed as CLI flags — troubleshoot.sh takes spec *sources*, not collector parameters. Values reach the spec via the Helm chart.
