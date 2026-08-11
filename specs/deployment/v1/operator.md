@@ -16,7 +16,7 @@ What is known so far: the Operator writes the same base spec into a cluster Conf
 
 - [ ] **Decide whether provisioning the spec ConfigMap is opt-in.** A diagnostic ConfigMap appearing in a production namespace without the customer asking for it is the kind of surprise that draws change-control friction, so the default matters. `specs/user_experience.md` currently tells customers to check their Operator configuration for whether provisioning is enabled, which needs to match whatever is decided here.
 
-- [ ] **Specify how Operator customers set preferences that other tiers set as chart values.** This is a functional gap, not a formality: `redaction.includeSchema` and the previous-container logs opt-in are chart values, and Operator customers do not install the chart. As things stand the zero-config tier has no way to opt out of including schema/SDL — likely to matter most to exactly the customers who chose the Operator.
+- [ ] **Specify how Operator customers set preferences that other tiers set as chart values.** This is a functional gap, not a formality: `redaction.includeSchema` and the `logs.maxAge` / `logs.maxLines` bounds are chart values, and Operator customers do not install the chart. As things stand the zero-config tier has no way to opt out of including schema/SDL — likely to matter most to exactly the customers who chose the Operator.
 
 - [ ] **Document which targeting values the Operator populates, and from what**, so the one-spec guarantee in `v1.md` is verifiable rather than asserted.
 

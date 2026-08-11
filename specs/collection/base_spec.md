@@ -6,6 +6,8 @@ The default collection spec is grounded in a TSH ticket analysis of the past yea
 
 These items are collected in the base spec and address the most common first-round support asks. The table below documents what is collected, how, and the permissions each collector needs. This is designed to be shared directly with customers — a platform team can review it, grant the access required for the collectors they want, and understand exactly what each one provides and what's lost if they decline it. Nothing is collected that isn't listed here.
 
+This spec declares collectors and redactors only. **v1 ships no analyzers** — the bundle is raw material for a support engineer, not a diagnosis; see `specs/versions/v1.md` → Analyzers are out of scope for v1.
+
 Every bundle also carries a `meta.json` recording what the tool was configured to do and which empty sections are expected — see `specs/collection/meta_json.md`. That file is what makes an empty section here attributable rather than mysterious.
 
 **Collector names follow the conventions in `specs/collection/collector_naming.md`, which also lists the assigned name for every collector below.** This is not a style preference: troubleshoot.sh names the bundle's directories after the collector name, so the naming convention *is* the bundle's directory layout. Adding a collector means picking its name from that convention, and renaming one is a breaking change for anything that reads a bundle path.
@@ -13,7 +15,7 @@ Every bundle also carries a `meta.json` recording what the tool was configured t
 | Signal | Source | Collected via | Resource consumed | What it tells you | Where | Notes |
 | ----- | ----- | ----- | ----- | ----- | ----- | ----- |
 | Pod status, restart counts, resource limits | k8s API | `clusterResources` collector | API server CPU | Whether pods are healthy, restart count, resource limits configured | k8s control plane | **Must be scoped with `namespaces: [<namespace>]`** — this collector defaults to every namespace in the cluster, and it collects ConfigMaps with their full `data`. See `specs/deployment/v1/v1.md` → Deployment tiers. |
-| Runtime logs | Container log stream | `logs` collector | Network bandwidth | Recent router output, crash output from previous container if enabled | Cluster network | Collected per pod, captures all containers in the pod (including proxy/mesh sidecars) Previous container logs opt-in via `values.yaml` |
+| Runtime logs | Container log stream | `logs` collector | Network bandwidth | Recent router output, plus crash output from the previous container when one exists | Cluster network | Collected per pod, captures all containers in the pod (including proxy/mesh sidecars). **Previous-container logs are always collected**, written to `<name>-previous.log` — not an opt-in. How far back and how much is bounded by `logs.maxAge` / `logs.maxLines`, defined in `specs/deployment/v1/v1.md` → Chart values |
 | Full Prometheus metrics snapshot | Router metrics endpoint | `http` collector | Network, router HTTP handler | Complete operational metrics — request rates, error rates, latency, traffic shaping state | Router network | Requires Prometheus endpoint enabled in `router.yaml`. See [Prometheus metrics: fixed port, tier-dependent](#prometheus-metrics-fixed-port-tier-dependent) below. |
 | Sanitized `router.yaml` | ConfigMap holding the rendered config | `helm` + `configMap` collectors | API server CPU | Full router configuration — traffic shaping, timeouts, plugins, feature flags | k8s control plane | Captures config as written, not effective config (env-var overrides not included). Custom redactors strip JWT keys, auth config, and inline secrets. See [`router.yaml` capture: two collectors, deployment-tier dependent](#routeryaml-capture-two-collectors-deployment-tier-dependent) below. |
 | `Router deployment env vars: APOLLO_GRAPH_REF, APOLLO_ROUTER_OFFICIAL_HELM_CHART` | Pod spec (`spec.containers[].env`) | `clusterResources` collector | API server CPU — no additional call, this data is already in the pod list | Graph ref for bundle tagging, whether the router was deployed via Apollo's official Helm chart | k8s control plane | Read from the declared pod spec, **not** by exec — see [Router env vars: read from the pod spec](#router-env-vars-read-from-the-pod-spec-not-by-exec) below. `APOLLO_KEY` is a `secretKeyRef` in the pod spec, so it is structurally absent from this data |
@@ -37,12 +39,12 @@ For **raw-manifest or other custom deployments**, neither collector can succeed 
 
 ### Router env vars: read from the pod spec, not by exec
 
-**Decision: the base spec contains no `exec` collector.** `APOLLO_GRAPH_REF` and `APOLLO_ROUTER_OFFICIAL_HELM_CHART` are read from the pod spec that `clusterResources` already collects. Earlier design material used an `exec` collector for this; it is not needed.
+**The base spec contains no `exec` collector.** `APOLLO_GRAPH_REF` and `APOLLO_ROUTER_OFFICIAL_HELM_CHART` are read from the pod spec that `clusterResources` already collects, which makes an `exec` collector unnecessary for them.
 
 Both halves are verified:
 
 - **The values are in the pod spec.** From the official chart's `templates/deployment.yaml`: `APOLLO_ROUTER_OFFICIAL_HELM_CHART` is set as `value: "true"`, and `APOLLO_GRAPH_REF` as `value: {{ .Values.managedFederation.graphRef }}` — both plain literals on the container, not references.
-- **`clusterResources` collects them.** Its `pods()` function lists full `Pod` objects and marshals the entire list, with no field filtering, to `cluster-resources/pods/<namespace>.json`. `spec.containers[].env` is included.
+- **`clusterResources` collects them.** Its [`pods()` function](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/collect/cluster_resources.go#L473) lists full `Pod` objects and marshals the entire list, with no field filtering, to `cluster-resources/pods/<namespace>.json`. `spec.containers[].env` is included.
 
 #### The two mechanisms, side by side
 
@@ -133,7 +135,7 @@ If the exporter is off, or bound where the collector cannot reach it, the collec
 
 For **raw-manifest and custom deployments**: the port cannot be inferred, so this collector returns empty rather than failing. This tier gets no metrics in v1 by design — the alternative, an optional `metricsPort` chart value, was considered and deferred; see `specs/deployment/v1/v1.md` → Rejected alternatives.
 
-For the **Apollo Operator**: **this must be stated as a fact, not hedged as a possibility.** Unlike a customer's raw manifest, the Operator's metrics port is a convention Apollo defines, so whether the base spec's fixed `:9090` matches it is knowable by inspection and is not a property of the customer's environment. Earlier wording here said metrics "return empty if the deployment's metrics port differs from `9090`," which is an evasion rather than a specification: either the Operator uses `9090` and the collector works whenever the exporter is enabled, or it does not and the spec is wrong for the tier.
+For the **Apollo Operator**: this must be stated as a fact, not hedged as a possibility. Unlike a customer's raw manifest, the Operator's metrics port is a convention Apollo defines, so whether the base spec's fixed `:9090` matches it is knowable by inspection rather than being a property of the customer's environment. "Returns empty if the port differs" would be an evasion rather than a specification: either the Operator uses `9090` and the collector works whenever the exporter is enabled, or it does not and the spec is wrong for the tier.
 
 **Open — needs an answer, not a caveat:** confirm the Apollo Operator's metrics port and bind address, then state the outcome plainly here. Two paths follow from the answer:
 
@@ -146,7 +148,7 @@ Subgraph health checks and OTel endpoint reachability were considered for the ba
 
 ### Redis health: not collected in v1 — decided
 
-**The `redis` collector is not included in the v1 base spec.** Redis connectivity is not collected. This was an open question and is now a decision, recorded here because the collector appears in earlier design material as though it were part of the base spec.
+**The `redis` collector is not included in the v1 base spec.** Redis connectivity is not collected. The reasoning is recorded in full below, because the collector is an obvious thing to reach for and the reasons against it are not obvious.
 
 #### Why it cannot be targeted
 
@@ -159,7 +161,7 @@ That places Redis health in the same category as subgraph health checks and OTel
 
 #### What is lost, precisely
 
-The collector's output is one small JSON file per instance containing `isConnected`, `error`, and the Redis server `version` — connectivity and version, **not latency.** Earlier material described it as collecting latency; it does not.
+The collector's output is one small JSON file per instance containing `isConnected`, `error`, and the Redis server `version` — connectivity and version, **not latency.** It is worth being precise about that, because a latency measurement would have been a stronger reason to want it.
 
 What survives without it covers most of the diagnostic need:
 
@@ -171,7 +173,7 @@ What is lost is an independent reachability check and the server version string.
 
 #### Rejected alternatives
 
-**Accept an optional `redisUri` chart value.** Rejected on structural grounds, not preference. A Redis URI commonly embeds credentials (`redis://user:password@host:6379`), and because the collector requires the URI inline, the chart would template that literal into the spec ConfigMap. That ConfigMap does not stay out of the bundle: **`clusterResources` collects ConfigMaps with their full `data`** (confirmed in the collector source — it lists ConfigMaps per namespace and marshals the entire object, no key filtering), writing them to `cluster-resources/configmaps/<namespace>.json`. So an inline `redisUri` would place a live credential *inside the artifact the customer sends to support*, with only a redaction rule standing between it and disclosure.
+**Accept an optional `redisUri` chart value.** Rejected on structural grounds, not preference. A Redis URI commonly embeds credentials (`redis://user:password@host:6379`), and because the collector requires the URI inline, the chart would template that literal into the spec ConfigMap. That ConfigMap does not stay out of the bundle: [**`clusterResources` collects ConfigMaps with their full `data`**](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/collect/cluster_resources.go#L2125) — it lists ConfigMaps per namespace and marshals the entire object, no key filtering — writing them to `cluster-resources/configmaps/<namespace>.json`. So an inline `redisUri` would place a live credential *inside the artifact the customer sends to support*, with only a redaction rule standing between it and disclosure.
 
 That is the decisive objection. Depending on a redactor to strip a credential the tool itself introduced is exactly the posture ruled out for `APOLLO_KEY`: no redaction rule should be load-bearing for a secret. A collector that yields one boolean and a version string does not justify creating that dependency.
 
@@ -186,7 +188,7 @@ Two further points, in case the option is revisited:
 
 ### Namespace scoping is mandatory, not a default
 
-`clusterResources` collects **ConfigMaps with their full `data`**, and if its `namespaces` field is unset it enumerates **every namespace in the cluster** (confirmed in the collector source). An unscoped run therefore sweeps every ConfigMap in the cluster — unrelated teams' application config included — into a bundle the customer may share with Apollo.
+`clusterResources` collects [**ConfigMaps with their full `data`**](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/collect/cluster_resources.go#L2125), and if its `namespaces` field is unset it [enumerates **every namespace in the cluster**](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/collect/cluster_resources.go#L132). An unscoped run therefore sweeps every ConfigMap in the cluster — unrelated teams' application config included — into a bundle the customer may share with Apollo.
 
 The spec must set `namespaces: [<namespace>]` explicitly. Note the field name: `clusterResources` takes `namespaces`, a list, while `logs` and `configMap` take a singular `namespace` string. Omitting it on `clusterResources` fails in the opposite direction from the others — more data rather than less — so nothing about the resulting bundle looks wrong. See `specs/deployment/v1/v1.md` → Deployment tiers for how the chart wires the required value into both field shapes.
 
@@ -201,29 +203,82 @@ This is why no redaction rule is load-bearing for `APOLLO_KEY`, and why any futu
 
 ### Memory and CPU information collected
 
-Note: Memory is the most nuanced collection area because different levels of granularity require fundamentally different mechanisms. What we are collecting as part of the base spec should be sufficient to detect, confirm, and characterize a memory problem. It answers: is memory growing, how fast, how close to the limit, is it heap growth. It does not answer: which specific code path is leaking. That granularity requires jemalloc heap profiling via the diagnostics plugin. We will not be including jemalloc heap profiling as part of v1 of the support tool.
+Memory is the most nuanced collection area, because different levels of granularity require fundamentally different mechanisms. What the base spec collects is sufficient to **detect, confirm, and characterize** a memory problem: is memory growing, how fast, how close to the limit, and did the kernel already kill the container. It does not answer *which code path is leaking* — that needs jemalloc heap profiling via the router's diagnostics plugin, which is out of scope for v1.
 
 | Signal | Source | Collected via | Resource consumed | What it tells you | Where | Notes |
 | ----- | ----- | ----- | ----- | ----- | ----- | ----- |
-| `container_memory_working_set_bytes` | cAdvisor / k8s metrics API |  `containerMetrics` collector |  API server CPU | How much memory k8s counts against the limit — the OOM kill threshold |  k8s control plane | cAdvisor metrics are labelled per container per pod and correctly separate data across all router pods in a fleet. This assumes one router process per container — the standard k8s deployment pattern. For non-standard topologies where multiple processes share a container, cAdvisor metrics are aggregated at the container level and cannot distinguish between individual processes. \[1\] |
-| `container_memory_rss` | cAdvisor / k8s metrics API |  `containerMetrics` collector |  API server CPU | Physical RAM in use | k8s control plane | [See \[1\]](#bookmark=id.2r6vqnoi88ik) |
-| `container_oom_events_total` | cAdvisor / k8s metrics API |  `containerMetrics` collector |  API server CPU  | How many OOM kills have occurred — customers often don't know |  k8s control plane | [See \[1\]](#bookmark=id.2r6vqnoi88ik) |
-| `process_resident_memory_bytes` | Router Prometheus endpoint | `http` collector | Network, router HTTP handler |    Process-level RSS |  Router network | Requires Prometheus endpoint enabled. Subject to the fixed-port caveat above. |
-| `container_cpu_usage_seconds_total` | cAdvisor / k8s metrics API |  `containerMetrics` collector |  API server CPU | CPU time consumed by the router container |  k8s control plane | Labelled per pod and container — fleet-wide |
-| `container_cpu_throttled_seconds_total` | cAdvisor / k8s metrics API |  `containerMetrics` collector |  API server CPU | Whether the container is hitting its CPU cgroup limit |  k8s control plane | CPU problems are more often about hitting cgroup limits than raw CPU exhaustion |
-| `process_cpu_seconds_total` | Router Prometheus endpoint |  `http` collector |  Network, router HTTP handler | CPU time consumed by the router process |  Router network | Requires Prometheus endpoint enabled. Subject to the fixed-port caveat above. |
-| Not collected: `Heap dump .prof files` | `experimental_diagnostics` plugin | `exec` collector | — | Which code path / allocation site is holding memory |  Router container cgroup | Not collected — requires `experimental_diagnostics` enabled and `supported.rs:219` fix |
-| Not collected: CPU flame graph / pprof | `pprof-rs`  |  — |  — | Which code is consuming CPU |  — | Not collected — requires router instrumentation, named future gap |
+| `memory.workingSetBytes` | kubelet Summary API | `nodeMetrics` collector | API server + kubelet CPU | How much memory k8s counts against the limit — the OOM kill threshold | k8s control plane → kubelet | Per node, per pod, per container. \[1\] |
+| `memory.rssBytes` | kubelet Summary API | `nodeMetrics` collector | API server + kubelet CPU | Physical RAM in use | k8s control plane → kubelet | \[1\] |
+| `memory.usageBytes`, `memory.availableBytes` | kubelet Summary API | `nodeMetrics` collector | API server + kubelet CPU | Usage, and headroom remaining against the limit | k8s control plane → kubelet | \[1\] |
+| `memory.pageFaults`, `memory.majorPageFaults` | kubelet Summary API | `nodeMetrics` collector | API server + kubelet CPU | Major faults indicate real paging pressure rather than growth alone | k8s control plane → kubelet | \[1\] |
+| `cpu.usageNanoCores`, `cpu.usageCoreNanoSeconds` | kubelet Summary API | `nodeMetrics` collector | API server + kubelet CPU | CPU consumed by the router container | k8s control plane → kubelet | \[1\] |
+| `cpu.psi`, `memory.psi` (pressure stall information) | kubelet Summary API | `nodeMetrics` collector | API server + kubelet CPU | Whether the container is *stalling* on CPU or memory — the contention question CPU throttling was meant to answer | k8s control plane → kubelet | Requires cgroup v2 and a recent kubelet; may be absent. Verify in the test matrix rather than assuming. |
+| Configured `resources.limits` / `requests` | Pod spec | `clusterResources` collector | API server CPU | What the usage numbers above should be compared against | k8s control plane | Already collected as part of the pod list |
+| OOM kill **occurrences** | Kubernetes events (`OOMKilling`, evictions) | `clusterResources` collector | API server CPU | That OOM kills happened, when, and how often — customers frequently do not know | k8s control plane | Per-occurrence record, retained as long as the cluster keeps events |
+| OOM kill **last state** | Pod status `lastState.terminated.reason: OOMKilled`, `restartCount` | `clusterResources` collector | API server CPU | Whether the most recent restart was an OOM kill, and how many restarts have occurred | k8s control plane | Survives event expiry, unlike the row above — the two are complementary |
+| Node `MemoryPressure` / `DiskPressure` conditions | Node objects | `clusterResources` collector | API server CPU | Whether the node itself is under pressure, distinguishing a router problem from a neighbour's | k8s control plane | |
+| `process_resident_memory_bytes` | Router Prometheus endpoint | `http` collector | Network, router HTTP handler | Process-level RSS as the router sees it | Router network | Requires the Prometheus exporter enabled and reachably bound. Subject to the fixed-port caveat above. |
+| `process_cpu_seconds_total` | Router Prometheus endpoint | `http` collector | Network, router HTTP handler | CPU time consumed by the router process | Router network | Same conditions as the row above |
+| **Not collected:** `container_cpu_throttled_seconds_total` | cAdvisor `/metrics/cadvisor` | — | — | Whether the container is hitting its CPU cgroup limit | — | The metric exists in cAdvisor, but no troubleshoot.sh collector reaches that endpoint. `cpu.psi` above is the substitute. See below. |
+| **Not collected:** `container_oom_events_total` | cAdvisor `/metrics/cadvisor` | — | — | A cumulative OOM-event counter | — | Same reason. The two OOM rows above cover the diagnostic need without it. |
+| **Not collected:** heap dump `.prof` files | `experimental_diagnostics` plugin | — | — | Which code path / allocation site is holding memory | — | Requires `experimental_diagnostics` enabled and the `supported.rs:219` fix. Would also require in-container execution, which the base spec does not do. |
+| **Not collected:** CPU flame graph / pprof | `pprof-rs` | — | — | Which code is consuming CPU | — | Requires router instrumentation; named future gap |
+
+**\[1\]** The Summary API reports per node, per pod, and per container, so signal is correctly separated across every router pod in a fleet. This assumes one router process per container — the standard k8s pattern. Where multiple processes share a container, container-level figures are aggregates and cannot distinguish between them.
+
+#### Why the Summary API and not cAdvisor's metrics endpoint
+
+The kubelet exposes two endpoints carrying container-level resource data, and only one of them is reachable:
+
+| Endpoint | Reached by | Contains |
+| --- | --- | --- |
+| `/api/v1/nodes/<node>/proxy/stats/summary` | The `nodeMetrics` collector | Per-container CPU and memory as JSON, plus PSI |
+| `/api/v1/nodes/<node>/proxy/metrics/cadvisor` | **No troubleshoot.sh collector** | cAdvisor's Prometheus series, including throttling and OOM counters |
+
+Sources, pinned so the line references stay valid:
+
+| Claim | Evidence |
+| --- | --- |
+| `nodeMetrics` queries only the Summary API path | [`k8s_node_metrics.go#L18`](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/collect/k8s_node_metrics.go#L18) — `summaryUrlTemplate = "/api/v1/nodes/%s/proxy/stats/summary"`, the only endpoint the collector builds |
+| The Summary API carries no throttling or OOM fields | [`stats/v1alpha1/types.go#L218`](https://github.com/kubernetes/kubelet/blob/v0.32.0/pkg/apis/stats/v1alpha1/types.go#L218) (`CPUStats`) and [`#L231`](https://github.com/kubernetes/kubelet/blob/v0.32.0/pkg/apis/stats/v1alpha1/types.go#L231) (`MemoryStats`) — zero occurrences of "throttl" or "oom" in the whole file |
+| No collector named `containerMetrics` exists | [`collector_shared.go#L320`](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/apis/troubleshoot/v1beta2/collector_shared.go#L320) — the `Collect` struct is the complete list of collectors the engine accepts |
+| The `http` collector cannot authenticate to the API server | [`collector_shared.go#L185`](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/apis/troubleshoot/v1beta2/collector_shared.go#L185) — `Get` accepts only static `headers`, so a bearer token would have to be a literal in the spec |
+| `clusterResources` collects no metrics | [`cluster_resources.go`](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/collect/cluster_resources.go) — zero occurrences of "metric" in the file |
+| `clusterResources` collects full pod objects, `env` included | [`cluster_resources.go#L473`](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/collect/cluster_resources.go#L473) — `pods()` marshals the whole `PodList` with no field filtering |
+| …and full ConfigMaps, `data` included | [`cluster_resources.go#L2125`](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/collect/cluster_resources.go#L2125) — `configMaps()`, same pattern |
+
+cAdvisor does carry the throttling and OOM counters — the constraint is that no troubleshoot.sh collector fetches that endpoint, and troubleshoot.sh is the engine we author against rather than one we extend.
+
+References are pinned to troubleshoot.sh `v0.120.0` and `k8s.io/kubelet` `v0.32.0`. **Re-check them whenever the declared minimum troubleshoot.sh version changes** — a collector gaining a field is exactly the kind of change that would reopen a decision recorded here. See `specs/deployment/v1/v1.md` → Collection engine version.
+
+**Why not just point the `http` collector at `/metrics/cadvisor`?** That path goes through the API server and requires authentication, and the `http` collector's `get` supports only static `headers`. A ServiceAccount bearer token would have to be templated into the spec ConfigMap — the same prohibition that rules out `redisUri`, and worse, since `clusterResources` collects that ConfigMap into the bundle. See `specs/deployment/v1/v1.md` → Chart values.
+
+#### What this costs, and what it does not
+
+Losing the two cAdvisor counters is narrower than it appears:
+
+- **OOM detection is not weakened.** Events plus pod status give occurrence, timing, count, and whether the latest restart was an OOM kill. The counter would have been one number; this is a record.
+- **CPU contention has a substitute, arguably a better one.** PSI measures whether the container is actually stalling, which is the question throttling was a proxy for. Its risk is availability, not usefulness — hence the test-matrix note.
+
+#### RBAC: `nodes/proxy` exists for exactly one reason
+
+`nodeMetrics` requires **`nodes/proxy` (get)** to reach the kubelet, plus **`nodes` (list)** to resolve node names when neither `nodeNames` nor `selector` is set. This is a heavier grant than a plain `nodes` read, and a security reviewer will treat it as such — proxying to the kubelet is a broader capability than reading node objects.
+
+It is worth being precise about why it is requested, so a customer can decline it knowingly: **`nodes/proxy` buys pre-OOM memory trajectory for customers who have not enabled the Prometheus exporter.** That is the "is memory growing, how fast, how close to the limit" question, and for those customers there is no other source for it.
+
+Declining it leaves intact: OOM kill occurrences and last state, restart counts, configured limits, node pressure conditions, and — when the exporter is enabled — process-level memory and CPU from the router itself. What is lost is container-level usage over time when Prometheus is off.
+
+**`nodeMetrics` cannot be scoped to the router's nodes.** Its `selector` matches *nodes* by label, not pods, and the chart cannot enumerate node names at render time. So this collector inherently reads beyond the router's namespace, which is the underlying reason the permission is cluster-scoped rather than a quirk of how it is written. See `specs/deployment/v1/v1.md` → Permissions.
 
 ## Service mesh and proxy environments
 
 Some customers run a service mesh or proxy (Istio, Linkerd, Envoy) as a sidecar alongside the router. Two things to note:
 
-* The proxy itself can be the root cause of what looks like a router problem — a throttled or OOMing sidecar, mTLS failures, or Envoy circuit-breaking present as router latency or subgraph failures. To catch this, the `logs` and `containerMetrics` collectors capture all containers in the pod, not just the router.
+* The proxy itself can be the root cause of what looks like a router problem — a throttled or OOMing sidecar, mTLS failures, or Envoy circuit-breaking present as router latency or subgraph failures. To catch this, the `logs` collector captures all containers in the pod, not just the router, and the kubelet Summary API reports per-container figures, so a sidecar's own memory and CPU are visible alongside the router's.
 
 * **The proxy can block a collector, and when it does the result is an empty section rather than an error.** A mesh enforcing strict mTLS intercepts inbound traffic to the pod, so a scrape originating outside the mesh — from the invoking user's machine in `mode: local`, or from a Job pod without a sidecar — can be rejected at the sidecar before the router ever sees it. Collection degrades gracefully, as designed: the run continues and the rest of the bundle is unaffected. But the failure is silent, so it needs to be recognizable.
 
-  Only the **Prometheus metrics scrape** is meaningfully exposed to this. It is the one collector in the base spec that talks directly to a router port. Everything else reaches its data through the Kubernetes API server or cAdvisor — `logs`, `clusterResources`, `containerMetrics`, `configMap` — which a service mesh does not sit in front of.
+  Only the **Prometheus metrics scrape** is meaningfully exposed to this. It is the one collector in the base spec that talks directly to a router port. Everything else reaches its data through the Kubernetes API server or the kubelet — `logs`, `clusterResources`, `nodeMetrics`, `configMap` — which a service mesh does not sit in front of.
 
   **The resulting ambiguity matters for triage.** An empty metrics section caused by mesh interception looks identical to one caused by the exporter being disabled, bound to loopback, or listening on a non-default port. The collected `router.yaml` is what separates them: if `telemetry.exporters.metrics.prometheus.enabled: true` is present in the config and the metrics section is still empty, the exporter was on and something prevented the scrape from landing — a mesh policy, the bind address, or the port. That inference only works because config and metrics are collected together, which is an argument for keeping them in the same spec.
 

@@ -2,13 +2,15 @@
 
 An external diagnostic tool that collects a sanitized, point-in-time snapshot of Apollo Router and Kubernetes cluster state without requiring a router restart.
 
-The tool is built on [troubleshoot.sh](https://troubleshoot.sh). **We author SupportBundle specs and custom redactors — we do not build collection, packaging, or redaction logic.** If a task seems to call for writing collection machinery, check whether troubleshoot.sh already provides it.
+The tool is built on [troubleshoot.sh](https://troubleshoot.sh). **We author SupportBundle specs and custom redactors — we do not build collection, packaging, or redaction logic.** If a task seems to call for writing collection machinery, check whether troubleshoot.sh already provides it. v1 uses their collectors and redactors only; **analyzers are out of scope** — see `specs/versions/v1.md`.
 
 ---
 
 ## Start here
 
 Read `specs/architecture.md` before working on anything in this repo. It defines the layer model that the directory structure follows.
+
+Then read the version file for the milestone you are working on — `specs/versions/v1.md` for v1. The architecture describes the design across versions; the version file is what says which parts of it are actually in scope now.
 
 ---
 
@@ -32,11 +34,20 @@ When adding new content, file it by which of these it changes. A change that tou
 specs/
 ├── architecture.md          # Layer model. Required reading.
 ├── user_experience.md       # Customer-facing flows and invocation
+├── versions/                # What each version ships, and what it deliberately does not
 ├── collection/              # What is collected and how it is sanitized
 ├── trigger/                 # What causes collection to happen
 ├── storage/                 # Where bundles land
 └── deployment/              # Execution location, RBAC, deployment tiers
 ```
+
+### `specs/versions/` — start here for anything version-specific
+
+**Every version of the tool has exactly one file in `specs/versions/`, and that file is the authority on what that version ships.** v1 is `specs/versions/v1.md`; v2 gets `specs/versions/v2.md`, and so on.
+
+Read the relevant version file before answering "does the tool do X?" — the layer specs describe designs across versions, so they will happily describe a v2 trigger or a future spec as though it exists. The version file is what says whether a capability is actually in the milestone you are being asked about. `specs/versions/v1.md` also records our use of troubleshoot.sh — which parts of the engine v1 uses, and that analyzers are out of scope.
+
+When a new version is planned, create its file in this directory first. It states what the version ships, what it deliberately excludes, and where the detail lives; the layer specs then carry the detail. A version file that only lists inclusions is incomplete — **the exclusions are the more useful half**, because they are what stops a later reader assuming a capability exists.
 
 ---
 
@@ -66,10 +77,10 @@ These are load-bearing. Violating any of them is a correctness problem, not a st
 - **`APOLLO_KEY` is never collected.** Not redacted — never read. It is structurally isolated in a separate Kubernetes Secret from the ConfigMap the tool reads. No redaction rule should be load-bearing for it.
 - **Empty is not failure.** A collector whose target does not exist (Prometheus disabled, no matching ConfigMap, no locatable Helm release) returns empty and the run continues. Collection degrades gracefully; `meta.json` records what ran so an empty section is explainable.
 - **The tool must be safe to run against a degraded router.** Collection gathers signal externally wherever possible — k8s API, cAdvisor, external HTTP endpoints. Anything that runs *inside* the router container consumes its cgroup allocation and needs justification.
-- **`exec` collectors only run against one pod.** troubleshoot.sh's `exec` collector executes in a single arbitrarily-selected pod when a selector matches several. It is not fleet-wide. `logs` does not have this limitation.
+- **`exec` collectors only run against one pod.** troubleshoot.sh's `exec` collector executes in a single arbitrarily-selected pod when a selector matches several. It is not fleet-wide; `logs` does not have this limitation.
 - **Bundles never go to Apollo.** Storage is customer-owned. Apollo has access only when a customer explicitly shares a bundle during a support engagement.
 - **v1 is Kubernetes-only.** ECS, Fargate, and standalone VM deployments are out of scope.
-- **v1 ships one spec, on-demand only.** Additional specs and automated triggers are later milestones. Do not assume they exist.
+- **v1 ships one spec, on-demand only.** Additional specs and automated triggers are later milestones. Do not assume they exist. `specs/versions/v1.md` is the authority on v1's scope — check it before assuming a capability is present.
 
 ---
 
@@ -89,7 +100,7 @@ Scenarios to validate against. Not exhaustive — add cases as failure modes are
 - **Some routers misbehaving** — the affected pods are collected, and healthy neighbors are unaffected by collection running against degraded ones.
 - **All routers misbehaving** — the "safe to run at any time" claim holds under genuinely degraded conditions, and a bundle is still produced even when some collectors return empty.
 - **Routers under-resourced** — the negligible-resource-consumption claim holds when the container is already near its CPU or memory cgroup limit. This is where an in-container collector does damage if one is ever added.
-- **Router recently restarted** — previous-container logs are captured and startup errors appear in the bundle.
+- **Router recently restarted** — previous-container logs are captured (the `logs` collector always requests them, writing `<name>-previous.log`) and startup errors appear in the bundle.
 - **OOM in progress** — for v2, that danger-zone suppression works and the tool does not trigger collection that would worsen the situation.
 
 ### What every run must confirm, not just the happy path
