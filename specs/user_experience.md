@@ -22,7 +22,7 @@ Customer shares bundle with support
         │
         ▼
 Support has: router version, sanitized config, metrics
-             (if enabled), logs, pod state, Redis health
+             (if enabled), logs, pod state
         │
         ▼
 (Future) - Temporary dashboard created for support with the metrics collected
@@ -47,16 +47,34 @@ The tool supports three deployment tiers in v1:
 
 If you deployed the router with a hand-authored manifest or a custom chart that doesn't follow the official chart's conventions, this tool still works — you'll just need to supply more. None of the official chart's conventions (standard labels, known ConfigMap naming) apply, so the tool can't locate your router's config or pod on its own. Supply your namespace, pod selector, and ConfigMap name, and the same chart and collection engine used for every other tier handles the rest.
 
-### Setup: one chart, two modes
+### Setup, step one: install the collection plugin
 
-Getting a spec into the cluster is done through a single Helm chart, `router-diagnostics-spec`, with a `mode` value controlling how collection actually runs:
+Unless you're using `mode: job` below, install the `support-bundle` kubectl plugin on the machine you'll collect from. This is a one-time step, and it's separate from installing the chart — the chart puts the collection spec in your cluster, and the plugin is what actually runs it:
+
+```bash
+kubectl krew install support-bundle
+```
+
+This installs a single binary in your path and deploys nothing to your cluster. If you don't use `krew`, or you're collecting from CI, download the standalone binary instead:
+
+```bash
+curl -L https://github.com/replicatedhq/troubleshoot/releases/latest/download/support-bundle_linux_amd64.tar.gz | tar xzvf -
+```
+
+`krew` always installs the latest release. If you're collecting from CI or work somewhere that needs a pinned, reproducible toolchain, prefer the standalone download with a specific release tag in place of `latest`.
+
+You don't need this if you're using `mode: job` — the Job runs collection in-cluster with the binary already in its image, so nothing is installed on your machine.
+
+### Setup, step two: one chart, two modes
+
+Getting a spec into the cluster is done through a single Helm chart, `router-diagnostics`, with a `mode` value controlling how collection actually runs:
 
 - **`mode: local`** — renders the spec into a cluster ConfigMap. You run the collection yourself from a machine with kubectl access.
 - **`mode: job`** — renders the same spec plus a Kubernetes Job (and its ServiceAccount/RBAC) that runs the collection in-cluster. Use this if your own kubectl access to production is restricted — a platform team installs the chart and runs the Job on your behalf.
 
 Both modes use the same spec and collection engine; only who runs it and where differs.
 
-**If you're on the Apollo Operator**, you don't need this chart at all — the Operator already installs a fully-populated spec for you. Skip to [Apollo Operator customers](#apollo-operator-customers) below.
+**If you're on the Apollo Operator**, you don't need this chart at all — the Operator installs the same spec for you, with the values already filled in. You do still need the plugin from step one. Skip to [Apollo Operator customers](#apollo-operator-customers) below.
 
 **If you're on the official Apollo Helm chart:**
 
@@ -96,13 +114,13 @@ Since none of the official chart's conventions apply to your deployment, supply 
 
 ### Apollo Operator customers
 
-Zero configuration. The Operator installs a fully-populated spec into a cluster ConfigMap directly, using the deployment conventions it already knows. Run:
+Zero configuration. The Operator writes the spec into a cluster ConfigMap directly, filling in its values from the deployment conventions it already knows. It is the same spec every other tier runs — only the values come from the Operator instead of from you. Run:
 
 ```bash
 kubectl support-bundle --load-cluster-specs
 ```
 
-Nothing else is required. Note: today this requires opting in via the Operator — check with your Operator configuration whether spec provisioning is enabled.
+No chart install and no values to supply — the plugin from step one is the only thing you set up. Note: today this requires opting in via the Operator — check with your Operator configuration whether spec provisioning is enabled.
 
 ### Restricted-access clusters (`mode: job`)
 
@@ -123,11 +141,22 @@ The ServiceAccount needs the same namespace-scoped read permissions as the local
 
 #### Support tool output
 
-A `support-bundle-<timestamp>.tar.gz` file appears in your current directory: a point-in-time snapshot of the router and cluster state. It includes router version, sanitized configuration, recent logs, metrics (if you've enabled the Prometheus endpoint), pod status, and Redis health if Redis is configured. Sensitive data is redacted automatically before the file is created — see [Redaction preferences](#redaction-preferences) below. You can inspect the bundle contents before sharing. Nothing persists in the cluster after collection completes, though the chart itself remains installed unless you remove it — see [Cluster footprint](#cluster-footprint) below.
+A `support-bundle-<timestamp>.tar.gz` file appears in your current directory: a point-in-time snapshot of the router and cluster state. It includes router version, sanitized configuration, recent logs, metrics (if you've enabled the Prometheus endpoint), and pod status. It does not include a Redis connectivity check — connecting to Redis would mean handing the tool your Redis credentials, which we've chosen not to do. Your Redis configuration and any Redis errors in the router logs are captured, so support can still see how Redis is configured and whether the router is failing against it. Sensitive data is redacted automatically before the file is created — see [Redaction preferences](#redaction-preferences) below. You can inspect the bundle contents before sharing. Nothing persists in the cluster after collection completes, though the chart itself remains installed unless you remove it — see [Cluster footprint](#cluster-footprint) below.
 
 #### Metrics require the Prometheus endpoint to be enabled
 
-The metrics collector targets the official chart's known metrics port (`9090`). If you haven't enabled the Prometheus exporter in your `router.yaml` (`telemetry.exporters.metrics.prometheus.enabled: true`), that section of the bundle will simply be empty — the rest of the bundle is unaffected. This currently applies to the official chart tier only; other tiers will not have metrics populated in v1.
+The metrics collector targets the official chart's known metrics port (`9090`). Two settings in your `router.yaml` need to be in place for it to collect anything:
+
+- `telemetry.exporters.metrics.prometheus.enabled: true` — turns the exporter on.
+- `telemetry.exporters.metrics.prometheus.listen` — the address the exporter binds to. It must be reachable from outside the router container; if it's left bound to loopback, the collector can't scrape it even with the exporter enabled.
+
+Note that the chart's `serviceMonitor.enabled` value is a *different* switch. It exposes the metrics port on the Service and renders a ServiceMonitor for your own Prometheus, but it does not enable the exporter — the two settings above are what do that. You can have one without the other.
+
+If the exporter is off, or bound somewhere the collector can't reach, that section of the bundle will simply be empty — the rest of the bundle is unaffected.
+
+**If you're on a raw-manifest or custom deployment**, the collector has no way to discover your metrics port, so this section will be empty in v1 regardless of how your exporter is configured. Everything else in the bundle is unaffected, and your `router.yaml` still shows support how telemetry is set up.
+
+**If you're on the Apollo Operator**, see the Operator's own documentation for whether metrics are collected — the port is set by the Operator rather than by you, so it isn't something you configure.
 
 #### Redaction preferences
 
@@ -185,7 +214,7 @@ Installing the chart requires permission to create Deployments, CronJobs, Servic
 
 The chart's ServiceAccount needs:
 
-- **Namespace-scoped** (Role + RoleBinding in the router's namespace): read pods, deployments, logs, and ConfigMaps; `pods/exec` for the graph ref read
+- **Namespace-scoped** (Role + RoleBinding in the router's namespace): read pods, deployments, logs, and ConfigMaps. `pods/exec` is **not** required — nothing runs inside the router container
 - **Cluster-scoped** (ClusterRole + ClusterRoleBinding): read-only access to `nodes`, since node objects are not namespaced and are required for node/container resource metrics
 
 The only cluster-scoped permission is read-only access to node information. Everything else is confined to the router's namespace. Both are documented explicitly so customers with strict security review can approve exactly what's granted.
