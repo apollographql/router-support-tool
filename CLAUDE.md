@@ -68,6 +68,7 @@ Specs describe current intended behavior. They are reviewed and merged like code
 
 - **Spec first.** A behavior change starts as a spec change. Update the spec, then implement against it — not the other way round.
 - **Reconcile, don't diverge.** If an implementation change is already in hand and the spec does not describe it, the change is not done until the spec is updated in the same PR. "The code does X but the spec says Y" is a defect in one of the two, never an acceptable steady state.
+- **Before considering an edit to a cross-referenced fact complete, grep `specs/` for every place that references it.** A fact stated in one file and pointed to from others has drifted before — check every pointer, not just the file you edited.
 - **Divergence is a bug — report it.** If you find implementation and spec disagreeing, say so explicitly and ask which one is correct rather than assuming the code is authoritative and quietly editing the spec to match.
 - **Never infer intended behavior from the implementation alone.** When answering a question about how the tool is supposed to behave, the spec is the answer. The code is evidence about what was built, not about what was intended.
 

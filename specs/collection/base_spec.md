@@ -35,7 +35,7 @@ For the **official Apollo router Helm chart**, the `configMap` collector succeed
 
 For **other Helm-based deployments**, the `helm` collector is more likely to succeed, since it does not depend on the deployment following the official chart's specific labeling convention.
 
-For **raw-manifest or other custom deployments**, neither collector can succeed on convention alone — the customer supplies the ConfigMap name and pod selector as chart values, and the `configMap` collector targets by those instead. This tier is supported in v1; it just requires more from the customer. See `specs/deployment/v1/v1.md`.
+For **raw-manifest or other custom deployments**, neither collector can succeed on convention alone — the customer supplies the ConfigMap name and pod selector as chart values, and the `configMap` collector targets by those instead. This tier is supported in v1; it just requires more from the customer. See `specs/deployment/v1/v1.md` → Chart values for the `selector`/`configMapName` definitions.
 
 ### Where graph schema/SDL actually lands, and why it is sometimes absent for a reason that has nothing to do with redaction
 
