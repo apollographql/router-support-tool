@@ -50,7 +50,7 @@ The layer boundaries are drawn to make each anticipated extension touch exactly 
 
 | Change | Touches |
 | --- | --- |
-| Add a new `enhanced-memory` spec | Collection only |
+| Add a collector to the base spec | Collection only |
 | Add threshold-triggered collection | Trigger only |
 | Add leading-indicator metrics to threshold rules | Trigger only — the watcher takes a metric name as config so a new metric is a config addition |
 | Add S3/GCS bundle storage | Storage only |
@@ -68,7 +68,7 @@ A collection is defined by a [troubleshoot.sh SupportBundle spec](https://troubl
 
 ### Specs
 
-v1 ships **one spec** — a single base spec definition, authored once, and the only collection artifact v1 produces. Deployment tiers differ only in who populates its targeting values (the Apollo Operator, or the Helm chart from customer-supplied values); they do not each get their own spec. See `specs/deployment/v1/v1.md` for why a per-tier spec was rejected.
+v1 ships **one spec** — a single base spec definition, authored once, and the only collection artifact v1 produces.
 
 Additional specs may be introduced in later milestones as new collection capabilities are added.
 
@@ -76,30 +76,23 @@ Shipping capabilities as separate specs, rather than growing a single spec, is m
 
 For example, a future `enhanced-memory` spec might use the router's diagnostics plugin to profile memory via jemalloc. Because triggering a heap dump above certain memory thresholds risks worsening the pressure it is trying to diagnose, that spec ships with its own schedule and threshold rules — independent of the base spec's cadence.
 
-Collection degrades gracefully. A collector whose target does not exist — Prometheus not enabled, no matching ConfigMap, a Helm release the helm collector cannot find — returns empty rather than failing the run. meta.json's content is baked into the spec when it is rendered, before collection ever runs, so it can only state what absences are expected — for example, a tier that can't support a given collector, or a customer's own redaction choice — not observe what happened during the run itself. That is what makes an empty section explainable rather than mysterious. See `specs/collection/meta_json.md` for more.
+Collection degrades gracefully. A collector whose target does not exist — Prometheus not enabled, no matching ConfigMap, a Helm release the `helm` collector cannot find — returns empty rather than failing the run. `meta.json` is what makes an empty section explainable rather than mysterious — see `specs/collection/meta_json.md` for how.
 
 #### base spec
 
 **All** signal is gathered externally — via the k8s API, the kubelet's Summary API, or direct HTTP calls to the router's externally reachable endpoints. Nothing in the base spec executes inside the router container, so none of its collection draws on the router's cgroup allocation. It is safe to run at any time, including against a degraded router.
-
-This is an invariant to preserve, not an incidental property of the current collector set. It became absolute when the last in-container collector was removed — the `exec` read of `APOLLO_GRAPH_REF` and `APOLLO_ROUTER_OFFICIAL_HELM_CHART`, now read from the pod spec instead (see `specs/collection/base_spec.md` → Router env vars). A collector that needs to run inside the container does not belong in the base spec; it belongs in a separate spec with its own trigger and threshold controls, for the reasons above. See `specs/collection/base_spec.md` for more information on what the base spec collects, including collector-level targeting details and why some previously-considered collectors (subgraph health checks, OTel reachability) were dropped.
 
 | Signal | Collector |
 | --- | --- |
 | Pod status, restart counts, resource limits | `clusterResources` |
 | Router version (container image tag) | `clusterResources` |
 | Runtime logs (all containers in the pod) | `logs` |
-| Container CPU and memory metrics, PSI | `nodeMetrics` (kubelet Summary API) |
+| Container CPU and memory metrics | `nodeMetrics` (kubelet Summary API) |
 | Prometheus metrics snapshot | `http` |
 | `router.yaml` configuration | `helm` + `configMap` |
 | `APOLLO_GRAPH_REF`, `APOLLO_ROUTER_OFFICIAL_HELM_CHART` (from the pod spec) | `clusterResources` |
 
-Redis health was considered and is **not** collected in v1: the `redis` collector requires an inline connection URI, which no deployment tier can supply without placing a credential in the spec ConfigMap — and that ConfigMap is itself collected into the bundle. Redis remains visible through router logs and the collected `router.yaml`. See `specs/collection/base_spec.md`.
-
-Two of these collectors have deployment-tier-dependent behavior worth flagging here, with detail in `specs/collection/base_spec.md`:
-
-- **`router.yaml` configuration** — both `helm` and `configMap` run unconditionally; whichever matches the customer's deployment populates, the other returns empty. For the official Apollo Helm chart, the `configMap` collector targets by the chart's standard label rather than needing a release name.
-- **Prometheus metrics snapshot** — targets a fixed port known from the official Apollo Helm chart, and requires the exporter to be both enabled and bound reachably. For raw-manifest and custom deployments the port cannot be inferred, so this returns empty by design. For the Apollo Operator the port is an Apollo-defined convention and therefore a fact to be confirmed rather than a variable to hedge — see `specs/collection/base_spec.md`.
+See `specs/collection/base_spec.md` for collector-level targeting details and what was considered and left out.
 
 ### Redaction
 
@@ -111,10 +104,6 @@ Two categories:
 
 - **Built-in redactors** (troubleshoot.sh, no Apollo work) — passwords and API tokens, AWS credentials, connection strings, IP addresses, bearer tokens and Authorization headers.
 - **Custom redactors** (authored by Apollo) — JWT and auth config, header values in config (keys preserved, values stripped), operation bodies in logs, subgraph URLs, graph schema/SDL.
-
-One of these — schema/SDL — is customer-configurable (included by default, opt-out available); the mechanism for setting that preference is a chart value, described in `specs/deployment/`. Everything else is fixed with no customer configuration.
-
-Schema/SDL has no collector of its own — by default it is simply *left in* the same ConfigMap collection everything else in the namespace goes through, since inclusion is the default. Only when the customer sets `redaction.includeSchema: false` does a redactor act on that collection, stripping the `supergraph-schema.graphql` key wherever it appears. Absent redaction entirely, schema/SDL is also frequently missing from a bundle for a reason unrelated to that setting: it only reaches the cluster when the customer supplies a local supergraph file to the chart, so managed-federation customers who fetch their supergraph from GraphOS at runtime never have it there to include or strip in the first place. See `specs/collection/base_spec.md` → Where graph schema/SDL actually lands.
 
 `APOLLO_KEY` is never collected in the first place. It is structurally isolated in a separate Kubernetes Secret from the ConfigMap the tool reads, so no redaction rule is load-bearing for it.
 
@@ -139,7 +128,7 @@ See `specs/trigger/` for more information.
 
 ### On-demand (v1)
 
-The user invokes a collection. No standing infrastructure is required.
+The user invokes a collection. No standing compute workload is required — nothing polls or runs between invocations, unlike the CronJob and watcher below. Getting the spec into the cluster still leaves a small footprint (the spec ConfigMap, and for restricted-access clusters a Job); see [Deployment model](#deployment-model) below.
 
 ### Scheduled (v2)
 
@@ -168,8 +157,6 @@ The same spec produces the same bundle regardless of destination. A change in st
 
 One invariant holds across every storage option: **bundles are never pushed to Apollo infrastructure.** Storage is customer-owned and customer-controlled. Apollo has access only when a customer explicitly shares a bundle as part of a support engagement.
 
-Storage is not something later milestones add to the architecture, it is a dimension that has always been present. Local invocation (`mode: local`) has a storage answer (the invoking user's local disk), it is simply the degenerate case requiring no design. Any unattended collection, the restricted-access Job (`mode: job`) as well as v2's scheduled and threshold-triggered collection, for example, is what forces the question to be answered explicitly, because no user is present to receive the bundle.
-
 Storage options, their tradeoffs, and the reasoning behind the current choice are specified in `specs/storage/`.
 
 ---
@@ -186,7 +173,7 @@ Deployment concerns include:
 
 - **Execution location** — local plugin vs. in-cluster Job or CronJob
 - **RBAC** — the user's own kubeconfig vs. a namespace-scoped ServiceAccount
-- **Cluster footprint** — ranges from nothing (pure local invocation) to a persistent ConfigMap (chart-based invocation) to standing workloads (scheduled/threshold collection), depending on execution location
+- **Cluster footprint** — ranges from a persistent ConfigMap (on-demand, chart-based invocation) to standing workloads (scheduled/threshold collection), depending on execution location
 - **Deployment tier** — how the customer deployed the router, which determines how much the tool can infer versus what the customer must supply
 
 Which tiers are supported, what each requires from the customer, and how execution location and deployment tier are actually implemented (the `router-diagnostics` chart and its values) is specified per version rather than here — see `specs/deployment/v1/v1.md` for v1's answer to all of the above.

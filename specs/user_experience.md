@@ -43,7 +43,7 @@ The tool supports three deployment tiers in v1:
 
 | Deployment | Support in v1 | What you supply |
 | --- | --- | --- |
-| **Apollo Operator** | Full support, zero config | Nothing |
+| **Apollo Operator** | Full support, zero config once enabled | Nothing |
 | **Official Apollo router Helm chart** | Full support | `namespace` only |
 | **Raw manifests / custom deployment** | Supported | `namespace`, `selector`, `configMapName` |
 
@@ -164,9 +164,9 @@ Sensitive data is redacted automatically before the output bundle is created —
 The metrics collector targets the official chart's known metrics port (`9090`). Two settings in your `router.yaml` need to be in place for it to collect anything:
 
 - `telemetry.exporters.metrics.prometheus.enabled: true` — turns the exporter on.
-- `telemetry.exporters.metrics.prometheus.listen` — the address the exporter binds to. It must be reachable from outside the router container; if it's left bound to loopback, the collector can't scrape it even with the exporter enabled.
+- `telemetry.exporters.metrics.prometheus.listen` — the `host:port` the exporter binds to. Both halves matter: the host must be reachable from outside the router container (loopback won't work even with the exporter enabled), and the port must stay `9090` — the collector targets that port specifically and has no way to discover a different one, so changing it (for example to avoid a conflict with another workload) makes this section empty the same way an unreachable host would.
 
-Note that the chart's `serviceMonitor.enabled` value is a *different* switch. It exposes the metrics port on the Service and renders a ServiceMonitor for your own Prometheus, but it does not enable the exporter — the two settings above are what do that. You can have one without the other.
+Note that the **router chart's** `serviceMonitor.enabled` value (not `router-diagnostics`) is a *different* switch. It exposes the metrics port on the Service and renders a ServiceMonitor for your own Prometheus, but it does not enable the exporter — the two settings above are what do that. You can have one without the other.
 
 If the exporter is off, or bound somewhere the collector can't reach, that section of the bundle will simply be empty — the rest of the bundle is unaffected.
 
