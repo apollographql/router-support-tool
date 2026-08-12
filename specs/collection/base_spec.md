@@ -37,6 +37,19 @@ For **other Helm-based deployments**, the `helm` collector is more likely to suc
 
 For **raw-manifest or other custom deployments**, neither collector can succeed on convention alone — the customer supplies the ConfigMap name and pod selector as chart values, and the `configMap` collector targets by those instead. This tier is supported in v1; it just requires more from the customer. See `specs/deployment/v1/v1.md`.
 
+### Where graph schema/SDL actually lands, and why it is sometimes absent for a reason that has nothing to do with redaction
+
+`specs/architecture.md` documents schema/SDL as a customer-configurable redactor (`redaction.includeSchema`), which implies there is a schema *collector* the redactor attaches to. There is not. Verified by rendering the official chart's `templates/supergraph-cm.yaml`:
+
+- Schema/SDL, when the chart puts it in the cluster at all, lands in a **separate ConfigMap**, `<release>-supergraph` — distinct from the main config ConfigMap (`<release>`) that `router.yaml` capture reads.
+- **It renders only when the customer sets `.Values.supergraphFile`** — i.e., only for customers who hand the chart a local supergraph file at install time. Customers on managed federation, who supply `APOLLO_GRAPH_REF`/`APOLLO_KEY` and let the router fetch the supergraph from Uplink/GraphOS at runtime, never populate this ConfigMap. For that population, **schema is absent from the cluster regardless of `redaction.includeSchema`** — the setting has nothing to redact.
+- It carries the same `app.kubernetes.io/name=router` label as every other chart resource (`router.labels` includes `router.selectorLabels`, which sets it), so it is swept up by the same `clusterResources` ConfigMap collection as everything else in the namespace — landing at `cluster-resources/configmaps/<namespace>.json`, alongside the main config ConfigMap, not at any schema-specific path.
+
+Two consequences that are not yet reflected elsewhere in these specs:
+
+1. **The schema redactor has no dedicated collector to attach to.** It must operate on the generic ConfigMap collection output — finding and stripping the `supergraph-schema.graphql` key wherever a ConfigMap in the dump happens to carry it — because there is no separate schema collection to redact instead. This belongs in `specs/collection/data_sanitization/` when that file is written; it is flagged here because it changes what the redactor's implementation has to target.
+2. **An absent schema needs two different `expected_absences` reasons, not one.** "Customer set `redaction.includeSchema: false`" and "customer never supplied `.Values.supergraphFile`, so there was no supergraph ConfigMap to collect" are different facts, and only the chart knows which one applies. Collapsing them would misreport an opt-out as a missing capability, or vice versa, in exactly the kind of empty section CLAUDE.md's testing rules require to be attributable.
+
 ### Router env vars: read from the pod spec, not by exec
 
 **The base spec contains no `exec` collector.** `APOLLO_GRAPH_REF` and `APOLLO_ROUTER_OFFICIAL_HELM_CHART` are read from the pod spec that `clusterResources` already collects, which makes an `exec` collector unnecessary for them.
@@ -66,7 +79,7 @@ Both approaches read the same two variables. They differ in where they read from
 **`exec` genuinely wins two rows**, and both are real losses rather than rounding errors:
 
 1. **It resolves indirected values.** A graph ref supplied via `valueFrom` or `envFrom` is a literal to `exec` and a reference to the pod-spec read. Detailed by tier below.
-2. **It would have given us a proper collection timestamp for free.** Appending `date -u` to the command it already runs costs no extra call and no extra permission, and produces a UTC value from the router container's own clock — the same clock that stamps the router's logs, which is what a support engineer wants when lining a bundle up against an incident timeline. Dropping `exec` gives that up: the bundle's directory name becomes the only timestamp, and it has no timezone. See `specs/collection/meta_json.md` → Collection time, where that option is recorded as rejected *because of this decision*.
+2. **It would have given us a proper collection timestamp for free.** Appending `date -u` to the command it already runs costs no extra call and no extra permission, and produces a UTC value from the router container's own clock — the same clock that stamps the router's logs, which is what a support engineer wants when lining a bundle up against an incident timeline. Dropping `exec` gives that up: the bundle's directory name becomes the only timestamp, and it has no timezone. See `specs/collection/meta_json.md` → Collection time, where that option is recorded as unavailable *because of this decision* — not rejected on its own merits; nothing is wrong with the mechanism itself.
 
 The pod-spec read wins on permissions, on reliability in the degraded case that motivates the entire tool, on fleet coverage, on cost, and on respecting a customer's decision to keep a value in a Secret.
 
@@ -90,13 +103,15 @@ Pod specs record env vars as *declared*; `exec` would read them as *resolved*. T
 
 **`APOLLO_ROUTER_OFFICIAL_HELM_CHART` — nothing is lost, at any tier.** Its job is to identify the deployment type, and non-official-chart deployments do not set it at all, so **absence is the signal.** Pod-spec reading and `exec` report it identically: present and `"true"` means official chart, absent means not.
 
-**`APOLLO_GRAPH_REF` — depends on how it is supplied**, which only varies outside the official chart, since the chart's plain-value rendering is verified above:
+**`APOLLO_GRAPH_REF` on the official chart: also nothing is lost, by construction, not by observed likelihood.** The chart has exactly one field for it, `managedFederation.graphRef`, and that field renders **only** as a plain `value:` — there is no chart-native option that puts the graph ref behind a `valueFrom` or `envFrom`, unlike `APOLLO_KEY`, which explicitly supports `existingSecret`. So for any customer using the chart's own documented interface, the graph ref is a literal in the pod spec, full stop, and `clusterResources`'s unfiltered pod list always captures it (given the `pods` read the base spec already requires).
+
+The table below applies only to a customer who deliberately steps outside that interface — using the chart's generic `extraEnvVars`/`extraEnvVarsCM`/`extraEnvVarsSecret` escape hatches to inject `APOLLO_GRAPH_REF` some other way instead of setting `managedFederation.graphRef`:
 
 | How the customer supplies it | Pod-spec read | Recoverable from the bundle at all? |
 | --- | --- | --- |
-| Plain `value:` | Works | Yes |
-| `envFrom` a ConfigMap | Shows the ConfigMap name only | **Yes** — `clusterResources` collects ConfigMaps with their `data`, so the value is in the bundle, just in a different file |
-| `valueFrom` a Secret | Shows the reference only | No — and deliberately so, see below |
+| `managedFederation.graphRef` (the chart's own field) | Works | Yes — always, this is the only path the chart itself produces |
+| `extraEnvVars` with `envFrom` a ConfigMap | Shows the ConfigMap name only | **Yes** — `clusterResources` collects ConfigMaps with their `data`, so the value is in the bundle, just in a different file |
+| `extraEnvVars` with `valueFrom` a Secret | Shows the reference only | No — and deliberately so, see below |
 | Apollo Operator | Unknown — see below | Unknown |
 
 **The Secret case is a reason to prefer this approach, not a cost of it.** A customer who puts their graph ref in a Secret has chosen to treat it as sensitive. `exec` reads the resolved environment and would pull that value into the bundle regardless of that choice; the pod-spec read respects it. Given that this tool's central promise is that it is safe to run, silently overriding a customer's own indirection is the wrong default.
@@ -166,10 +181,26 @@ The collector's output is one small JSON file per instance containing `isConnect
 What survives without it covers most of the diagnostic need:
 
 - Redis errors and connection failures appear in the **router logs**.
-- The Redis configuration block appears in the collected **`router.yaml`**, so support can see that Redis is configured and how.
+- The Redis configuration block appears in the collected **`router.yaml`**, so support can see that Redis is configured and how. See below for exactly where.
 - Router cache metrics are captured by the **Prometheus scrape** when enabled.
 
 What is lost is an independent reachability check and the server version string.
+
+#### Where Redis configuration appears in `router.yaml`
+
+Not a single block — the router has three independent Redis-backed caches, each configured under its own path, verified against the router's own config source (`apollographql/router` @ `v2.17.0`):
+
+| Feature | Config path | Source |
+| --- | --- | --- |
+| Query-plan cache | `supergraph.query_planning.cache.redis` | [`QueryPlanRedisCache`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/configuration/mod.rs#L1032) |
+| APQ cache | `apq.router.cache.redis` | [`Apq.router.cache`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/configuration/mod.rs#L907), `Cache.redis` |
+| Entity caching | `preview_entity_cache.subgraph.all.redis`, `.subgraphs.<name>.redis` | [`entity.rs` `Config.redis`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/cache/entity.rs#L140) — **note: `preview_entity_cache` is marked deprecated in the router source**, so this path may not be stable across router versions |
+
+All three route through the same underlying shape (`urls`, `username`, `password`, `timeout`, `ttl`, `namespace`, `tls`, `required_to_start`, `reset_ttl`, `pool_size`). None of this is collected by a dedicated mechanism — whichever of these three the customer has enabled rides along in the same `helm`/`configMap` capture as the rest of `router.yaml`, the same way any other config section would.
+
+**Credential handling here is unresolved and explicitly deferred, not assumed safe.** `username`/`password` are separate fields that take precedence over anything embedded in `urls` — so a customer *can* keep the connection string itself credential-free. But nothing requires that: a customer who instead embeds `redis://user:password@host:6379` directly in `urls` has a live credential collected into the bundle via ordinary config capture, no chart value involved. Whether troubleshoot.sh's built-in connection-string redactor actually matches and strips that shape has not been verified.
+
+**TODO: will be addressed in `specs/collection/data_sanitization/`.** That is where redaction behavior belongs, and it needs to cover this specific case before this section can claim the credential is handled — not assume the built-in redactor catches it.
 
 #### Rejected alternatives
 

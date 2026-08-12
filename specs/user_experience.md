@@ -6,11 +6,11 @@ This file covers both milestones, because it is written in the order a customer 
 
 ```
 Customer wants to collect data
-    - They have hit an issue and want data
-    - they want to collect a "healthy" snapshot
+    - They have hit an issue and want to collect data to attach to an support ticket
+    - They want to collect a "healthy" snapshot
         │
         ▼
-V1: User (or platform team) triggers collection via the chart
+V1: User (or platform team) triggers collection — via the chart, or with the Apollo Operator
 V2: watcher already triggered a bundle at threshold crossing
         │
         ▼
@@ -20,7 +20,7 @@ V2: watcher already triggered a bundle at threshold crossing
 Customer inspects bundle contents (optional)
         │
         ▼
-Customer shares bundle with support
+Customer shares bundle with support (or keeps it for their own knowledge)
         │
         ▼
 Support has: router version, sanitized config, metrics
@@ -35,7 +35,7 @@ Support has: router version, sanitized config, metrics
 
 ## On-demand (flare-style) collection
 
-**Note: this tool currently supports Kubernetes deployments only.** Non-k8s deployments, including ECS, Fargate, or standalone EC2/VM deployments, aren't covered by this flow. If you're running on ECS or another non-k8s environment, the closest equivalent today is a manual collection: your sanitized `router.yaml`, router version, recent logs (via CloudWatch Logs export), and container-level CPU/memory metrics (via CloudWatch Container Insights) cover much of the same ground the automated bundle would.
+**Note: this tool currently supports Kubernetes deployments only.** Non-k8s deployments, including ECS, Fargate, or standalone EC2/VM deployments, aren't covered by this flow. If you're running on ECS or another non-k8s environment, the closest equivalent today is a manual collection: your sanitized `router.yaml`, router version, recent logs (via CloudWatch Logs export, for example), and container-level CPU/memory metrics (via CloudWatch Container Insights, for example) cover much of the same ground the automated bundle would.
 
 ### Which path applies to you
 
@@ -76,9 +76,9 @@ Getting a spec into the cluster is done through a single Helm chart, `router-dia
 
 Both modes use the same spec and collection engine; only who runs it and where differs.
 
-**If you're on the Apollo Operator**, you don't need this chart at all — the Operator installs the same spec for you, with the values already filled in. You do still need the plugin from step one. Skip to [Apollo Operator customers](#apollo-operator-customers) below.
+**If you use the Apollo Operator**, you don't need this chart at all — the Operator installs the same spec for you, with the values already filled in. You do still need the plugin from step one. Skip to [Apollo Operator customers](#apollo-operator-customers) below.
 
-**If you're on the official Apollo Helm chart:**
+**If you deployed with the official Apollo Helm chart:**
 
 ```bash
 helm install router-diagnostics apollo/router-diagnostics \
@@ -95,7 +95,7 @@ kubectl support-bundle --load-cluster-specs
 
 `namespace` is the only value you need to supply. The chart's collectors target your router by its standard `app.kubernetes.io/name=router` label — no release name, selector, or ConfigMap name is needed **for the official chart.**
 
-**If you're on a raw-manifest or custom deployment:**
+**If you use a raw-manifest or custom deployment:**
 
 ```bash
 helm install router-diagnostics apollo/router-diagnostics \
@@ -137,26 +137,27 @@ helm install router-diagnostics apollo/router-diagnostics \
 
 If you're on a raw-manifest or custom deployment, also set `selector` and `configMapName` as shown above.
 
-The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle. *(Bundle retrieval mechanism — mounted volume vs. object storage — is still being finalized.)* No one outside the platform team needs raw kubectl access. This is the same spec and collection engine as `mode: local`; only who runs it and how the bundle is retrieved differs.
+The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle. *(TODO: Bundle retrieval mechanism — mounted volume vs. object storage — is still being finalized.)* No one outside the platform team needs raw kubectl access. This is the same spec and collection engine as `mode: local`; only who runs it and how the bundle is retrieved differs.
 
-The ServiceAccount needs the same namespace-scoped read permissions as the local path, applied by whoever has permission to create Jobs and RBAC objects in the namespace.
+The ServiceAccount needs the same read permissions as the local path — namespace-scoped, plus the cluster-scoped `nodes`/`nodes/proxy` grant for container metrics — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below. Applying them requires someone who can create Jobs, namespace RBAC, *and* cluster-scoped RBAC in the cluster — see [Setup, step two](#setup-step-two-one-chart-two-modes) above for what that means for who can install this mode.
 
 ---
 
 ## What you get, whichever path you used
 
-The rest of this section applies to **every** v1 path — `mode: local`, `mode: job`, and the Apollo Operator. Only where a path differs is it called out.
+The rest of this section applies to **every** path — `mode: local`, `mode: job`, and the Apollo Operator. Only where a path differs is it called out.
 
 ### Support tool output
 
 Collection produces a `support-bundle-<timestamp>.tar.gz`: a point-in-time snapshot of the router and cluster state. Where it lands depends on how you ran it:
 
-- **`mode: local` and the Apollo Operator** — the file appears in your current directory.
-- **`mode: job`** — the Job writes it in-cluster and your platform team retrieves it. *(Retrieval mechanism — mounted volume vs. object storage — is still being finalized.)*
+- **`mode: local`** — the file appears in your current directory.
+- **`mode: job`** — the Job writes it in-cluster and your platform team retrieves it. *(TODO: Retrieval mechanism — mounted volume vs. object storage — is still being finalized.)*
+- **Apollo Operator** - TODO, see `specs/deployment/v1/operator.md`
 
-It includes router version, sanitized configuration, recent logs, metrics (if you've enabled the Prometheus endpoint), and pod status. It does not include a Redis connectivity check — connecting to Redis would mean handing the tool your Redis credentials, which we've chosen not to do. Your Redis configuration and any Redis errors in the router logs are captured, so support can still see how Redis is configured and whether the router is failing against it.
+It includes router version, sanitized configuration, recent logs, metrics (if you've enabled the Prometheus endpoint), and pod status. Your Redis configuration and any Redis errors in the router logs are captured, so support can still see how Redis is configured and whether the router is failing against it.
 
-Sensitive data is redacted automatically before the file is created — see [Redaction preferences](#redaction-preferences) below. You can inspect the bundle contents before sharing. Nothing persists in the cluster after collection completes, though the chart itself remains installed unless you remove it — see [Cluster footprint](#cluster-footprint) below.
+Sensitive data is redacted automatically before the output bundle is created — see [Redaction preferences](#redaction-preferences) below. You can inspect the bundle contents before sharing. Nothing persists in the cluster after collection completes, though the chart itself remains installed unless you remove it — see [Cluster footprint](#cluster-footprint) below.
 
 ### Metrics require the Prometheus endpoint to be enabled
 
@@ -169,7 +170,7 @@ Note that the chart's `serviceMonitor.enabled` value is a *different* switch. It
 
 If the exporter is off, or bound somewhere the collector can't reach, that section of the bundle will simply be empty — the rest of the bundle is unaffected.
 
-**If you're on a raw-manifest or custom deployment**, the collector has no way to discover your metrics port, so this section will be empty in v1 regardless of how your exporter is configured. Everything else in the bundle is unaffected, and your `router.yaml` still shows support how telemetry is set up.
+**If you're on a raw-manifest or custom deployment**, the collector has no way to discover your metrics port, so this section will be empty regardless of how your exporter is configured. Everything else in the bundle is unaffected, and your `router.yaml` still shows support how telemetry is set up.
 
 **If you're on the Apollo Operator**, see the Operator's own documentation for whether metrics are collected — the port is set by the Operator rather than by you, so it isn't something you configure.
 
@@ -187,7 +188,7 @@ helm install router-diagnostics apollo/router-diagnostics \
 
 Everything else — JWT/auth config, header values, operation bodies in logs, subgraph URLs — is redacted automatically with no configuration available or needed. `APOLLO_KEY` is never collected under any circumstances.
 
-**On the Apollo Operator** there is no chart to pass this value to. How Operator customers express the same preference is still being finalized — see `specs/deployment/v1/operator.md`.
+**On the Apollo Operator** there is no chart to pass this value to. TODO: How Operator customers express the same preference is still being finalized — see `specs/deployment/v1/operator.md`.
 
 ### Cluster footprint
 
@@ -201,13 +202,15 @@ If you expect to run diagnostics more than once, you may prefer to leave it inst
 
 ### Permissions for on-demand collection
 
-The chart install itself requires permission to create ConfigMaps, ServiceAccounts, and RBAC objects in the target namespace, plus (for `mode: job`) permission to create Jobs — the same level of access needed to install the router itself. `kubectl support-bundle --load-cluster-specs` (for `mode: local`) runs using your existing kubectl credentials; no additional ServiceAccount is created for that step.
+Installing with `mode: local` requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself. `kubectl support-bundle --load-cluster-specs` then runs using your existing kubectl credentials; no additional ServiceAccount is created for that step.
+
+Installing with `mode: job` requires more: creating a Job, a ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — a **ClusterRole and ClusterRoleBinding** granting `nodes`/`nodes/proxy`. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
 
 Collection itself needs read access in the router's namespace to pods, pod logs, ConfigMaps, and deployments — standard permissions for anyone managing a k8s workload — plus `list` on `nodes` and `get` on `nodes/proxy`, which is how container memory and CPU are read from the kubelet. Node access is the only permission that reaches outside the namespace, and it is read-only.
 
 **`pods/exec` is not required** — nothing runs inside your router container.
 
-If you'd rather not grant `nodes/proxy`, you can decline it: you'll still get OOM kills, restart counts, configured limits, and node pressure conditions, and you'll lose container memory and CPU usage over time.
+If you'd rather not grant `nodes/proxy`, you can decline it: you'll still get OOM kills, restart counts, configured limits, and node pressure conditions, but you'll lose container memory and CPU usage over time.
 
 ### Sharing with support
 
@@ -222,18 +225,16 @@ Attach the `.tar.gz` to your support ticket.
 Install the Helm chart. This must be installed in the same Kubernetes cluster and namespace as your router:
 
 ```bash
-helm install apollo-router-diagnostics apollo/router-diagnostics \
+helm install router-diagnostics apollo/router-diagnostics \
   --namespace production \
   -f values.yaml
 ```
 
 The chart deploys a CronJob (for scheduled collection) and a watcher Deployment (for threshold-triggered collection). Both are disabled by default — enable them by setting `scheduled.base.enabled: true` and `thresholds.enabled: true` in your `values.yaml`.
 
-> **Open question:** this v2 chart has not yet gone through the same parameter-passing and deployment-tier analysis as the v1 chart above. Whether it can rely on the same official-chart label-based targeting, is still to be determined.
-
 ### Permissions for scheduled and threshold-triggered collection
 
-Installing the chart requires permission to create Deployments, CronJobs, ServiceAccounts, and RBAC objects in the target namespace — the same level of access needed to install the router itself.
+Installing the chart requires permission to create Deployments, CronJobs, a ServiceAccount, and namespace-scoped RBAC in the target namespace, plus — because container memory/CPU come from the kubelet — a cluster-scoped ClusterRole and ClusterRoleBinding. That last one is a broader capability than installing the router needs; see the v1 discussion of the same asymmetry in `specs/deployment/v1/v1.md` → Permissions.
 
 The chart's ServiceAccount needs:
 

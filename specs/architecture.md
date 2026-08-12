@@ -2,16 +2,9 @@
 
 The Router Support Tool collects a sanitized, point-in-time snapshot of Apollo Router and Kubernetes cluster state without requiring a router restart.
 
-The tool is built on [troubleshoot.sh](https://troubleshoot.sh), which provides the collection engine: the collectors themselves, the redaction pipeline, and assembly of collector output into a bundle. **v1 uses their collectors and redactors; analyzers are deliberately out of scope** — see `specs/versions/v1.md` → Use of troubleshoot.sh for what we use, what we do not, and links into their documentation.
+The tool is built on [troubleshoot.sh](https://troubleshoot.sh), which provides the collection engine: the collectors themselves, the redaction pipeline, and assembly of collector output into a bundle. See `specs/versions/v1.md` for more details regarding our use of troubleshoot.sh including what we use, what we do not, and links into their documentation.
 
-**We define what runs through that engine** — which collectors, with which parameters, and which redaction rules — **and we own everything around it**: the Helm chart, the published spec artifact, and the Job image.
-
-If a task seems to call for writing collection machinery, check whether troubleshoot.sh already provides it. The following is ours:
-
-- How the spec reaches a cluster
-- How collection is triggered
-- How a bundle is stored
-- How redaction preferences are exposed to the customer
+**We define what runs through that engine** — which collectors, with which parameters, and which redaction rules — **and we own everything around it**: the Helm chart that renders the spec, the spec itself, and the Job image.
 
 See `specs/user_experience.md` for a detailed description of the user experience.
 
@@ -61,8 +54,7 @@ The layer boundaries are drawn to make each anticipated extension touch exactly 
 | Add threshold-triggered collection | Trigger only |
 | Add leading-indicator metrics to threshold rules | Trigger only — the watcher takes a metric name as config so a new metric is a config addition |
 | Add S3/GCS bundle storage | Storage only |
-| Deploy the tool via Ground Control's ClusterManager | Deployment model only |
-| Support a new deployment tier | Deployment model only |
+| Deploy the tool via Ground Control | Deployment model only |
 
 Redaction and execution location are deliberately *not* layers — the first because it does not vary independently of collection, the second because it is a choice about where existing functions run rather than a function of its own.
 
@@ -78,13 +70,13 @@ A collection is defined by a [troubleshoot.sh SupportBundle spec](https://troubl
 
 v1 ships **one spec** — a single base spec definition, authored once, and the only collection artifact v1 produces. Deployment tiers differ only in who populates its targeting values (the Apollo Operator, or the Helm chart from customer-supplied values); they do not each get their own spec. See `specs/deployment/v1/v1.md` for why a per-tier spec was rejected.
 
-Additional specs are introduced in later milestones as new collection capabilities are added.
+Additional specs may be introduced in later milestones as new collection capabilities are added.
 
 Shipping capabilities as separate specs, rather than growing a single spec, is motivated by a concrete safety constraint: some collectors (notably `exec`-based ones) run commands inside the router's existing container and consume from its cgroup allocation rather than a separate budget. **The v1 base spec contains none of these** — it runs entirely against the API server, the kubelet, and external endpoints. Heavier collection operations therefore warrant their own spec, with independent controls over when they run.
 
 For example, a future `enhanced-memory` spec might use the router's diagnostics plugin to profile memory via jemalloc. Because triggering a heap dump above certain memory thresholds risks worsening the pressure it is trying to diagnose, that spec ships with its own schedule and threshold rules — independent of the base spec's cadence.
 
-Collection degrades gracefully. A collector whose target does not exist — Prometheus not enabled, no matching ConfigMap, a Helm release the `helm` collector cannot find — returns empty rather than failing the run. `meta.json` records which collectors ran, so an empty section is explainable rather than mysterious.
+Collection degrades gracefully. A collector whose target does not exist — Prometheus not enabled, no matching ConfigMap, a Helm release the helm collector cannot find — returns empty rather than failing the run. meta.json's content is baked into the spec when it is rendered, before collection ever runs, so it can only state what absences are expected — for example, a tier that can't support a given collector, or a customer's own redaction choice — not observe what happened during the run itself. That is what makes an empty section explainable rather than mysterious. See `specs/collection/meta_json.md` for more.
 
 #### base spec
 
@@ -122,6 +114,8 @@ Two categories:
 
 One of these — schema/SDL — is customer-configurable (included by default, opt-out available); the mechanism for setting that preference is a chart value, described in `specs/deployment/`. Everything else is fixed with no customer configuration.
 
+Schema/SDL has no collector of its own — by default it is simply *left in* the same ConfigMap collection everything else in the namespace goes through, since inclusion is the default. Only when the customer sets `redaction.includeSchema: false` does a redactor act on that collection, stripping the `supergraph-schema.graphql` key wherever it appears. Absent redaction entirely, schema/SDL is also frequently missing from a bundle for a reason unrelated to that setting: it only reaches the cluster when the customer supplies a local supergraph file to the chart, so managed-federation customers who fetch their supergraph from GraphOS at runtime never have it there to include or strip in the first place. See `specs/collection/base_spec.md` → Where graph schema/SDL actually lands.
+
 `APOLLO_KEY` is never collected in the first place. It is structurally isolated in a separate Kubernetes Secret from the ConfigMap the tool reads, so no redaction rule is load-bearing for it.
 
 See `specs/collection/data_sanitization/` for more details on redaction.
@@ -137,7 +131,7 @@ Triggers are independent mechanisms that invoke a collection spec. Each can be a
 | Trigger | Milestone | Mechanism |
 | --- | --- | --- |
 | On-demand (flare) | v1 | User invokes collection directly |
-| Scheduled base collection | v2 | CronJob on a configurable interval (default 15m) |
+| Scheduled base collection | v2 | CronJob on a configurable interval |
 | Threshold-triggered | v2 | Watcher Deployment polling metrics against threshold rules |
 | Scheduled additional specs | v3 | CronJob on an independent cadence per spec |
 
@@ -163,8 +157,6 @@ The watcher is both trigger and circuit breaker. A two-tier model applies:
 - **Danger zone** (e.g. 90%+) — *suppresses* collection regardless of other rules, preventing the tool from worsening a degraded situation.
 
 Threshold rules are metric-agnostic by design. Memory and CPU are the metrics available today, but they are trailing indicators — by the time memory is climbing, the causal event has already happened. Leading indicators such as queue depth and concurrency saturation would fire earlier and point at cause rather than symptom. Because rules are metric-agnostic, adding those later is a configuration change, not a redesign.
-
-> **Note:** the v2 scheduled/threshold chart has not yet gone through the same parameter-passing and deployment-tier analysis as the v1 collection chart described in `specs/deployment/v1/v1.md`. Whether it needs the same tiered targeting approach is still open.
 
 ---
 

@@ -9,7 +9,7 @@ That makes naming a compatibility surface. Rename a collector and every path in 
 **`<domain>-<signal>`** — a domain prefix, then what the data *is*.
 
 - **Prefix by domain.** `router-` for signal about the router itself, `cluster-` for signal about the Kubernetes environment around it. A new domain gets a new prefix.
-- **Name by signal, not by mechanism.** The name says what the data is, not how it was obtained. `router-config`, not `router-configmap-read`. `router-deployment-env`, not `router-exec-env`.
+- **Name by signal, not by mechanism.** The name says what the data is, not how it was obtained. `router-config`, not `router-configmap-read`. `router-metrics`, not `router-http-scrape`.
 - **Lowercase kebab-case**, no underscores, no capitals. This matches troubleshoot.sh's own directory naming and avoids surprises across filesystems.
 
 ### Why mechanism must stay out of the name

@@ -4,6 +4,13 @@ An external diagnostic tool that collects a sanitized, point-in-time snapshot of
 
 The tool is built on [troubleshoot.sh](https://troubleshoot.sh). **We author SupportBundle specs and custom redactors — we do not build collection, packaging, or redaction logic.** If a task seems to call for writing collection machinery, check whether troubleshoot.sh already provides it. v1 uses their collectors and redactors only; **analyzers are out of scope** — see `specs/versions/v1.md`.
 
+What's ours to build is everything *around* their engine:
+
+- How the spec reaches a cluster
+- How collection is triggered
+- How a bundle is stored
+- How redaction preferences are exposed to the customer
+
 ---
 
 ## Start here
@@ -23,6 +30,8 @@ Three layers, each varying independently:
 - **Storage** — where the bundle lands. Local disk (v1); customer-provided S3/GCS (v2).
 
 **Deployment is not a layer.** Where collection runs (local plugin vs. in-cluster Job/CronJob), RBAC, cluster footprint, and deployment tier are deployment concerns. Execution location adds no new capability — it is the same function relocated. See the reasoning in `specs/architecture.md`.
+
+**The test for whether something is a layer or a deployment concern (or any other non-layer concept): can the system's behavior be fully described without reference to it?** *"On threshold crossing, collect the base spec, write to object storage"* is a complete description — where the process happens to run never comes up, so execution location isn't a layer. Contrast storage, where *"the bundle goes somewhere"* leaves a genuine open question that has to be answered. Apply this test before proposing a new layer or arguing an existing boundary is wrong.
 
 When adding new content, file it by which of these it changes. A change that touches two layers is a signal the boundary was drawn wrong — flag it rather than splitting the content.
 
@@ -75,7 +84,7 @@ When a design question arises that the specs do not answer, propose a spec chang
 These are load-bearing. Violating any of them is a correctness problem, not a style preference.
 
 - **`APOLLO_KEY` is never collected.** Not redacted — never read. It is structurally isolated in a separate Kubernetes Secret from the ConfigMap the tool reads. No redaction rule should be load-bearing for it.
-- **Empty is not failure.** A collector whose target does not exist (Prometheus disabled, no matching ConfigMap, no locatable Helm release) returns empty and the run continues. Collection degrades gracefully; `meta.json` records what ran so an empty section is explainable.
+- **Empty is not failure.** A collector whose target does not exist (Prometheus disabled, no matching ConfigMap, no locatable Helm release) returns empty and the run continues. Collection degrades gracefully; `meta.json` records which absences are *expected* (it is static, baked in at render time — it cannot report what actually ran) so an empty section is explainable rather than mysterious.
 - **The tool must be safe to run against a degraded router.** Collection gathers signal externally wherever possible — k8s API, cAdvisor, external HTTP endpoints. Anything that runs *inside* the router container consumes its cgroup allocation and needs justification.
 - **`exec` collectors only run against one pod.** troubleshoot.sh's `exec` collector executes in a single arbitrarily-selected pod when a selector matches several. It is not fleet-wide; `logs` does not have this limitation.
 - **Bundles never go to Apollo.** Storage is customer-owned. Apollo has access only when a customer explicitly shares a bundle during a support engagement.
