@@ -1,7 +1,5 @@
 # User Experience
 
-This file covers both milestones, because it is written in the order a customer reads it rather than split by version. **Everything under *On-demand (flare-style) collection* is v1; everything under *Scheduled and threshold-triggered collection (v2)* is not yet built.** `specs/versions/v1.md` maps this section by section.
-
 ## The full lifecycle at a glance
 
 ```
@@ -10,8 +8,7 @@ Customer wants to collect data
     - They want to collect a "healthy" snapshot
         │
         ▼
-V1: User (or platform team) triggers collection — via the chart, or with the Apollo Operator
-V2: watcher already triggered a bundle at threshold crossing
+User (or platform team) triggers collection — via the chart, or with the Apollo Operator
         │
         ▼
 .tar.gz bundle produced, redacted automatically
@@ -139,7 +136,7 @@ If you're on a raw-manifest or custom deployment, also set `selector` and `confi
 
 The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle. *(TODO: Bundle retrieval mechanism — mounted volume vs. object storage — is still being finalized.)* No one outside the platform team needs raw kubectl access. This is the same spec and collection engine as `mode: local`; only who runs it and how the bundle is retrieved differs.
 
-The ServiceAccount needs the same read permissions as the local path — namespace-scoped, plus the cluster-scoped `nodes`/`nodes/proxy` grant for container metrics — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below. Applying them requires someone who can create Jobs, namespace RBAC, *and* cluster-scoped RBAC in the cluster — see [Setup, step two](#setup-step-two-one-chart-two-modes) above for what that means for who can install this mode.
+The ServiceAccount needs the same read permissions as the local path — namespace-scoped, plus the two cluster-scoped grants for node access and container metrics — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below. Applying them requires someone who can create Jobs, namespace RBAC, *and* cluster-scoped RBAC in the cluster — see [Setup, step two](#setup-step-two-one-chart-two-modes) above for what that means for who can install this mode.
 
 ---
 
@@ -204,54 +201,19 @@ If you expect to run diagnostics more than once, you may prefer to leave it inst
 
 Installing with `mode: local` requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself. `kubectl support-bundle --load-cluster-specs` then runs using your existing kubectl credentials; no additional ServiceAccount is created for that step.
 
-Installing with `mode: job` requires more: creating a Job, a ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — a **ClusterRole and ClusterRoleBinding** granting `nodes`/`nodes/proxy`. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
+Installing with `mode: job` requires more: creating a Job, a ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
 
-Collection itself needs read access in the router's namespace to pods, pod logs, ConfigMaps, and deployments — standard permissions for anyone managing a k8s workload — plus `list` on `nodes` and `get` on `nodes/proxy`, which is how container memory and CPU are read from the kubelet. Node access is the only permission that reaches outside the namespace, and it is read-only.
+Collection itself needs read access in the router's namespace to pods, pod logs, ConfigMaps, and deployments — standard permissions for anyone managing a k8s workload — plus two separate cluster-scoped grants, deliberately kept independent so you can decline the more sensitive one without losing the other:
+
+- **`list`/`get` on `nodes`** — an ordinary, low-risk read of node objects. This is what surfaces node pressure conditions (`MemoryPressure`, `DiskPressure`).
+- **`get` on `nodes/proxy`** — authorizes proxying requests through the API server to the kubelet. This is what's needed to read container memory and CPU from the kubelet Summary API.
+
+Both are read-only, and node access is the only permission that reaches outside the namespace.
 
 **`pods/exec` is not required** — nothing runs inside your router container.
 
-If you'd rather not grant `nodes/proxy`, you can decline it: you'll still get OOM kills, restart counts, configured limits, and node pressure conditions, but you'll lose container memory and CPU usage over time.
+If you'd rather not grant `nodes/proxy`, you can decline it on its own and keep `nodes` access: you'll still get OOM kills, restart counts, configured limits, and node pressure conditions, but you'll lose container memory and CPU usage over time.
 
 ### Sharing with support
 
 Attach the `.tar.gz` to your support ticket.
-
----
-
-## Scheduled and threshold-triggered collection (v2)
-
-### Setup
-
-Install the Helm chart. This must be installed in the same Kubernetes cluster and namespace as your router:
-
-```bash
-helm install router-diagnostics apollo/router-diagnostics \
-  --namespace production \
-  -f values.yaml
-```
-
-The chart deploys a CronJob (for scheduled collection) and a watcher Deployment (for threshold-triggered collection). Both are disabled by default — enable them by setting `scheduled.base.enabled: true` and `thresholds.enabled: true` in your `values.yaml`.
-
-### Permissions for scheduled and threshold-triggered collection
-
-Installing the chart requires permission to create Deployments, CronJobs, a ServiceAccount, and namespace-scoped RBAC in the target namespace, plus — because container memory/CPU come from the kubelet — a cluster-scoped ClusterRole and ClusterRoleBinding. That last one is a broader capability than installing the router needs; see the v1 discussion of the same asymmetry in `specs/deployment/v1/v1.md` → Permissions.
-
-The chart's ServiceAccount needs:
-
-- **Namespace-scoped** (Role + RoleBinding in the router's namespace): read pods, deployments, logs, and ConfigMaps. `pods/exec` is **not** required — nothing runs inside the router container
-- **Cluster-scoped** (ClusterRole + ClusterRoleBinding): `list` on `nodes` and `get` on `nodes/proxy`, since container memory and CPU come from the kubelet and node objects are not namespaced
-
-Node access is the only permission that reaches beyond the router's namespace, and it is read-only. Everything else is confined to the namespace. Both are documented explicitly so customers with strict security review can approve exactly what's granted — and if you'd rather not grant `nodes/proxy`, you can decline it: you'll still get OOM kills, restart counts, configured limits, and node pressure conditions, and you'll lose container memory/CPU usage over time.
-
-### Automatic collection
-
-Once configured, collection runs without any user involvement:
-
-- **Every 15 minutes (configurable)** — the base spec is collected, covering logs, metrics, and pod status.
-- **When memory or CPU crosses a configured threshold** — a bundle is triggered automatically, capturing router state before conditions worsen further.
-
-Bundles are pushed to a customer-configured S3 or GCS bucket. Apollo cannot access your bundles — sharing is always your choice.
-
-### Sharing with support
-
-When opening a ticket, support can ask for the most recent bundle from around the time of the incident. Since scheduled collection has been running, there is likely a healthy baseline bundle to compare against — making diagnosis significantly faster than a single reactive snapshot.
