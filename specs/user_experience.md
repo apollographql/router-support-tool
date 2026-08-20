@@ -136,7 +136,7 @@ If you're on a raw-manifest or custom deployment, also set `selector` and `confi
 
 The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle. *(TODO: Bundle retrieval mechanism — mounted volume vs. object storage — is still being finalized.)* No one outside the platform team needs raw kubectl access. This is the same spec and collection engine as `mode: local`; only who runs it and how the bundle is retrieved differs.
 
-The ServiceAccount needs the same read permissions as the local path — namespace-scoped, plus the two cluster-scoped grants for node access and container metrics — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below. Applying them requires someone who can create Jobs, namespace RBAC, *and* cluster-scoped RBAC in the cluster — see [Setup, step two](#setup-step-two-one-chart-two-modes) above for what that means for who can install this mode.
+The ServiceAccount needs the same read permissions as the local path — namespace-scoped, plus the cluster-scoped grants for node access and container metrics — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below. Applying them requires someone who can create Jobs, namespace RBAC, *and* cluster-scoped RBAC in the cluster — see [Setup, step two](#setup-step-two-one-chart-two-modes) above for what that means for who can install this mode.
 
 ---
 
@@ -203,16 +203,17 @@ Installing with `mode: local` requires permission to create a ConfigMap in the t
 
 Installing with `mode: job` requires more: creating a Job, a ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
 
-Collection itself needs read access in the router's namespace to pods, pod logs, ConfigMaps, and deployments — standard permissions for anyone managing a k8s workload — plus two separate cluster-scoped grants, deliberately kept independent so you can decline the more sensitive one without losing the other:
+Collection itself needs read access in the router's namespace to pods, pod logs, ConfigMaps, and deployments — standard permissions for anyone managing a k8s workload — plus three separate cluster-scoped grants, deliberately kept independent so you can decline the more sensitive ones without losing the others:
 
 - **`list`/`get` on `nodes`** — an ordinary, low-risk read of node objects. This is what surfaces node pressure conditions (`MemoryPressure`, `DiskPressure`).
-- **`get` on `nodes/proxy`** — authorizes proxying requests through the API server to the kubelet. This is what's needed to read container memory and CPU from the kubelet Summary API.
+- **`get` on `nodes/proxy`** — required by the API server for any request proxied through it to a kubelet, regardless of what's being asked for. This is a broader grant than it may look: Kubernetes' own documentation notes that `nodes/proxy` "provides access to privileged kubelet APIs that can retrieve container logs or execute and attach to pod processes... This access bypasses audit logging and admission control," and is explicitly "not a read-only permission." What this tool actually does with it is read-only — it only ever asks for the kubelet's stats endpoint — but the grant itself authorizes more than that one use.
+- **`get` on `nodes/stats`** — required separately by the kubelet's own authorization check specifically for the stats endpoint. This is what actually narrows what the kubelet will serve once `nodes/proxy` gets the request there; it does not replace `nodes/proxy`.
 
-Both are read-only, and node access is the only permission that reaches outside the namespace.
+Node access alone is the only one of the three that reaches outside the namespace with no other caveats. All three are read-only in what this tool does with them.
 
 **`pods/exec` is not required** — nothing runs inside your router container.
 
-If you'd rather not grant `nodes/proxy`, you can decline it on its own and keep `nodes` access: you'll still get OOM kills, restart counts, configured limits, and node pressure conditions, but you'll lose container memory and CPU usage over time.
+If you'd rather not grant `nodes/proxy`/`nodes/stats`, you can decline both and keep `nodes` access: you'll still get OOM kills, restart counts, configured limits, and node pressure conditions, but you'll lose container memory and CPU usage over time. `nodes/proxy` and `nodes/stats` are only useful together — declining either one loses the same capability, so there's no reason to grant one without the other.
 
 ### Sharing with support
 

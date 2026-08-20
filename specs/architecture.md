@@ -76,7 +76,7 @@ Shipping capabilities as separate specs, rather than growing a single spec, is m
 
 For example, a future `enhanced-memory` spec might use the router's diagnostics plugin to profile memory via jemalloc. Because triggering a heap dump above certain memory thresholds risks worsening the pressure it is trying to diagnose, that spec ships with its own schedule and threshold rules — independent of the base spec's cadence.
 
-Collection degrades gracefully. A collector whose target does not exist — Prometheus not enabled, no matching ConfigMap, a Helm release the `helm` collector cannot find — returns empty rather than failing the run. `meta.json` is what makes an empty section explainable rather than mysterious — see `specs/collection/meta_json.md` for how.
+Collection degrades gracefully. A collector whose target does not exist — Prometheus not enabled, no matching ConfigMap, a Helm release the `helm` collector cannot find — returns empty rather than failing the run. `meta.json` records what the tool was configured to do, which helps narrow down why a section is empty, but it cannot attribute every empty section on its own — see `specs/collection/meta_json.md` for what it does and does not cover.
 
 #### base spec
 
