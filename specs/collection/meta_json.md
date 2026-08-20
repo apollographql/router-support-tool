@@ -34,7 +34,7 @@ The consequence is the central design constraint here: **`meta.json` can only co
 So `meta.json` does two things instead:
 
 1. **States what the tool was configured to do**, from values known at render time.
-2. **Points at where runtime facts live** in the bundle, rather than duplicating them.
+2. **Documents, once, the fixed convention for where runtime facts actually live** in every bundle — it does not repeat that convention as data inside the file itself.
 
 ### Do not duplicate the engine version
 
@@ -50,22 +50,8 @@ Every bundle already contains **`version.yaml`**, [written by the engine](https:
 | `mode` | Chart value | `local` or `job`. Establishes where collection ran, which explains mesh-blocked and network-scoped results. Undefined for the Apollo Operator tier, which has no `mode` value — see [Who populates it](#who-populates-it) above. |
 | `namespace` | Chart value | The namespace collection was scoped to — the counterpart to the cluster-wide-collection failure mode described in `base_spec.md`. |
 | `redaction.include_schema` | Chart value | Whether the customer opted out of schema/SDL. Tells you one of the two possible reasons schema/SDL might be absent — the opt-out — but not the other (the customer never supplying `.Values.supergraphFile` to the *router's own* chart, a fact `router-diagnostics` has no visibility into at all). `true` here does not mean schema/SDL is actually present. |
-| `sidecar_injection_disabled` | Chart, `mode: job` only | Records that the Job ran outside the mesh, which is the expected cause of an empty metrics section in a mesh cluster. |
+| `sidecar_injection_disabled` | Chart, `mode: job` only | Records that the Job ran outside the mesh. Rules out one specific cause of an empty metrics section — interception via the Job's own mesh membership — but does not, on its own, confirm a mesh issue exists or attribute the section fully; see `specs/collection/base_spec.md` → Service mesh and proxy environments. |
 | `min_troubleshoot_version` | Spec | The declared floor from `specs/deployment/v1/v1.md` → Collection engine version. Compared against `version.yaml` by whoever reads the bundle. |
-
-### Why there is no `expected_absences` field
-
-An earlier version of this spec proposed one: a list of `{ path, reason }` entries the chart would write at render time, so a reader could tell a known-expected empty section apart from a defect without inferring it themselves. That would only work if there were reasons meeting two conditions at once — genuinely knowable to `router-diagnostics` at its own render time, and not already covered by an existing render-time field. Every candidate reason found so far has failed at least one of those:
-
-- **Deployment tier.** This project has no reliable way to know a customer's tier; it can only be inferred from which optional values happen to be set (`selector`/`configMapName` present or absent), and that inference can be wrong in either direction (see `specs/collection/base_spec.md` → `router.yaml` capture). Any reason resting on tier inherits that unreliability — this is the same problem that ruled out a standalone `deployment_tier` field.
-- **Schema/SDL absence, opt-out case.** `redaction.includeSchema=false` is genuinely knowable, but it's already the `redaction.include_schema` field above — a separate entry restating it adds nothing.
-- **Schema/SDL absence, the other case.** The customer never supplying `.Values.supergraphFile` is *not* redundant with anything — but it also isn't knowable. That value lives on the **router's own Helm chart**, a separate release with its own values file that `router-diagnostics` has no visibility into, the same cross-chart blindness that already rules out resolving indirected `APOLLO_GRAPH_REF` values (`specs/collection/base_spec.md` → Router env vars).
-- **PSI absence, mesh interception, network-unreachable `mode: local` metrics** — all environmental or runtime facts, covered elsewhere in `base_spec.md`, none knowable at chart-render time.
-- **A customer declining the `nodes/proxy` grant** (see `specs/collection/base_spec.md` → RBAC) — plausible in principle if `router-diagnostics` ever gains its own value gating that RBAC, but no such value is specified today, so this isn't a confirmed case either.
-
-Zero candidates surviving multiple attempts is a signal, not bad luck: an empty section in this bundle has to be worked out by a reader, using the pointers in this file and the reasoning in `specs/collection/base_spec.md`, not from a pre-declared list. If a genuinely knowable, non-redundant reason is ever found — most plausibly a future `router-diagnostics`-owned RBAC or targeting value — reintroduce this mechanism then, with that real example, rather than restoring it on the strength of this explanation alone.
-
-Schema/SDL absence specifically still needs care from whoever reads a bundle: per `specs/collection/base_spec.md` → Where graph schema/SDL actually lands, it has no collector of its own, so it's redacted out of (or simply never present in) the general ConfigMap dump. `redaction.include_schema=false` tells you about the opt-out case; nothing in the bundle tells you about the other one. A reader has to know both exist and check for the opt-out field before concluding anything about the other.
 
 ### Where runtime facts actually live
 
@@ -75,6 +61,7 @@ Schema/SDL absence specifically still needs care from whoever reads a bundle: pe
 | --- | --- |
 | Router version | `cluster-resources/pods/<namespace>.json` — container image tag |
 | `APOLLO_GRAPH_REF` | `cluster-resources/pods/<namespace>.json` — `spec.containers[].env`, alongside the router version. See `specs/collection/base_spec.md` → Router env vars: read from the pod spec. |
+| `APOLLO_ROUTER_OFFICIAL_HELM_CHART` | `cluster-resources/pods/<namespace>.json` — same `spec.containers[].env` array as `APOLLO_GRAPH_REF` above. See `specs/collection/base_spec.md` → Router env vars for how to read it. |
 | Collection engine version | `version.yaml` |
 | Collection time | The bundle's top-level directory name, `support-bundle-<timestamp>/` — see below |
 | Whether more than one router release matched | File count under the `configMap` collector's output path — see below |

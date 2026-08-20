@@ -1,8 +1,10 @@
 # Collector naming conventions
 
-Every collector in a spec is given a name. **For most collector types, troubleshoot.sh names the bundle's directory after it** — a collector called `router-runtime-logs` produces `router-runtime-logs/` inside the `.tar.gz`. That makes naming a compatibility surface for those types: rename one and every path in every future bundle changes, breaking bundle-to-bundle comparison across tool versions and any automation that reads a known path. **Treat a collector rename as a breaking change**, not a cosmetic edit.
+Every collector in a spec is given a name. **For most collector types, troubleshoot.sh names the bundle's directory after it** — a collector called `router-metrics` produces `router-metrics/` inside the `.tar.gz`, holding the real file. That makes naming a compatibility surface for those types: rename one and every path in every future bundle changes, breaking bundle-to-bundle comparison across tool versions and any automation that reads a known path. **Treat a collector rename as a breaking change**, not a cosmetic edit.
 
-**Some collector types are engine-fixed instead** — their output path is hardcoded by troubleshoot.sh regardless of what `name:` they're given. See [Engine-fixed collectors](#engine-fixed-collectors) below before assuming a rename moves a bundle path; three of the five collectors in the base spec fall into this category.
+**Some collector types are engine-fixed instead** — their output path is hardcoded by troubleshoot.sh regardless of what `name:` they're given. See [Engine-fixed collectors](#engine-fixed-collectors) below before assuming a rename moves a bundle path; four of the six collectors in the base spec fall into this category.
+
+**One more is a hybrid, and it's the one most worth double-checking: `logs`.** Its chosen name controls a *symlink*, not the real file — see [Name-controlled via symlink: `logs`](#name-controlled-via-symlink-logs) below.
 
 ## The convention
 
@@ -26,12 +28,23 @@ Every collector gets a name, engine-fixed or not — for the engine-fixed rows b
 
 | Signal | Collector | Name | Name controls bundle path? |
 | --- | --- | --- | --- |
-| Runtime logs, all containers in the pod | `logs` | `router-runtime-logs` | Yes |
+| Runtime logs, all containers in the pod | `logs` | `router-runtime-logs` | Only a symlink — see below |
 | Prometheus metrics snapshot | `http` | `router-metrics` | Yes |
 | Helm values layer of the config | `helm` | `router-config-values` | No — engine-fixed |
 | Rendered `router.yaml` | `configMap` | `router-config-rendered` | No — engine-fixed |
-| Node, pod, and container CPU/memory from the kubelet | `nodeMetrics` | `router-resource-usage` *(proposed — confirm)* | No — engine-fixed |
-| Pod status, router version, env vars, OOM events, node pressure | `clusterResources` | `cluster-router-resources` *(proposed — confirm)* | No — engine-fixed |
+| Node, pod, and container CPU/memory from the kubelet | `nodeMetrics` | `router-resource-usage` | No — engine-fixed |
+| Pod status, router version, env vars, OOM events, node pressure | `clusterResources` | `cluster-resources` | No — engine-fixed |
+
+## Name-controlled via symlink: `logs`
+
+`logs` isn't a clean member of either category. Confirmed from [`logs.go` `savePodLogs`](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/collect/logs.go#L138): the real log content is written under the **engine-fixed** `cluster-resources/pods/logs/<namespace>/<pod>/<container>.log` — not under the collector's own name at all. The chosen `name:` (`router-runtime-logs`) only controls a **symlink** pointing at that real file, created because the collector's call site passes `createSymLinks: true`.
+
+So renaming `router-runtime-logs` *is* still a breaking change — it moves the symlink's path, and any automation reading that path breaks exactly like it would for `http`. But the underlying data was never at risk of moving; it's pinned to the engine-fixed path regardless of what this collector is named. Two consequences:
+
+- **A customer's extraction tooling that doesn't preserve symlinks can make `router-runtime-logs/` look empty or broken while the logs are actually intact** under `cluster-resources/pods/logs/`. Don't conclude logs weren't collected from an empty-looking `router-runtime-logs/` alone — check the engine-fixed path directly.
+- The naming convention (domain-signal, no mechanism in the name) still fully applies to `logs` — it's a real, dereferenceable path a reader is meant to use, just not the only path to the same data.
+
+See `specs/collection/output.md` for the full worked directory tree, including exactly how this symlink resolves.
 
 ## Engine-fixed collectors
 
