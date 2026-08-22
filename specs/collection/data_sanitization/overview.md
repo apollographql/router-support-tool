@@ -8,6 +8,7 @@ Redaction is part of the collection layer, not a separate concern from it — pe
 | Literal header values in `headers` config | `header_values.md` |
 | GraphQL operation bodies reaching router logs | `operation_bodies.md` |
 | Subgraph routing URLs | `subgraph_urls.md` |
+| Redis credentials embedded in cache URLs | `redis_credentials.md` |
 | Graph schema/SDL | `schema_sdl.md` |
 
 Every file here is scoped to the router's own `router.yaml` (captured per `specs/collection/base_spec.md` → `router.yaml` capture) and adjacent collected surfaces (logs, the schema ConfigMap). Generic secrets — cloud credentials, standard connection strings, tokens with recognizable env-var names — are already covered by troubleshoot.sh's built-in redactors, which run unconditionally on every collected file with no spec authoring required (see below). These docs exist because the router's own config shape has fields no generic pattern knows about.
