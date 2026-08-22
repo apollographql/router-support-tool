@@ -1,10 +1,12 @@
 # Header values in config
 
-The router's `headers` plugin lets an operator set literal HTTP header values in `router.yaml`. That's the one place in this plugin's config a real secret can appear — everything else in it is header *names* or forwarding rules, never values.
+## The Problem
+
+The router's `headers` plugin lets an operator set literal HTTP header values in `router.yaml`. That's the one place in this plugin's config a real secret can appear — everything else in it is header names or forwarding rules, never values.
 
 Verified against `apollographql/router` at `v2.17.0`.
 
-## What's in the block, and which parts are actually sensitive
+### What's in the block, and which parts are actually sensitive
 
 `headers.all.request`/`.response` and the per-subgraph equivalent (`headers.subgraphs.<name>.request`/`.response`) hold a list of operations. The `Operation` enum is `insert | remove | propagate`:
 
