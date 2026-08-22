@@ -1,36 +1,78 @@
 # Operation bodies in logs
 
-This one is a different kind of problem from the other four, and the difference matters: **`router.yaml` never contains an operation body as a literal value.** What it contains is *config that causes the router to write operation bodies into its own logs at runtime* — query text, mutation text, and variables, which can carry customer PII or business-sensitive data. There is no field to mask in the config; the thing that needs sanitizing is downstream of it, in log output this tool also collects.
+## The problem
 
-Verified against `apollographql/router` at `v2.17.0`.
+Although `router.yaml` never contains an operation body as a literal value, it does contain config that causes the router to write operation bodies into its own logs at runtime — query text, mutation text, and variables, which can carry customer PII or business-sensitive data. Note this was verified against `apollographql/router` at `v2.17.0`.
 
-## What causes the leak
+The base spec's `logs` collector captures router container logs (per `specs/collection/base_spec.md` → main table). If a customer has any of the settings below enabled, operation bodies — potentially including customer data passed as GraphQL variables — are already inside the log lines this tool collects.
+
+### What causes operation bodies to show in logs
 
 `telemetry.instrumentation.*` config, opt-in (not the router's default):
 
 | Setting | Effect |
 | --- | --- |
 | `telemetry.instrumentation.events.router.response` (a `StandardEventConfig`, with `level`/`condition`) | Logs an event that includes an `http.response.body` attribute when the response-body extension is populated. Source: [`router/events.rs#L22-L128`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/telemetry/config_new/router/events.rs#L22) |
-| Supergraph request/response events (`SupergraphEventRequest`/`SupergraphEventResponse`) | Serializes the *full* `supergraph_request.body()` — query text and variables — into the log line. Source: [`supergraph/events.rs#L60-L90`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/telemetry/config_new/supergraph/events.rs#L60) |
+| `telemetry.instrumentation.events.supergraph.request` / `.response` (also `StandardEventConfig`) | Serializes the *full* `supergraph_request.body()` — query text and variables — into the log line. Confirmed via `SupergraphEventsConfig` ([`supergraph/events.rs#L142-L148`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/telemetry/config_new/supergraph/events.rs#L142)), assembled under the `supergraph` field of the top-level `Events` struct ([`events.rs#L39-L48`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/telemetry/config_new/events.rs#L39)). Behavior confirmed from [`supergraph/events.rs#L60-L90`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/telemetry/config_new/supergraph/events.rs#L60) |
 | `telemetry.instrumentation.spans.supergraph.attributes.custom.<name>.query` (a `Query::String` selector), or `.query_variable: "<varName>"` | Attaches the raw query document, or a specific variable's value, to a span/log attribute under a customer-chosen name. Source: [`supergraph/selectors.rs#L58-L100`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/telemetry/config_new/supergraph/selectors.rs#L58) |
 
-None of these settings hold a secret themselves — they're booleans and selector expressions. A regex redactor on `router.yaml` can, at most, detect that one of them is turned on. It cannot mask the data that setting causes to leak, because that data doesn't exist in the config file at all.
+### Router Redaction
 
-## Why this is relevant to `specs/collection/base_spec.md`, not just this directory
+The router does have a real, built-in redaction mechanism for headers, but it doesn't cover operation bodies.
 
-**The base spec's `logs` collector captures router container logs unconditionally** (per `specs/collection/base_spec.md` → main table). If a customer has any of the settings above enabled, operation bodies — potentially including customer data passed as GraphQL variables — are already inside the log lines this tool collects, before any redaction in this directory ever runs. This is a real, current gap between what the base spec collects and what it redacts:
+- **HTTP headers are masked before logging, by design.** The `RequestHeader`/`ResponseHeader` telemetry selectors carry an explicit `redact: Option<RedactMode>` field, and both the router-level and supergraph-level log events call `header_masking::masked_headers_for_log` before a header value is ever written to a log line. Sources: [`supergraph/selectors.rs#L86`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/telemetry/config_new/supergraph/selectors.rs#L86) (the `redact` field), [`supergraph/events.rs#L48`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/telemetry/config_new/supergraph/events.rs#L48) (the masking call on the request path).
+- **`Query` and `QueryVariable` selectors have no equivalent field.** In the same enum, immediately next to `RequestHeader`, both variants carry only `{query, default}` and `{query_variable, default}` — no `redact` option exists on either. Source: [`supergraph/selectors.rs#L69-L79`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/telemetry/config_new/supergraph/selectors.rs#L69).
+- **The standard request/response body events serialize the body raw, with no masking call at all.** `SupergraphEventRequest` does `serde_json::to_string(request.supergraph_request.body())` directly — [`supergraph/events.rs#L79`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/telemetry/config_new/supergraph/events.rs#L79), three lines after the header line above it, which *does* go through masking first. The router-level `HTTP_RESPONSE_BODY` attribute follows the identical pattern — pushed straight from the response-body extension with no redaction call.
 
-- **No custom redactor in this repo currently targets router log content for operation-body patterns.** The redactors in this directory all target `router.yaml`, not `router-runtime-logs/`.
-- **A redactor that could catch this would need to pattern-match arbitrary GraphQL query/variable syntax inside free-form log text** — a much harder, higher-false-positive/false-negative problem than matching a known config field, because the shape of a customer's queries and variables is unbounded and customer-specific.
+So: if a customer enables header logging, whatever they've configured for `redact` already applies, and there's genuinely nothing for this project to add on top of that. If they enable any of the three settings above, the operation body and any named variable value are logged as-is — the absence of any masking here is confirmed directly from the code that logs them, not just inferred from the lack of a `redact` field on the selector.
 
-This needs a design decision, not an assumption one way or the other — and the three options below aren't evenly weighted, because two of them require reopening a decision already made elsewhere, not just writing new content:
+## Options
 
-1. **Detect and warn, don't attempt to mask.** This is more precisely an **analyzer** — troubleshoot.sh's mechanism for evaluating already-collected data and emitting a finding — not a redactor (redactors mask content, they don't produce findings) and not a `meta.json` field (the `router-diagnostics` chart can't see the router's own chart's `telemetry.instrumentation` settings at render time, the same cross-chart blindness that ruled out `expected_absences` in `specs/collection/meta_json.md`). **`specs/versions/v1.md` puts analyzers out of scope for v1 entirely**, so adopting this option isn't just "write a check" — it's reopening that scope decision for this one case.
-2. **Attempt log-content redaction.** Write a best-effort pattern for common GraphQL log-line shapes (e.g., a `"query":` or `"variables":` JSON key inside a structured log line). Higher engineering cost, and a false negative here is silent and undetectable from the bundle alone — the same silent-failure risk every redactor in this directory carries, but with a much larger blast radius if it's wrong, since operation bodies can carry real customer data. **This is the only one of the three that fits within v1's current constraints as they stand** — it's a redactor, not an analyzer, and needs no render-time visibility into the router's own config.
-3. **Leave it as a documented risk, unaddressed for v1.** Consistent with `CLAUDE.md`'s instruction to flag a design gap rather than silently deciding it — this doc is not proposing which of the three is correct.
+1. **Detect and warn, don't attempt to mask.** This is more precisely an **analyzer** — troubleshoot.sh's mechanism for evaluating already-collected data and emitting a finding — not a redactor (redactors mask content, they don't produce findings) and not a `meta.json` field (the `router-diagnostics` chart can't see the router's own chart's `telemetry.instrumentation` settings at render time).
+2. **Attempt log-content redaction.** This looks at first like it needs to pattern-match arbitrary GraphQL query/variable syntax inside free-form log text — a much harder problem than matching a known config field, since the shape of a customer's queries and variables is unbounded and customer-specific. **It's less open-ended than that, for two of the three settings above.** The router-level and supergraph-level body events push their content under fixed, hardcoded OpenTelemetry attribute keys, not customer-chosen ones:
 
-**Open, and blocking a real redactor rather than just a documented one:** which of the above this project adopts. Until that's decided, the honest state is that operation bodies reaching logs are a known, collected, unredacted risk whenever a customer has enabled any of the telemetry settings above — this should be called out in `specs/collection/base_spec.md`'s `logs` collector row or its own subsection, not left implicit.
+   | Leak vector | Attribute key | Customer-controllable? |
+   | --- | --- | --- |
+   | `telemetry.instrumentation.events.router.response` | `http.response.body` — [`attributes.rs#L25`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/telemetry/config_new/attributes.rs#L25) | No — fixed constant |
+   | `SupergraphEventRequest`/`SupergraphEventResponse` | `http.request.body` / (response uses the same `http.response.body` key) — [`attributes.rs#L20`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/telemetry/config_new/attributes.rs#L20) | No — fixed constant |
+   | `telemetry.instrumentation.spans.supergraph.attributes.custom.<name>.query` / `.query_variable` | Whatever key name the customer writes in place of `<name>` | **Yes — the customer picks the key name** |
 
-## What this doc does not attempt
+3. **Leave it as a documented risk** Consistent with `CLAUDE.md`'s instruction to flag a design gap rather than silently deciding it.
 
-No redactor YAML is proposed here, deliberately — writing one before the detect-vs-mask-vs-defer decision above is made would encode an unreviewed design choice into a "redactor" that either does very little (option 1) or takes on real false-negative risk (option 2). See `overview.md` for why every redactor in this directory needs a verified test before being trusted; this is the one case in this set where that testing gap is a security decision, not an implementation detail.
+## Recommended Solution
+
+**Option 2, log-content redaction — for the two leak vectors with fixed keys.** The reasoning above is what makes this a normal redaction problem rather than a genuinely open-ended one: the redactor never needs to know what a query looks like, only where the fixed key `http.request.body`/`http.response.body` sits in a log line.
+
+**Two real constraints this redactor has to account for, both different from the `router.yaml` redactors elsewhere in this directory:**
+
+- **Log files are genuinely line-delimited, unlike `router.yaml`.** The `logs` collector writes real newline-separated text files (`cluster-resources/pods/logs/<namespace>/<pod>/<container>.log`, symlinked at `router-runtime-logs/<pod>/<container>.log` — `specs/collection/output.md`), not JSON-escaped text embedded inside a larger document. So this redactor doesn't hit the `\n`-escaping problem every `router.yaml` redactor in this directory has to work around — single-line `regex` applies per real log line, cleanly.
+- **The log line's exact JSON shape is not yet confirmed.** The router supports more than one log output format (`formatters/json.rs`, `formatters/text.rs`), and this redactor assumes the JSON formatter is in use, with `http.request.body`/`http.response.body` appearing as flat string-valued keys somewhere in that line. Whether that's actually true — flat vs. nested under a `fields`/`attributes` object, single-line-per-record vs. pretty-printed — was not traced further into the tracing-subscriber formatting layer and needs confirming against a real collected log line before this pattern is trusted. This is the same "draft until tested against a real bundle" status every redactor in this directory carries, not a new kind of risk.
+
+```yaml
+- name: router-log-request-body
+  fileSelector:
+    files:
+      - "cluster-resources/pods/logs/*/*/*.log"
+      - "router-runtime-logs/*/*.log"
+  removals:
+    regex:
+      - redactor: '"http\.request\.body":"(?P<mask>(?:[^"\\]|\\.)*)"'
+- name: router-log-response-body
+  fileSelector:
+    files:
+      - "cluster-resources/pods/logs/*/*/*.log"
+      - "router-runtime-logs/*/*.log"
+  removals:
+    regex:
+      - redactor: '"http\.response\.body":"(?P<mask>(?:[^"\\]|\\.)*)"'
+```
+
+The capture group `(?:[^"\\]|\\.)*` matches a JSON string value correctly even when it contains escaped quotes (a GraphQL query embedding a string literal, for instance) — it consumes either a non-quote-non-backslash character or an escaped pair, so it doesn't terminate early on an escaped `\"` inside the body text.
+
+### Notes
+
+- **Required before this is considered done:** enable `telemetry.instrumentation.events.router.response` (and separately, the supergraph request/response events) against a router configured for JSON logging, send a query carrying a distinctive string in its body, collect a bundle, and confirm the value is masked in both `cluster-resources/pods/logs/.../*.log` and the `router-runtime-logs/` symlink target.
+
+- **Text-format logging is deliberately out of scope, not an unresolved gap.** This pattern will not match a text-formatted log line at all — but the router's own format default is TTY-dependent, not fixed: `Format::default()` returns `Text` only when stdout is a terminal, and `Json` otherwise ([`logging.rs#L238-244`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/telemetry/config_new/logging.rs#L238)). A router running in a Kubernetes container has no TTY attached to stdout, so JSON is the default in exactly the deployment context this tool targets — text format only appears if a customer deliberately overrides it.
+
+- **What this still doesn't cover, and won't from this redactor alone:** the third leak vector — customer-named custom span/log attributes (`.custom.<name>.query`, `.custom.<name>.query_variable`) — cannot be caught by a fixed-key pattern, because the key name is whatever the customer chose to write in their own `router.yaml`. This is a genuinely different problem from the two above: there is no constant to search for. Catching it would require either parsing `router.yaml` first to discover which custom attribute names a given customer configured (a `router.yaml`-then-logs, two-stage dependency that troubleshoot.sh's redaction mechanism has no way to express since collectors and redactors don't take input from each other's output), or a much weaker heuristic pattern with a real false-positive/false-negative rate. **This gap is accepted** — the redactor above closes the two vectors that were closeable with a known key and this third one remains an open, documented risk regardless of what's implemented, until troubleshoot.sh itself gains a mechanism for redactors to depend on other collected data.
