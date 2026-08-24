@@ -2,7 +2,7 @@
 
 The Router Support Tool collects a sanitized, point-in-time snapshot of Apollo Router and Kubernetes cluster state without requiring a router restart.
 
-The tool is built on [troubleshoot.sh](https://troubleshoot.sh), which provides the collection engine: the collectors themselves, the redaction pipeline, and assembly of collector output into a bundle. See `specs/versions/v1.md` for more details regarding our use of troubleshoot.sh including what we use, what we do not, and links into their documentation.
+The tool is built on [troubleshoot.sh](https://troubleshoot.sh), which provides the collection engine: the collectors themselves, the redaction pipeline, and assembly of collector output into a [support bundle](https://troubleshoot.sh/docs/support-bundle/introduction).
 
 **We define what runs through that engine** — which collectors, with which parameters, and which redaction rules — **and we own everything around it**: the Helm chart that renders the spec, the spec itself, and the Job image.
 
@@ -14,9 +14,9 @@ The architecture separates three concerns that vary independently of one another
 
 | Layer | What varies |
 | --- | --- |
-| **Collection** | What data is collected, and how it is sanitized |
+| **Collection** | What data is collected, and how it is sanitized. Defined by troubleshoot.sh SupportBundle specs. |
 | **Trigger** | What causes a collection to happen |
-| **Storage** | Where the resulting bundle lands |
+| **Storage** | Where the resulting support bundle lands |
 
 The boundaries are drawn so that a change in one layer does not require changes in the others. Adding a new trigger does not touch the spec. Adding a new storage target does not touch collectors. Adding a new spec does not touch the watcher (for threshold based triggers).
 
@@ -33,13 +33,13 @@ Deployment — where the collection process actually runs, and what permissions 
 ┌─────────────────────────────────────────────────┐
 │  COLLECTION                                     │
 │  What data is collected and how it's sanitized  │
-│  SupportBundle spec + custom redactors          │
+│  defined as a SupportBundle spec                │
 └────────────────────┬────────────────────────────┘
-                     │ produces a redacted bundle
+                     │ produces a redacted support bundle
                      ▼
 ┌─────────────────────────────────────────────────┐
 │  STORAGE                                        │
-│  Where the bundle lands                         │
+│  Where the support bundle lands                 │
 │  local disk · object storage                    │
 └─────────────────────────────────────────────────┘
 ```
@@ -56,7 +56,7 @@ The layer boundaries are drawn to make each anticipated extension touch exactly 
 | Add S3/GCS bundle storage | Storage only |
 | Deploy the tool via Ground Control | Deployment model only |
 
-Redaction and execution location are deliberately *not* layers — the first because it does not vary independently of collection, the second because it is a choice about where existing functions run rather than a function of its own.
+Redaction and execution location are deliberately *not* layers — the first because it does not vary independently of the Collection layer, the second because it is a choice about where existing functions run rather than a function of its own.
 
 ---
 
@@ -64,15 +64,13 @@ Redaction and execution location are deliberately *not* layers — the first bec
 
 **What varies:** which signals are gathered, and which redactors are applied.
 
-A collection is defined by a [troubleshoot.sh SupportBundle spec](https://troubleshoot.sh/docs/support-bundle/collecting) — a YAML file declaring which collectors to run, against which targets, with which parameters, plus the redactors to apply before packaging.
+A [troubleshoot.sh SupportBundle spec](https://troubleshoot.sh/docs/support-bundle/collecting) — a YAML file declaring which collectors to run, against which targets, with which parameters, plus the redactors to apply before packaging — defines what a collection gathers and how it's sanitized.
 
 ### Specs
 
-v1 ships **one spec** — a single base spec definition, authored once, and the only collection artifact v1 produces.
+Currently we ship **one spec** — a single base spec definition. Additional specs may be introduced in later milestones as new collection capabilities are added.
 
-Additional specs may be introduced in later milestones as new collection capabilities are added.
-
-Shipping capabilities as separate specs, rather than growing a single spec, is motivated by a concrete safety constraint: some collectors (notably `exec`-based ones) run commands inside the router's existing container and consume from its cgroup allocation rather than a separate budget. **The v1 base spec contains none of these** — it runs entirely against the API server, the kubelet, and external endpoints. Heavier collection operations therefore warrant their own spec, with independent controls over when they run.
+Shipping capabilities as separate specs, rather than growing a single spec, is motivated by a concrete safety constraint: some collectors (notably `exec`-based ones) run commands inside the router's existing container and consume from its cgroup allocation rather than a separate budget. **The base spec contains none of these** — it runs entirely against the API server, the kubelet, and external endpoints. Heavier collection operations therefore warrant their own spec, with independent controls over when they run.
 
 For example, a future `enhanced-memory` spec might use the router's diagnostics plugin to profile memory via jemalloc. Because triggering a heap dump above certain memory thresholds risks worsening the pressure it is trying to diagnose, that spec ships with its own schedule and threshold rules — independent of the base spec's cadence.
 
@@ -80,7 +78,7 @@ Collection degrades gracefully. A collector whose target does not exist — Prom
 
 #### base spec
 
-**All** signal is gathered externally — via the k8s API, the kubelet's Summary API, or direct HTTP calls to the router's externally reachable endpoints. Nothing in the base spec executes inside the router container, so none of its collection draws on the router's cgroup allocation. It is safe to run at any time, including against a degraded router.
+**All** signal is gathered externally — via the k8s API, the kubelet's Summary API, or direct HTTP calls to the router's externally reachable endpoints. Nothing in the base spec executes inside the router container, so nothing it gathers draws on the router's cgroup allocation. It is safe to run at any time, including against a degraded router.
 
 | Signal | Collector |
 | --- | --- |
@@ -96,7 +94,7 @@ See `specs/collection/base_spec.md` for collector-level targeting details and wh
 
 ### Redaction
 
-Redaction is **part of this layer, not a separate one.** It does not vary independently of collection: redactors are defined in the same spec YAML, ship in the same artifact, version together, and are authored alongside the collectors they protect. troubleshoot.sh treats redaction as a phase of the collection pipeline — collect, redact, package — not a separable concern.
+Redaction is **part of this layer, not a separate one.** It does not vary independently of the Collection layer: redactors are defined in the same spec YAML, ship in the same artifact, version together, and are authored alongside the collectors they protect. troubleshoot.sh treats redaction as a phase of the collection pipeline — collect, redact, package — not a separable concern.
 
 Redaction runs after all collectors complete and before the bundle is packaged, so it applies to the complete collected data rather than per-collector, and the customer can inspect the redacted output before sharing.
 
@@ -115,12 +113,12 @@ See `specs/collection/data_sanitization/` for more details on redaction.
 
 What causes collection to occur.
 
-Triggers are independent mechanisms that invoke a collection spec. Each can be added without modifying the spec it invokes.
+Triggers are independent mechanisms that invoke the SupportBundle spec. Each can be added without modifying the spec it invokes.
 
 | Trigger | Milestone | Mechanism |
 | --- | --- | --- |
 | On-demand (flare) | v1 | User invokes collection directly |
-| Scheduled base collection | v2 | CronJob on a configurable interval |
+| Scheduled base spec | v2 | CronJob on a configurable interval |
 | Threshold-triggered | v2 | Watcher Deployment polling metrics against threshold rules |
 | Scheduled additional specs | v3 | CronJob on an independent cadence per spec |
 
@@ -151,11 +149,11 @@ Threshold rules are metric-agnostic by design. Memory and CPU are the metrics av
 
 ## Storage layer
 
-**What varies:** where the bundle lands after collection.
+**What varies:** where the support bundle lands after collection completes.
 
-The same spec produces the same bundle regardless of destination. A change in storage target does not touch a collector, and a change in collection does not touch storage configuration — which is what makes this a layer rather than a detail of collection.
+The same spec produces the same support bundle regardless of destination. A change in storage target does not touch a collector, and a change to the spec does not touch storage configuration — which is what makes this a layer rather than a detail of the Collection layer.
 
-One invariant holds across every storage option: **bundles are never pushed to Apollo infrastructure.** Storage is customer-owned and customer-controlled. Apollo has access only when a customer explicitly shares a bundle as part of a support engagement.
+One invariant holds across every storage option: **support bundles are never pushed to Apollo infrastructure.** Storage is customer-owned and customer-controlled. Apollo has access only when a customer explicitly shares a support bundle as part of a support engagement.
 
 Storage options, their tradeoffs, and the reasoning behind the current choice are specified in `specs/storage/`.
 
@@ -165,9 +163,7 @@ Storage options, their tradeoffs, and the reasoning behind the current choice ar
 
 Where the collection process runs — from a local machine, or in-cluster as a Job or CronJob — is a **deployment concern, not an architectural layer.**
 
-The distinction matters. Each layer above corresponds to a function the system performs, and each introduces logic that does not exist elsewhere: the trigger layer adds metric polling and threshold evaluation, the storage layer adds auth, retry, and retention. Execution location adds no new capability. Running `kubectl support-bundle` from a container instead of a laptop is the same function relocated, using a ServiceAccount instead of a kubeconfig.
-
-The test: the system's behavior can be fully described without reference to execution location. *"On threshold crossing, collect the base spec, write to object storage"* is complete. Where the process happens to run is an implementation detail of that sentence — unlike storage, where *"the bundle goes somewhere"* leaves a genuine open question.
+Each layer above adds logic that doesn't exist elsewhere — trigger adds polling and threshold evaluation, storage adds auth and retention. Execution location adds no new function: running `kubectl support-bundle` from a container instead of a laptop is the same command relocated. The test: *"on threshold crossing, collect the base spec, write to object storage"* fully describes the system's behavior without mentioning where any of it runs — that's what makes execution location a deployment detail, not a layer.
 
 Deployment concerns include:
 

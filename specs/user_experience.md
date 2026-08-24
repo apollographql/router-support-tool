@@ -11,7 +11,7 @@ Customer wants to collect data
 User (or platform team) triggers collection — via the chart, or with the Apollo Operator
         │
         ▼
-.tar.gz bundle produced, redacted automatically
+.tar.gz support bundle produced, redacted automatically
         │
         ▼
 Customer inspects bundle contents (optional)
@@ -60,7 +60,7 @@ This installs a single binary in your path and deploys nothing to your cluster. 
 curl -L https://github.com/replicatedhq/troubleshoot/releases/latest/download/support-bundle_linux_amd64.tar.gz | tar xzvf -
 ```
 
-`krew` always installs the latest release. If you're collecting from CI or work somewhere that needs a pinned, reproducible toolchain, prefer the standalone download with a specific release tag in place of `latest`.
+`krew` always installs the latest release. If you're collecting from CI or work somewhere that needs a pinned, reproducible toolchain, use the standalone download instead and pin a specific release tag rather than `latest`.
 
 You don't need this if you're using `mode: job` — the Job runs collection in-cluster with the binary already in its image, so nothing is installed on your machine.
 
@@ -146,7 +146,7 @@ The rest of this section applies to **every** path — `mode: local`, `mode: job
 
 ### Support tool output
 
-Collection produces a `support-bundle-<timestamp>.tar.gz`: a point-in-time snapshot of the router and cluster state. Where it lands depends on how you ran it:
+Collection produces a support bundle — a `support-bundle-<timestamp>.tar.gz` archive, a point-in-time snapshot of the router and cluster state. Where it lands depends on how you ran it:
 
 - **`mode: local`** — the file appears in your current directory.
 - **`mode: job`** — the Job writes it in-cluster and your platform team retrieves it. *(TODO: Retrieval mechanism — mounted volume vs. object storage — is still being finalized.)*
