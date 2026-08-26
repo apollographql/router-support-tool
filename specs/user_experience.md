@@ -38,11 +38,11 @@ Support has: router version, sanitized config, metrics
 
 The tool supports three deployment tiers in v1:
 
-| Deployment | Support in v1 | What you supply |
-| --- | --- | --- |
-| **Apollo Operator** | Full support, zero config once enabled | Nothing |
-| **Official Apollo router Helm chart** | Full support | `namespace` only |
-| **Raw manifests / custom deployment** | Supported | `namespace`, `selector`, `configMapName` |
+| Deployment | What you supply |
+| --- | --- |
+| **Apollo Operator** | Nothing |
+| **Official Apollo router Helm chart** | `namespace` only |
+| **Raw manifests / custom deployment** | `namespace`, `selector`, `configMapName` |
 
 If you deployed the router with a hand-authored manifest or a custom chart that doesn't follow the official chart's conventions, this tool still works — you'll just need to supply more. None of the official chart's conventions (standard labels, known ConfigMap naming) apply, so the tool can't locate your router's config or pod on its own. Supply your namespace, pod selector, and ConfigMap name, and the same chart and collection engine used for every other tier handles the rest.
 
@@ -189,17 +189,9 @@ Installing with `mode: local` requires permission to create a ConfigMap in the t
 
 Installing with `mode: job` requires more: creating a Job, a ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
 
-Collection itself needs read access in the router's namespace to pods, pod logs, ConfigMaps, and deployments — standard permissions for anyone managing a k8s workload — plus three separate cluster-scoped grants, deliberately kept independent so you can decline the more sensitive ones without losing the others:
+Collection itself needs read access in the router's namespace to pods, pod logs, ConfigMaps, and deployments — standard permissions for anyone managing a k8s workload — plus cluster-scoped grants for node access, kept independent of the namespace-scoped ones so you can decline them without losing anything else. See `specs/deployment/v1/v1.md` → Permissions → `nodeMetrics` RBAC for exactly what's requested and why.
 
-- **`list`/`get` on `nodes`** — an ordinary, low-risk read of node objects. This is what surfaces node pressure conditions (`MemoryPressure`, `DiskPressure`).
-- **`get` on `nodes/proxy`** — required by the API server for any request proxied through it to a kubelet, regardless of what's being asked for. This is a broader grant than it may look: Kubernetes' own documentation notes that `nodes/proxy` "provides access to privileged kubelet APIs that can retrieve container logs or execute and attach to pod processes... This access bypasses audit logging and admission control," and is explicitly "not a read-only permission." What this tool actually does with it is read-only — it only ever asks for the kubelet's stats endpoint — but the grant itself authorizes more than that one use.
-- **`get` on `nodes/stats`** — required separately by the kubelet's own authorization check specifically for the stats endpoint. This is what actually narrows what the kubelet will serve once `nodes/proxy` gets the request there; it does not replace `nodes/proxy`.
-
-Node access alone is the only one of the three that reaches outside the namespace with no other caveats. All three are read-only in what this tool does with them.
-
-**`pods/exec` is not required** — nothing runs inside your router container.
-
-If you'd rather not grant `nodes/proxy`/`nodes/stats`, you can decline both and keep `nodes` access: you'll still get OOM kills, restart counts, configured limits, and node pressure conditions, but you'll lose container memory and CPU usage over time. `nodes/proxy` and `nodes/stats` are only useful together — declining either one loses the same capability, so there's no reason to grant one without the other.
+If you'd rather not grant node-proxy access, you can decline it and keep basic node access: you'll still get OOM kills, restart counts, configured limits, and node pressure conditions, but you'll lose container memory and CPU usage over time.
 
 ### Sharing with support
 

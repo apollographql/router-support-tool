@@ -1,24 +1,22 @@
 # Collector naming conventions
 
-Every collector in a spec is given a name. **For most collector types, troubleshoot.sh names the bundle's directory after it** — a collector called `router-metrics` produces `router-metrics/` inside the `.tar.gz`, holding the real file. That makes naming a compatibility surface for those types: rename one and every path in every future bundle changes, breaking bundle-to-bundle comparison across tool versions and any automation that reads a known path. **Treat a collector rename as a breaking change**, not a cosmetic edit.
+Every collector in a spec is given a name. For most collector types, troubleshoot.sh names the bundle's directory after it — a collector called `router-metrics` produces `router-metrics/` inside the `.tar.gz`, holding the real file. **Treat a collector rename as a breaking change**, not a cosmetic edit.
 
-**Some collector types are engine-fixed instead** — their output path is hardcoded by troubleshoot.sh regardless of what `name:` they're given. See [Engine-fixed collectors](#engine-fixed-collectors) below before assuming a rename moves a bundle path; four of the six collectors in the base spec fall into this category.
-
-**One more is a hybrid, and it's the one most worth double-checking: `logs`.** Its chosen name controls a *symlink*, not the real file — see [Name-controlled via symlink: `logs`](#name-controlled-via-symlink-logs) below.
+**Some collector types are engine-fixed instead** — their output path is hardcoded by troubleshoot.sh regardless of what `name:` they're given (see the table below).
 
 ## The convention
 
-**`<domain>-<signal>`** — a domain prefix, then what the data *is*. This applies to name-controlled collectors; it has no effect on engine-fixed ones.
+**`<domain>-<signal>`** — a domain prefix, then what the data *is*.
 
 - **Prefix by domain.** `router-` for signal about the router itself, `cluster-` for signal about the Kubernetes environment around it. A new domain gets a new prefix.
-- **Name by signal, not by mechanism.** The name says what the data is, not how it was obtained. `router-metrics`, not `router-http-scrape`. The mechanism can change without the signal changing; a mechanism-based name becomes a lie the moment it does, and fixing the lie means a breaking rename.
+- **Name by signal, not by mechanism.** The name says what the data is, not how it was obtained. `router-metrics`, not `router-http-scrape`. The mechanism can change without the signal changing.
 - **Lowercase kebab-case**, no underscores, no capitals. This matches troubleshoot.sh's own directory naming and avoids surprises across filesystems.
 
 **When two name-controlled collectors capture related signal, disambiguate by what the data is**, not by which collector produced it.
 
 ## Names for the base spec
 
-Every collector gets a name, engine-fixed or not — for the engine-fixed rows below, the name is a display label only and has no effect on the bundle path. See [Engine-fixed collectors](#engine-fixed-collectors) for the actual paths.
+Every collector gets a name, engine-fixed or not — for the engine-fixed rows below, the name is a display label only and has no effect on the bundle path.
 
 | Signal | Collector | Name | Name controls bundle path? |
 | --- | --- | --- | --- |
@@ -31,30 +29,15 @@ Every collector gets a name, engine-fixed or not — for the engine-fixed rows b
 
 ## Name-controlled via symlink: `logs`
 
-`logs` isn't a clean member of either category. The real log content is written under the **engine-fixed** `cluster-resources/pods/logs/<namespace>/<pod>/<container>.log` — not under the collector's own name at all. The chosen `name:` (`router-runtime-logs`) only controls a **symlink** pointing at that real file.
-
-So renaming `router-runtime-logs` *is* still a breaking change — it moves the symlink's path, and any automation reading that path breaks exactly like it would for `http`. But the underlying data was never at risk of moving; it's pinned to the engine-fixed path regardless of what this collector is named.
+Log content is written under `cluster-resources/pods/logs/<namespace>/<pod>/<container>.log`. The chosen name, `router-runtime-logs`, only controls a **symlink** pointing at that real file.Thus, renaming `router-runtime-logs` *is* still a breaking change.
 
 **A customer's extraction tooling that doesn't preserve symlinks can make `router-runtime-logs/` look empty or broken while the logs are actually intact** under `cluster-resources/pods/logs/`. Don't conclude logs weren't collected from an empty-looking `router-runtime-logs/` alone — check the engine-fixed path directly.
 
 See `specs/collection/output.md` for the full worked directory tree, including exactly how this symlink resolves.
 
-## Engine-fixed collectors
-
-`clusterResources`, `nodeMetrics`, `helm`, and `configMap` all write to paths hardcoded by the collection engine. The `name:` field on these has no effect on where output lands; it only affects the display label shown during collection. Do not choose a name expecting it to control the bundle layout for any of these.
-
-| Collector | Actual path | Source |
-| --- | --- | --- |
-| `clusterResources` | `cluster-resources/pods/<namespace>.json`, `cluster-resources/configmaps/<namespace>.json`, and similar, one file per resource type | [`cluster_resources.go`](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/collect/cluster_resources.go) |
-| `nodeMetrics` | `node-metrics/<node>.json` | [`k8s_node_metrics.go#L60`](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/collect/k8s_node_metrics.go#L60) |
-| `helm` | `helm/<namespace>.json` (or `helm/<namespace>/<releaseName>.json` if `releaseName` is set) | [`helm.go#L77-79`](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/collect/helm.go#L77) |
-| `configMap` | `configmaps/<namespace>/<configmap-name>.json` (the real Kubernetes ConfigMap name, not the collector's `name:`) | [`configmap.go`](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/collect/configmap.go), `GetConfigMapFileName` |
-
-This is why `router.yaml` capture (`specs/collection/base_spec.md` → `router.yaml` capture) never claims a chosen bundle path for the `helm`/`configMap` pair — there isn't one to choose.
-
 ## Rules for adding a collector
 
-- First, check whether the new collector's type is name-controlled or engine-fixed (see above). If engine-fixed, pick a reasonable `name:` for the display label, but don't expect it to affect the bundle layout or treat a later rename as breaking for path purposes.
+- First, check whether the new collector's type is name-controlled or engine-fixed. If engine-fixed, pick a reasonable `name:` for the display label, but don't expect it to affect the bundle layout or treat a later rename as breaking for path purposes.
 - For name-controlled collectors: pick the name before writing the YAML, and check it against the table above for collisions and for consistency of domain prefix.
 - If the obvious name contains a collector type (`exec`, `http`, `configmap`, `helm`), that is a signal the name is describing mechanism — rename it.
 - If a new name-controlled collector overlaps an existing one's signal, disambiguate by what the data is, not by mechanism.
