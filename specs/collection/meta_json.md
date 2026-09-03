@@ -47,4 +47,4 @@ Every field this file actually specifies, for a `mode: job` install:
 }
 ```
 
-A `mode: local` install omits `sidecar_injection_disabled` entirely (it only applies to the Job path).
+A `mode: local` install omits `sidecar_injection_disabled` (it only applies to the Job path).

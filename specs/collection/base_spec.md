@@ -79,4 +79,4 @@ Enabling the Prometheus exporter (`telemetry.exporters.metrics.prometheus.enable
 
 Some customers run a service mesh or proxy (Istio, Linkerd, Envoy) as a sidecar alongside the router. The proxy itself can be the root cause of what looks like a router problem. The `logs` collector captures every container in the pod, and the kubelet Summary API reports per-container figures, so a sidecar's own resource usage is visible alongside the router's.
 
-**A mesh enforcing strict mTLS can block the Prometheus scrape** — the section comes back empty, not an error. The collected `router.yaml` disambiguates the cause: if it shows `prometheus.enabled: true` and the section is still empty, the mesh blocked the scrape rather than the exporter being misconfigured.
+A mesh enforcing strict mTLS can block the Prometheus scrape, causing the section to come back empty — the same symptom as the `listen`-address misconfiguration. The bundle alone can't tell you which.
