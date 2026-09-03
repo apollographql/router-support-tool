@@ -154,7 +154,7 @@ Collection produces a support bundle — a `support-bundle-<timestamp>.tar.gz` a
 
 It includes router version, sanitized configuration, recent logs, metrics (if you've enabled the Prometheus endpoint), and pod status. Your Redis configuration and any Redis errors in the router logs are captured, so support can still see how Redis is configured and whether the router is failing against it.
 
-Sensitive data is redacted automatically before the output bundle is created — see [Redaction preferences](#redaction-preferences) below. You can inspect the bundle contents before sharing. Nothing persists in the cluster after collection completes, though the chart itself remains installed unless you remove it — see [Cluster footprint](#cluster-footprint) below.
+Sensitive data is redacted automatically before the output bundle is created — see [Redaction](#redaction) below. You can inspect the bundle contents before sharing. Nothing persists in the cluster after collection completes, though the chart itself remains installed unless you remove it — see [Cluster footprint](#cluster-footprint) below.
 
 ### Metrics require the Prometheus endpoint to be enabled
 
@@ -171,21 +171,9 @@ If the exporter is off, or bound somewhere the collector can't reach, that secti
 
 **If you're on the Apollo Operator**, see the Operator's own documentation for whether metrics are collected — the port is set by the Operator rather than by you, so it isn't something you configure.
 
-### Redaction preferences
+### Redaction
 
-By default, schema/SDL is included in the bundle since it's usually needed for diagnosis. If your schema is sensitive enough that even its presence shouldn't be shared, opt out:
-
-```bash
-helm install router-diagnostics apollo/router-diagnostics \
-  --namespace production \
-  --set namespace=production \
-  --set mode=local \
-  --set redaction.includeSchema=false
-```
-
-Everything else — JWT/auth config, header values, operation bodies in logs, subgraph URLs — is redacted automatically with no configuration available or needed. `APOLLO_KEY` is never collected under any circumstances.
-
-**On the Apollo Operator** there is no chart to pass this value to. TODO: How Operator customers express the same preference is still being finalized — see `specs/deployment/v1/operator.md`.
+Redaction runs automatically with no configuration needed. JWT/auth config, header values, operation bodies in logs, subgraph URLs are redacted automatically. `APOLLO_KEY` is never collected under any circumstances.
 
 ### Cluster footprint
 
