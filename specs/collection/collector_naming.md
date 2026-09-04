@@ -18,20 +18,20 @@ Every collector in a spec is given a name. For most collector types, troubleshoo
 
 Every collector gets a name, engine-fixed or not — for the engine-fixed rows below, the name is a display label only and has no effect on the bundle path.
 
-| Signal | Collector | Name | Name controls bundle path? |
+| Name | Signal | Collector | Name controls bundle path? |
 | --- | --- | --- | --- |
-| Runtime logs, all containers in the pod | `logs` | `router-runtime-logs` | Only a symlink — see below |
-| Prometheus metrics snapshot | `http` | `router-metrics` | Yes |
-| Helm values layer of the config | `helm` | `router-config-values` | No — engine-fixed |
-| Rendered `router.yaml` | `configMap` | `router-config-rendered` | No — engine-fixed |
-| Node, pod, and container CPU/memory from the kubelet | `nodeMetrics` | `router-resource-usage` | No — engine-fixed |
-| Pod status, router version, env vars, OOM events, node pressure | `clusterResources` | `cluster-resources` | No — engine-fixed |
+| `router-logs` | Runtime logs, all containers in the pod | `logs` | Only a symlink — see below |
+| `router-metrics` | Prometheus metrics snapshot | `http` | Yes |
+| `router-config-values` | Helm values layer of the config | `helm` | No — engine-fixed |
+| `router-config-rendered` | Rendered `router.yaml` | `configMap` | No — engine-fixed |
+| `router-resource-usage` | Node, pod, and container CPU/memory from the kubelet | `nodeMetrics` | No — engine-fixed |
+| `cluster-resources` | Pod status, router version, env vars, OOM events, node pressure | `clusterResources` | No — engine-fixed |
 
 ## Name-controlled via symlink: `logs`
 
-Log content is written under `cluster-resources/pods/logs/<namespace>/<pod>/<container>.log`. The chosen name, `router-runtime-logs`, only controls a **symlink** pointing at that real file.Thus, renaming `router-runtime-logs` *is* still a breaking change.
+This is a property of the `logs` collector type. Any collector of type `logs`, whatever name it's given, writes its real content to the fixed path `cluster-resources/pods/logs/<namespace>/<pod>/<container>.log` and only uses its `name:` to control a **symlink** pointing at that real file — troubleshoot.sh always creates this symlink for `logs` collectors, regardless of spec configuration. Renaming `router-logs` is still a breaking change since it moves the symlink.
 
-**A customer's extraction tooling that doesn't preserve symlinks can make `router-runtime-logs/` look empty or broken while the logs are actually intact** under `cluster-resources/pods/logs/`. Don't conclude logs weren't collected from an empty-looking `router-runtime-logs/` alone — check the engine-fixed path directly.
+**A customer's extraction tooling that doesn't preserve symlinks can make `router-logs/` look empty or broken while the logs are actually intact** under `cluster-resources/pods/logs/`. Don't conclude logs weren't collected from an empty-looking `router-logs/` alone — check the engine-fixed path directly.
 
 See `specs/collection/output.md` for the full worked directory tree, including exactly how this symlink resolves.
 

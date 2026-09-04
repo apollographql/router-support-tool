@@ -2,8 +2,6 @@
 
 `meta.json` is the file that makes a bundle self-describing. Populating `meta.json` is entirely our responsibility. It records what the tool was configured to do, which is enough to make a healthy baseline bundle comparable against an incident bundle — but, as this file explains, it cannot reliably attribute *why* any individual section came up empty. This file specifies what it holds and, importantly, what it cannot.
 
-Note: **This is not `metadata/user.json`.** That file comes from the `--metadata` flag and holds customer-supplied key-values typed at invocation.
-
 ## How it is produced
 
 **troubleshoot.sh has no metadata feature — only the `data` collector**, a generic primitive that writes whatever literal string we give it to whatever path we name, unaware of any other collector in the spec:

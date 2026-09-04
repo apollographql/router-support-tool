@@ -33,7 +33,7 @@ support-bundle-2026-08-11T14_23_00/
 ├── meta.json
 ├── router-metrics/
 │   └── result.json
-├── router-runtime-logs/
+├── router-logs/
 │   └── <router-pod-name>/
 │       └── router.log -> ../../cluster-resources/pods/logs/production/<router-pod-name>/router.log
 ├── cluster-resources/
