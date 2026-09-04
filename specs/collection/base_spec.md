@@ -4,7 +4,7 @@ The default collection spec is grounded in a TSH ticket analysis of the past yea
 
 ## What the base spec collects
 
-These items are collected in the base spec. The table below (omitting the "Notes" column) is designed to be shared with customers so a platform team can review it, grant the access required for the collectors they want, and understand exactly what each one provides and what's lost if they decline it. Nothing is collected that isn't listed here.
+These items are collected in the base spec. The table below is designed to be shared with customers so a platform team can review it, grant the access required for the collectors they want, and understand exactly what each one provides and what's lost if they decline it. Nothing is collected that isn't listed here.
 
 Every bundle also carries a `meta.json` recording what the tool was configured to do, see `specs/collection/meta_json.md` for more details.
 
@@ -34,14 +34,21 @@ Two collectors run unconditionally to capture configuration. Whichever matches t
 
 ### Schema collection
 
-Schema, when the chart puts it in the cluster, lands in a separate ConfigMap (`<release>-supergraph`), distinct from the main config ConfigMap, and only renders when the customer sets `.Values.supergraphFile` (customers on managed federation never populate it). It carries the router chart's standard label, so it's swept up by the same `clusterResources` collection as everything else in the namespace, landing at `cluster-resources/configmaps/<namespace>.json` alongside the main config ConfigMap.
+Schema only lands in the cluster at all when the customer sets `.Values.supergraphFile` on the router's Helm chart, not our support tool's chart. Customers on managed federation (GraphOS schema governance) never populate that value, so for them there is no `<release>-supergraph` ConfigMap and schema is simply absent from the bundle (see the "Absent for managed-federation customers" note on the `<release>-supergraph` ConfigMap row above).
+
+When `supergraphFile` is set, the schema renders into a separate ConfigMap (`<release>-supergraph`), distinct from the main config ConfigMap. It carries the router chart's standard label, so it's swept up by the same `clusterResources` collection as everything else in the namespace, landing at `cluster-resources/configmaps/<namespace>.json` alongside the main config ConfigMap.
 
 ### Prometheus metrics prerequisites
 
-The `http` collector targets the metrics endpoint at port `9090`. Three settings are load-bearing for this to return anything:
+The `http` collector targets the metrics endpoint at port `9090`. Three settings are load-bearing for this to return anything, from two different places:
+
+**`router.yaml`** (via `.Values.router.configuration` in the Helm chart):
 
 - `telemetry.exporters.metrics.prometheus.enabled: true` — turns the exporter on.
 - `telemetry.exporters.metrics.prometheus.listen` — the bind address. Binding to loopback means an external scrape can't reach it no matter what port the collector targets.
+
+**Helm chart value** (not a `router.yaml` setting):
+
 - `serviceMonitor.enabled: true` — the chart only adds a `metrics` port to the Service inside this flag. Without it, the Service has no `metrics` port at all, regardless of whether the exporter itself is on and reachable.
 
 If any of the three is off or misconfigured, the collector returns empty and the rest of the bundle is unaffected.
