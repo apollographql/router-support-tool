@@ -2,79 +2,85 @@
 
 ## The Problem
 
-The router's `headers` plugin lets an operator set literal HTTP header values in `router.yaml`. That's the one place in this plugin's config a real secret can appear — everything else in it is header names or forwarding rules, never values.
+The router's `headers` plugin supports several operations. Most carry only header names or routing rules. Three fields, across two of these operations, can also hold a literal value ([`headers/mod.rs#L128-224`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/headers/mod.rs#L128), verified at `v2.17.0`):
 
-Verified against `apollographql/router` at `v2.17.0`.
+- **`insert.value`** (the `Static` variant) — a hardcoded header value.
+- **`insert.default`** (the `FromBody` variant) — the literal fallback used when the configured JSONPath doesn't resolve in the request body.
+- **`propagate.default`** (the `Named` variant) — the literal fallback used when the source header isn't present to propagate.
 
-### What's in the block, and which parts are actually sensitive
-
-`headers.all.request`/`.response` and the per-subgraph equivalent (`headers.subgraphs.<name>.request`/`.response`) hold a list of operations. The `Operation` enum is `insert | remove | propagate`:
-
-| Operation | What it does | Sensitive? |
-| --- | --- | --- |
-| `propagate` | Forwards an existing header (by name or regex) from request to response, or vice versa | No — never carries a literal value |
-| `remove` | Strips a header by name or regex | No |
-| `insert` — `Static` variant | Sets a header to a **literal, hardcoded value**: `insert: {name: "x-api-key", value: "literal-secret"}` | **Yes.** This is the one shape where a customer would plausibly hardcode a credential (an API key sent to a subgraph, for instance) directly into the spec. |
-| `insert` — `FromContext` / `FromBody` variants | Sets a header from a runtime value (request context, request body field) | No literal value exists in the YAML — nothing to redact here |
-
-Source: [`headers/mod.rs#L96-L182`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/headers/mod.rs#L96) — `InsertStatic{name: HeaderName, value: HeaderValue}` is the exact field carrying the literal.
-
-**This is not the only place a literal header value can appear.** `authentication.router.jwt.jwks[].headers[]` (see `jwt_and_auth_config.md`) uses the identical `{name, value}` shape for a different purpose — headers sent when fetching a JWKS URL. The two are unrelated in the config tree and need separate redactor rules (different YAML paths), even though the underlying risk and pattern shape are the same.
+`insert.from_context` has no such field — it always reads a runtime value, never a literal.
 
 ## Redactor: `router.yaml` (`configMap`/`clusterResources` output)
 
-Single-line `regex` with a `mask` capture group, for the same reason given in `overview.md`: the config is embedded as JSON-escaped text, so `yamlPath` can't reach a single field inside it.
+Single-line `regex` with a `mask` capture group. Six patterns: block-style and flow-style for each of the three fields above.
 
 ```yaml
-- name: router-headers-insert-static-value
+- name: router-headers-insert-literal-values
   fileSelector:
     files:
       - "cluster-resources/configmaps/*.json"
       - "configmaps/*/*.json"
   removals:
     regex:
-      - redactor: 'insert:\\n\s*name:\s*"?[^"\\\n]*"?\\n\s*value:\s*"?(?P<mask>[^"\\\n]*?)"?'
-      - redactor: 'insert:\s*\{[^}\\]*?value:\s*"?(?P<mask>[^",}\\]*)"?[^}\\]*?\}'
+      - redactor: '(insert:\\n\s*name:\s*\\?"?[^"\\\n]*\\?"?\\n\s*value:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
+      - redactor: '(insert:\s*\{(?:[^}\\]|\\")*?value:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?(?:[^}\\]|\\")*?\})'
+      - redactor: '(insert:\\n\s*name:\s*\\?"?[^"\\\n]*\\?"?\\n\s*path:\s*\\?"?[^"\\\n]*\\?"?\\n\s*default:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
+      - redactor: '(insert:\s*\{(?:[^}\\]|\\")*?default:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?(?:[^}\\]|\\")*?\})'
+- name: router-headers-propagate-default
+  fileSelector:
+    files:
+      - "cluster-resources/configmaps/*.json"
+      - "configmaps/*/*.json"
+  removals:
+    regex:
+      - redactor: '(named:\s*\\?"?[^"\\\n]*\\?"?\\n\s*(?:rename:\s*\\?"?[^"\\\n]*\\?"?\\n\s*)?default:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
+      - redactor: '(propagate:\s*\{(?:[^}\\]|\\")*?default:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?(?:[^}\\]|\\")*?\})'
 ```
 
-**Two patterns, because block-style and flow-style YAML are both real possibilities and neither can be ruled out by checking source.** Unlike the `helm`-output serialization question elsewhere in this directory, which mechanical checking resolved definitively, whether a given `router.yaml` writes `insert` as
+**Notes:**
 
-```yaml
-- insert:
-    name: x-api-key
-    value: secret
-```
-
-or as `insert: {name: x-api-key, value: secret}` is entirely up to the customer or chart template that authored it — YAML permits both, and this project has no control over or visibility into that choice ahead of time. So rather than picking one and treating the other as an accepted gap, both patterns are included in the same redactor: the first (unchanged from before) targets the block-style, `key:`/`value:`-on-separate-lines shape; the second targets flow-style, matching `value:` anywhere between the `{` and `}` regardless of whether `name` comes before or after it, since YAML flow-map key order isn't guaranteed either. Unlike `subgraph_urls.md`'s redactor, neither pattern is order/structure-agnostic on its own — together, they cover the two structures YAML actually allows for this field, rather than one of them.
-
-**Important Notes:** 
-- Both patterns need independent verification, and covering both structures doesn't mean either is confirmed correct.
-- **Required before this is considered done:** collect against a router configured with a hardcoded `insert` header value written in block style, and a separate collection with it written in flow style, and confirm each pattern matches its corresponding case in real collected output.
+- Two patterns per field, because YAML permits both block style (`insert:` / `name:` / `value:` on separate lines) and flow style (`insert: {name: x-api-key, value: secret}`), and there's no way to know ahead of time which one a customer's `router.yaml` uses.
+- **Flow-style matches regardless of key order, block-style requires `name:`/`named:` to come first.** RE2 has no lookbehind, so the block pattern can't search backward for the key it depends on. **Accepted limitation:** a block entry that writes `value:`/`default:` before `name:`/`named:` is not masked.
+- `insert.default`'s block pattern expects `path:` between `name:` and `default:`. `path` is required on the `FromBody` variant so it is always present, but **serde accepts mapping keys in any order** — the pattern matches the conventional authoring order, not a structural guarantee. Any other order won't match, same limitation as above.
+- `propagate.default`'s block pattern allows an optional `rename:` line between `named:` and `default:`, since `Propagate::Named` has an optional `rename` field that a customer may or may not include.
 
 ## Redactor: the `helm` collector's output
 
-**Not a two-line regex — `yamlPath`, because the field's exact location is known, not guessed.** We choose not to use a `selector`/`redactor` pair matching any `"name": "..."` line in the file, because that's too broad and would mask whatever follows *any* `{name, value}`-shaped pair in the whole Helm values dump, including ones that have nothing to do with header redaction (an env var list, an unrelated annotation, anything else shaped like `{name, value}`). Per `overview.md`, `helm/*.json` is genuine structured JSON, not a string blob — exactly the case where `yamlPath` is the right tool, since it can target a specific field by path rather than pattern-matching text. The router chart nests all router config under `.Values.router.configuration` (confirmed elsewhere in this doc set, e.g. `router.configuration.telemetry.exporters.metrics.prometheus.enabled` — `specs/deployment/v1/v1.md`), so the `headers` config's location is a known chart convention, not something this pattern has to guess at:
+`helm/*.json` is structured JSON, so `yamlPath` masks each field by its exact path — order-independent, and precise rather than key-name matching:
 
 ```yaml
-- name: router-headers-insert-static-value-helm
+- name: router-headers-insert-literal-values-helm
   fileSelector:
     files:
       - "helm/*.json"
       - "helm/*/*.json"
   removals:
     yamlPath:
-      - "releaseHistory.*.values.router.configuration.headers.all.request.*.insert.value"
-      - "releaseHistory.*.values.router.configuration.headers.all.response.*.insert.value"
-      - "releaseHistory.*.values.router.configuration.headers.subgraphs.*.request.*.insert.value"
-      - "releaseHistory.*.values.router.configuration.headers.subgraphs.*.response.*.insert.value"
+      - "*.releaseHistory.*.values.router.configuration.headers.all.request.*.insert.value"
+      - "*.releaseHistory.*.values.router.configuration.headers.all.response.*.insert.value"
+      - "*.releaseHistory.*.values.router.configuration.headers.subgraphs.*.request.*.insert.value"
+      - "*.releaseHistory.*.values.router.configuration.headers.subgraphs.*.response.*.insert.value"
+      - "*.releaseHistory.*.values.router.configuration.headers.all.request.*.insert.default"
+      - "*.releaseHistory.*.values.router.configuration.headers.all.response.*.insert.default"
+      - "*.releaseHistory.*.values.router.configuration.headers.subgraphs.*.request.*.insert.default"
+      - "*.releaseHistory.*.values.router.configuration.headers.subgraphs.*.response.*.insert.default"
+- name: router-headers-propagate-default-helm
+  fileSelector:
+    files:
+      - "helm/*.json"
+      - "helm/*/*.json"
+  removals:
+    yamlPath:
+      - "*.releaseHistory.*.values.router.configuration.headers.all.request.*.propagate.default"
+      - "*.releaseHistory.*.values.router.configuration.headers.all.response.*.propagate.default"
+      - "*.releaseHistory.*.values.router.configuration.headers.subgraphs.*.request.*.propagate.default"
+      - "*.releaseHistory.*.values.router.configuration.headers.subgraphs.*.response.*.propagate.default"
 ```
 
-**Important Notes:**
+`Insert` and `Propagate` are both `#[serde(untagged)]` ([`headers/mod.rs#L164`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/headers/mod.rs#L164), [`headers/mod.rs#L192`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/headers/mod.rs#L192)), so each variant's fields serialize flatly under `insert:`/`propagate:` — no variant-name segment in the path.
 
-- Four paths, one per `all`/`subgraphs` × `request`/`response` combination — `subgraphs.*` wildcards over subgraph names, `request.*`/`response.*` wildcards over the operation list's array index, and only the `insert.value` leaf is masked, leaving `insert.name` (and every `propagate`/`remove` entry) untouched. This is more precise than a two-line regex, at the cost of depending on `releaseHistory`'s array shape and the `router.configuration` nesting convention holding — both stated as fact above, not verified against a real collected file.
-
-- **Required before this is considered done:** collect a bundle with a hardcoded `insert` header value configured, and confirm each path actually matches and masks in real collected output — including checking `helm/*.json`'s actual top-level shape (is it really `releaseHistory`, an array, at that nesting?) before trusting any of the four paths.
+**Required before this is considered done:** collect against a router with each of the three fields set to a distinct value — `insert.value`, `insert.default` (with the JSONPath deliberately unresolvable), and `propagate.default` (with the source header absent) — and confirm all three are masked in both the `configMap`/`clusterResources` output and the `helm` collector's output.
 
 ## What's deliberately left visible
 
-Header *names* in every operation — `propagate`, `remove`, and the `name` field of `insert` — are left visible. Which headers the router forwards or strips is routing/security-posture information a support engineer needs to see. Only the literal secret a customer chose to hardcode as a value is masked.
+Header *names* — `propagate.named`, `remove`, `rename`, and the `name` field of `insert` — are left visible in every operation. Which headers the router forwards or strips is routing/security-posture information a support engineer needs to see. Only the literal values a customer chose to hardcode are masked.

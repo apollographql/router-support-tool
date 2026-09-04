@@ -2,21 +2,70 @@
 
 ## The Problem
 
-`override_subgraph_url.<subgraphName>` in `router.yaml` is a plain string map (`HashMap<String, String>`), parsed via `http::Uri::from_str` (or a `unix://` socket path on Unix). Source: [`override_url.rs#L20-L32`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/override_url.rs#L20), verified at `v2.17.0`.
+`override_subgraph_url.<subgraphName>` in `router.yaml` is a plain string map parsed via `http::Uri::from_str` ([`override_url.rs#L20-L32`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/override_url.rs#L20), verified at `v2.17.0`). The values are network addresses, usually internal service DNS names, sometimes external hosts, and nothing prevents a userinfo component (`http://user:pass@internal-host:4001/graphql`) from being included as well.
 
-In the overwhelming majority of real deployments, these are internal service DNS names — `http://products.internal.svc.cluster.local:4001/graphql` — sensitive only as network topology, not as credential material. But `http::Uri` has no schema-level restriction against a userinfo component, so nothing prevents a customer from writing `http://user:pass@internal-host:4001/graphql`, and if one does, that's a literal credential sitting in the config.
+## We redact the whole URL, not just the credentials
 
-### Two different things "sensitive" could mean here — only one needs a redactor
+A subgraph URL is masked in full because the address itself is the disclosure, and the credential is the rarer case.
 
-1. **Embedded credentials in the URL's userinfo component.** Unambiguously sensitive whenever present, rare in practice, and safe to always mask — masking a URL that never had credentials in it costs nothing, since there's nothing to mask. Addressed below.
-2. **The URL/hostname itself, as internal topology.** Decided: this does not need masking or an opt-out, and not because it's judged harmless in isolation — `clusterResources` already collects Service objects unconditionally (`cluster-resources/services/<namespace>.json`, per `specs/collection/output.md`), alongside Deployments and Pods. A Kubernetes Service named `products` in namespace `default` *is* the DNS name `products.default.svc.cluster.local` — so the internal topology a masked subgraph URL would protect is already fully exposed elsewhere in every bundle this tool produces, regardless of what this file does. Masking it here would trade real diagnostic value (subgraph reachability, which is exactly what a support engineer checks this field for) for no actual privacy benefit, since the same information is already sitting in `cluster-resources/`. See "What's deliberately left visible" below.
+- The host is internal topology. `http://products.checkout-prod.svc.cluster.local:4001/graphql` names a namespace, a service, and a port.
 
-## Redactor: embedded URL credentials
+- An external host can reveal a business relationship.
 
-Always-on, defensive, single-line `regex` with a `mask` capture group (same reasoning as the other config-field redactors in this directory — `router.yaml` is embedded JSON-escaped text, so this is the only mechanism that reaches a specific substring inside it):
+- Support does not need the address to use the field. What is diagnostically useful is *that* an override exists and *which* subgraph it applies to — and the subgraph name survives on the `helm` surface and in the schema. A customer can supply the URL directly if a specific question turns on it.
+
+Rejected alternative: mask only the userinfo, leaving the address.
+
+## Redactor: the `helm` collector's output
+
+`helm/*.json` is structured JSON, so `yamlPath` masks each value directly and leaves the subgraph names intact:
 
 ```yaml
-- name: router-subgraph-url-embedded-credentials
+- name: router-subgraph-url-helm
+  fileSelector:
+    files:
+      - "helm/*.json"
+      - "helm/*/*.json"
+  removals:
+    yamlPath:
+      - "*.releaseHistory.*.values.router.configuration.override_subgraph_url.*"
+```
+
+The trailing `*` wildcards over the map's keys, masking every value beneath `override_subgraph_url`.
+
+## Redactor: `router.yaml` (`configMap`/`clusterResources` output)
+
+This surface masks the **whole block**, keys included — RE2 has no lookbehind, so no pattern can scope itself to entries under `override_subgraph_url:` specifically without either missing later entries or over-matching unrelated ones.
+
+```yaml
+- name: router-subgraph-url
+  fileSelector:
+    files:
+      - "cluster-resources/configmaps/*.json"
+      - "configmaps/*/*.json"
+  removals:
+    regex:
+      - redactor: '(override_subgraph_url:)(?P<mask>(?:\\n\s+(?:[^\\]|\\")+)+)'
+```
+
+**Consequence:** subgraph *names* survive on the `helm` surface but not in `router.yaml`, where the pattern can only mask the block wholesale. This is a side effect of the RE2 constraint.
+
+## Redactor: subgraph URLs in the supergraph schema
+
+Every supergraph schema carries the canonical URL of every subgraph in a `@join__graph` directive, which is federation spec, not a customer choice:
+
+```graphql
+directive @join__graph(name: String!, url: String!) on ENUM_VALUE
+
+enum join__Graph {
+  ACCOUNTS @join__graph(name: "accounts", url: "https://accounts.demo.dev/")
+}
+```
+
+That schema is collected whenever the customer sets `.Values.supergraphFile` — it lands in the `<release>-supergraph` ConfigMap and is swept up by `clusterResources` (`specs/collection/base_spec.md` → Schema collection).
+
+```yaml
+- name: router-subgraph-url-schema
   fileSelector:
     files:
       - "cluster-resources/configmaps/*.json"
@@ -25,15 +74,21 @@ Always-on, defensive, single-line `regex` with a `mask` capture group (same reas
       - "helm/*/*.json"
   removals:
     regex:
-      - redactor: '(:\/\/)(?P<mask>[^\/@"\\]+:[^\/@"\\]+)(@)'
+      - redactor: '(@join__graph\([^)]*url:\s*\\?")(?P<mask>[^"\\]*)(\\?")'
+      - redactor: '(baseURL:\s*\\?")(?P<mask>[^"\\]*)(\\?")'
 ```
 
 **Notes:**
 
-- This targets the `user:pass@` userinfo shape generically (not specific to `override_subgraph_url`'s own key name, since the pattern is the same wherever a URL with embedded credentials could appear in the config), and doesn't depend on any particular serialization at all — it never relies on JSON-escaping sequences the way the `router.yaml`-targeting patterns elsewhere in this directory do.
-- **One pattern covers both file shapes:** Per `overview.md` → The `helm` collector's output, `helm/*.json` is real, unescaped JSON, and this pattern needs no changes to match there too — a `://user:pass@` substring looks identical whether it's sitting inside JSON-escaped block-style YAML or a plain JSON string value. This is the one redactor in this directory that didn't need a second, format-specific rule for the `helm/*.json` paths.
-- **Required before this is considered done:** collect against a router with a credential-bearing `override_subgraph_url` entry and confirm it's masked in both the `configMap`/`clusterResources` output and the `helm` collector's output, and confirm the pattern doesn't false-positive on a URL that merely contains an `@` for an unrelated reason (unlikely in a URL authority position, but not verified).
+- Anchors on `@join__graph(` rather than a bare `url:`, so it doesn't also mask `@link(url: …)` (the federation spec version) or a customer's own `url: String` field.
+- Assumes the SDL is collected as one physical line inside the ConfigMap JSON; it would not match if the schema were ever collected as a standalone `.graphql` file.
+- The second pattern anchors on `baseURL` directly to reach Apollo Connectors' external API addresses (`@source(http: { baseURL: … })`, nested inside `@join__directive`) — a connector base URL is usually third-party, making it the disclosure most likely to name a business relationship.
+- Managed-federation customers are unaffected: their schema comes from Uplink at runtime and never lands in a ConfigMap.
+
+**Required before this is considered done:** collect with (a) `override_subgraph_url` set for two subgraphs, one quoted and one not, followed by a top-level key, (b) a `supergraphFile` schema carrying `@join__graph` URLs and a connector `baseURL`, and (c) a `@link` directive. Confirm every address is masked on every surface, the key after the block is intact rather than swallowed, subgraph names and the `@link` URL survive, and — per `overview.md` → Order independence on `helm/*.json` — the schema patterns still fire after a `yamlPath` rule re-serializes that file as YAML.
 
 ## What's deliberately left visible
 
-The URL/hostname itself — everything outside a userinfo component, which is the common case — is left visible, deliberately and not just by default. Per the decision above, masking it would provide no privacy benefit that `clusterResources`'s unconditional collection of Services, Deployments, and Pods doesn't already provide, and it would cost the diagnostic value a support engineer needs when checking subgraph reachability. No opt-out or opt-in toggle is proposed for this field, unlike schema/SDL — the two cases looked similar at first, but they aren't: schema content reveals business logic and structure that lives nowhere else in the bundle, while a subgraph hostname reveals nothing that `cluster-resources/` doesn't already.
+- **Subgraph names**, everywhere they can be kept — `@join__graph(name: …)`, the `helm` map keys, and a connector's `graphs` argument. Knowing which subgraphs exist, and which one an override applies to, is what makes the field useful to support. The one exception is the `override_subgraph_url` block on the embedded surface, for the RE2 reason above; those same names survive on the other two surfaces in the same bundle.
+- **`@link(url: …)`**, which pins the federation spec version rather than naming a customer host.
+- **A connector's `name`, `path`, and `queryParams`**, which describe the shape of a call without disclosing where it goes.
