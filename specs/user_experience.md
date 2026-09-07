@@ -134,9 +134,10 @@ helm install router-diagnostics apollo/router-diagnostics \
 
 If you're on a raw-manifest or custom deployment, also set `selector` and `configMapName` as shown above.
 
-The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle. *(TODO: Bundle retrieval mechanism — mounted volume vs. object storage — is still being finalized.)* No one outside the platform team needs raw kubectl access. This is the same spec and collection engine as `mode: local`; only who runs it and how the bundle is retrieved differs.
-
+The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle.
 The ServiceAccount needs the same read permissions as the local path — namespace-scoped, plus the cluster-scoped grants for node access and container metrics — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below. Applying them requires someone who can create Jobs, namespace RBAC, *and* cluster-scoped RBAC in the cluster — see [Setup, step two](#setup-step-two-one-chart-two-modes) above for what that means for who can install this mode.
+
+**If your cluster runs a service mesh, the Job's pod doesn't join it by default.** Sidecar injection is disabled automatically so the Job reliably reaches `Completed` instead of getting stuck in `Running` waiting on a long-lived sidecar. If your platform team's policy requires every pod to be in the mesh, this can be overridden. See `specs/deployment/v1/v1.md` → Service mesh environments for how to override it.
 
 ---
 
@@ -149,12 +150,12 @@ The rest of this section applies to **every** path — `mode: local`, `mode: job
 Collection produces a support bundle — a `support-bundle-<timestamp>.tar.gz` archive, a point-in-time snapshot of the router and cluster state. Where it lands depends on how you ran it:
 
 - **`mode: local`** — the file appears in your current directory.
-- **`mode: job`** — the Job writes it in-cluster and your platform team retrieves it. *(TODO: Retrieval mechanism — mounted volume vs. object storage — is still being finalized.)*
-- **Apollo Operator** - TODO, see `specs/deployment/v1/operator.md`
+- **`mode: job`** — the Job writes it in-cluster and your platform team retrieves it.
+- **Apollo Operator** - See `specs/deployment/v1/operator.md`
 
 It includes router version, sanitized configuration, recent logs, metrics (if you've enabled the Prometheus endpoint), and pod status. Your Redis configuration and any Redis errors in the router logs are captured, so support can still see how Redis is configured and whether the router is failing against it.
 
-Sensitive data is redacted automatically before the output bundle is created — see [Redaction preferences](#redaction-preferences) below. You can inspect the bundle contents before sharing. Nothing persists in the cluster after collection completes, though the chart itself remains installed unless you remove it — see [Cluster footprint](#cluster-footprint) below.
+Sensitive data is redacted automatically before the output bundle is created — see [Redaction](#redaction) below. You can inspect the bundle contents before sharing. Nothing persists in the cluster after collection completes, though the chart itself remains installed unless you remove it — see [Cluster footprint](#cluster-footprint) below.
 
 ### Metrics require the Prometheus endpoint to be enabled
 
@@ -171,21 +172,11 @@ If the exporter is off, or bound somewhere the collector can't reach, that secti
 
 **If you're on the Apollo Operator**, see the Operator's own documentation for whether metrics are collected — the port is set by the Operator rather than by you, so it isn't something you configure.
 
-### Redaction preferences
+**A service mesh enforcing strict mTLS can also empty this section**, even with the exporter correctly configured above — this applies to `mode: local` and `mode: job` alike, since collection runs from outside the mesh either way. See `specs/deployment/v1/v1.md` → Running outside the mesh doesn't have to mean losing metrics.
 
-By default, schema/SDL is included in the bundle since it's usually needed for diagnosis. If your schema is sensitive enough that even its presence shouldn't be shared, opt out:
+### Redaction
 
-```bash
-helm install router-diagnostics apollo/router-diagnostics \
-  --namespace production \
-  --set namespace=production \
-  --set mode=local \
-  --set redaction.includeSchema=false
-```
-
-Everything else — JWT/auth config, header values, operation bodies in logs, subgraph URLs — is redacted automatically with no configuration available or needed. `APOLLO_KEY` is never collected under any circumstances.
-
-**On the Apollo Operator** there is no chart to pass this value to. TODO: How Operator customers express the same preference is still being finalized — see `specs/deployment/v1/operator.md`.
+Redaction runs automatically with no configuration needed. JWT/auth config, header values, operation bodies in logs, subgraph URLs are redacted automatically. `APOLLO_KEY` is never collected under any circumstances.
 
 ### Cluster footprint
 
