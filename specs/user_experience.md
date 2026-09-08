@@ -134,7 +134,8 @@ helm install router-diagnostics apollo/router-diagnostics \
 
 If you're on a raw-manifest or custom deployment, also set `selector` and `configMapName` as shown above.
 
-The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle.
+The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle. See `specs/storage/`.
+
 The ServiceAccount needs the same read permissions as the local path — namespace-scoped, plus the cluster-scoped grants for node access and container metrics — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below. Applying them requires someone who can create Jobs, namespace RBAC, *and* cluster-scoped RBAC in the cluster — see [Setup, step two](#setup-step-two-one-chart-two-modes) above for what that means for who can install this mode.
 
 **If your cluster runs a service mesh, the Job's pod doesn't join it by default.** Sidecar injection is disabled automatically so the Job reliably reaches `Completed` instead of getting stuck in `Running` waiting on a long-lived sidecar. If your platform team's policy requires every pod to be in the mesh, this can be overridden. See `specs/deployment/v1/v1.md` → Service mesh environments for how to override it.
@@ -150,8 +151,8 @@ The rest of this section applies to **every** path — `mode: local`, `mode: job
 Collection produces a support bundle — a `support-bundle-<timestamp>.tar.gz` archive, a point-in-time snapshot of the router and cluster state. Where it lands depends on how you ran it:
 
 - **`mode: local`** — the file appears in your current directory.
-- **`mode: job`** — the Job writes it in-cluster and your platform team retrieves it.
-- **Apollo Operator** - See `specs/deployment/v1/operator.md`
+- **`mode: job`** — the Job writes it in-cluster and your platform team retrieves it. See `specs/storage/`
+- **Apollo Operator** - see `specs/deployment/v1/operator.md`
 
 It includes router version, sanitized configuration, recent logs, metrics (if you've enabled the Prometheus endpoint), and pod status. Your Redis configuration and any Redis errors in the router logs are captured, so support can still see how Redis is configured and whether the router is failing against it.
 
