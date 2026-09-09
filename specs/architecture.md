@@ -94,7 +94,9 @@ See `specs/collection/base_spec.md` for collector-level targeting details and wh
 
 ### Redaction
 
-Redaction is **part of this layer, not a separate one.** It does not vary independently of the Collection layer: redactors are defined in the same spec YAML, ship in the same artifact, version together, and are authored alongside the collectors they protect. troubleshoot.sh treats redaction as a phase of the collection pipeline — collect, redact, package — not a separable concern.
+Redaction is **part of this layer, not a separate one.** It does not vary independently of the Collection layer: redactors ship in the same artifact, version together, and are authored alongside the collectors they protect. troubleshoot.sh treats redaction as a phase of the collection pipeline — collect, redact, package — not a separable concern.
+
+Mechanically they are a separate document, delivered alongside the collection spec — a packaging detail of the engine, not a layer boundary. See `specs/collection/data_sanitization/overview.md` → How the `Redactor` document is delivered.
 
 Redaction runs after all collectors complete and before the bundle is packaged, so it applies to the complete collected data rather than per-collector, and the customer can inspect the redacted output before sharing.
 

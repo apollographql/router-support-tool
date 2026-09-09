@@ -25,7 +25,7 @@ Then read the version file for the milestone you are working on — `specs/versi
 
 Three layers, each varying independently:
 
-- **Collection** — what data is collected, and how it is sanitized. The SupportBundle spec plus its redactors. Redaction is *part of this layer*, not separate: redactors live in the same spec YAML and version with it.
+- **Collection** — what data is collected, and how it is sanitized. The SupportBundle spec plus its redactors. Redaction is *part of this layer*, not separate: redactors ship in the same artifact and version with it. They are a separate `kind: Redactor` document, delivered under its own `data` key on the same ConfigMap — a packaging detail of the engine, not a layer boundary.
 - **Trigger** — what causes a collection to happen. On-demand (v1); scheduled and threshold-triggered (v2).
 - **Storage** — where the bundle lands. Local disk (v1); customer-provided S3/GCS (v2).
 
