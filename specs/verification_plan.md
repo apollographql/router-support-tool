@@ -86,7 +86,11 @@ Each scenario is a `K8sEnvironment` that RTF deploys, with the degradation for t
 - **The router's own container logs labeled `rtf.io/log-collection: "true"`.** This gets RTF to pull the *raw*, pre-redaction container logs into its own `output/logs/` alongside our tool's collected (redacted) bundle in the same run — see [Redaction verification technique](#redaction-verification-technique) below for why that matters.
 - A router config (`router.yaml`) that exercises every custom redactor's trigger conditions, not a minimal one — see [Redaction](#redaction) above.
 
-**Constraint: no live cluster access from the Scenario.** The Scenario container has no kubeconfig and no cluster-API-capable ServiceAccount — only the `deploy-environment` step does (`crates/rtf-orchestrator/src/k8s/job.rs`). Degradation has to already be true of the environment by the time the Scenario starts, baked into the manifest as above rather than triggered live.
+**Constraints:**
+
+1. No live cluster access from the Scenario. The Scenario container has no kubeconfig and no cluster-API-capable ServiceAccount — only the `deploy-environment` step does (`crates/rtf-orchestrator/src/k8s/job.rs`). Degradation has to already be true of the environment by the time the Scenario starts, baked into the manifest as above rather than triggered live.
+
+2. `K8sEnvironment` can't be run locally. A Kubernetes environment can be templated, checked, and resolved with the `rtf` CLI, but it can only be run via the Orchestrator.
 
 #### Applying the router condition matrix to RTF
 
@@ -96,7 +100,7 @@ Most rows are just a matrix dimension value picked up by the templated manifest 
 
 - **All routers misbehaving:** reuse the `router-degraded` config from "some routers misbehaving," applied to every replica instead of a minority — no `router-healthy` Deployment for this scenario.
 
-- **Routers under-resourced:** use `environment.output_collection.prometheus` (a PromQL query the Orchestrator runs and saves as output after the run) to assert the resource-consumption claim. The router just needs the `rtf.io/otel: true` annotation on its Deployment to reach "the workload cluster's Prometheus," the Orchestrator's own standing instance.
+- **Routers under-resourced:** verify by reading `node-metrics/*.json` and `router-metrics/result.json` against `resources.limits`, not `output_collection.prometheus`.
 
 - **Router recently restarted** and **OOM in progress** both need their timing to live inside the pod's own entrypoint (a wrapper script, or a memory-ramping sidecar) rather than triggered externally. Don't assume a wrapper script's sleep interval lines up with Orchestrator provisioning time — this needs a throwaway RTF run to measure actual provisioning time before designing the timing. **TODO:** nothing in `rtf-morgue` does this kind of fault-injection timing (killing a process on a schedule, ramping memory) — its test plans are all steady-state load/perf/scalability/profiling.
 
@@ -116,6 +120,10 @@ Both are also just matrix dimension values on the same templated manifests, not 
 #### Collection mode and troubleshoot.sh version coverage in RTF
 
 The floor and current-release versions are two separate environment variants, differing only in which `support-bundle` binary/image the environment stages.
+
+#### Bundle retrieval in RTF
+
+With job mode the Job already uploads the bundle to object storage on its own (`specs/deployment/v1/v1.md`). Point that upload at a throwaway test bucket, and have the Scenario poll it using object-storage credentials until the bundle appears, then download it. This also answers how the Scenario knows the Job is finished, since it has no way to check the Job's status directly.
 
 ### Other CI checks
 
