@@ -22,7 +22,6 @@ Every collector gets a name, engine-fixed or not — for the engine-fixed rows b
 | --- | --- | --- | --- |
 | `router-logs` | Runtime logs, all containers in the pod | `logs` | Only a symlink — see below |
 | `router-metrics` | Prometheus metrics snapshot | `http` | Yes |
-| `router-release-info` | Helm release metadata (name, chart, version, revision history) — never values | `helm` | No — engine-fixed |
 | `router-config-rendered` | Rendered `router.yaml` | `configMap` | No — engine-fixed |
 | `router-resource-usage` | Node, pod, and container CPU/memory from the kubelet | `nodeMetrics` | No — engine-fixed |
 | `cluster-resources` | Pod status, router version, env vars, OOM events, node pressure | `clusterResources` | No — engine-fixed |

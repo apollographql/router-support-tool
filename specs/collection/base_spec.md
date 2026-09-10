@@ -21,7 +21,6 @@ References to "the official Apollo router Helm chart" are pinned to `v2.17.0` an
 | Container log stream | Runtime logs | `logs` collector | Recent router output, plus crash output from the previous container when one exists | None additional | Network bandwidth | Cluster network | Collected per pod, captures all containers in the pod (including proxy/mesh sidecars). **Previous-container logs are always collected**, written to `<name>-previous.log`. Configuration options: `logs.maxAge` and `logs.maxLines` are defined in `specs/deployment/v1/v1.md` → Chart values |
 | Router metrics endpoint | Full Prometheus metrics snapshot | `http` collector | Complete operational metrics — request rates, error rates, latency, traffic shaping state | Prometheus exporter enabled and reachably bound (see [Prometheus metrics prerequisites](#prometheus-metrics-prerequisites) below) | Network, router HTTP handler | Router network | |
 | ConfigMap holding the rendered config | Sanitized `router.yaml` | `configMap` collector | Full router configuration — traffic shaping, timeouts, plugins, feature flags | A matching labeled ConfigMap present, or a customer-supplied `configMapName`/`selector` (see [`router.yaml` capture](#routeryaml-capture) below) | API server CPU | k8s control plane | Captures config as written, not effective config (env-var overrides not included). |
-| Helm release itself, if deployed via Helm | Release name, chart, chart version, revision history | `helm` collector | Whether/when the release was last installed or upgraded — useful for correlating a recent change with an incident | None additional | API server CPU | k8s control plane | Metadata only. Does **not** read the release's values — see [`router.yaml` capture](#routeryaml-capture) below for why. |
 
 ### `router.yaml` capture
 
@@ -29,7 +28,6 @@ The **`configMap` collector** is the mechanism that captures configuration. It r
 
 **Each router release in a namespace gets its own file in the support bundle.** Label-based targeting matches every ConfigMap with `app.kubernetes.io/name=router`, so a namespace running more than one router release (one per graph, for example) has every release's config collected, each in its own separately-named file. See `specs/collection/meta_json.md` → Multiple router releases in one namespace.
 
-The `helm` collector also runs unconditionally, but only for release metadata (release name, chart, chart version, revision history), never for the release's configuration values.
 
 ### Schema collection
 
