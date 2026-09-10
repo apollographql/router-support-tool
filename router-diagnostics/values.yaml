@@ -1,0 +1,26 @@
+# -- Required. The router's namespace. Rendered into every collector that accepts a
+# namespace, including `clusterResources.namespaces` as a single-element list. Never
+# rely on the invoking kubectl context's default namespace.
+namespace: ""
+
+# -- Required. `local` or `job`. `mode: job` is a stub in this chart version: the spec
+# ConfigMap still renders, but no Job resource is created yet.
+mode: ""
+
+# -- Raw-manifest / custom deployments only. Pod label selector for the router, e.g.
+# `app=my-router`. Defaults to the official chart's own `app.kubernetes.io/name=router`
+# label — leave unset when the router was deployed via the official Apollo Helm chart.
+selector: ""
+
+# -- Raw-manifest / custom deployments only. Name of the ConfigMap holding the router's
+# rendered config. Defaults to label-based discovery (via `selector`) — leave unset when
+# the router was deployed via the official Apollo Helm chart.
+configMapName: ""
+
+logs:
+  # -- Optional. Maps to the `logs` collector's `limits.maxAge`, e.g. `2h`. Left unset,
+  # collection is uncapped by age.
+  maxAge: ""
+  # -- Optional. Maps to `limits.maxLines`. Left unset, troubleshoot.sh's own default
+  # (10000) applies — this chart does not re-declare that default.
+  maxLines: ""

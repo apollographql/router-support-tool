@@ -1,0 +1,14 @@
+# Always rendered, regardless of `mode`. `kubectl support-bundle --load-cluster-specs`
+# discovers this via the `troubleshoot.sh/kind: support-bundle` label.
+#
+# No `redactor-spec` key yet: rendering redaction is a separate, later piece of work —
+# this ConfigMap intentionally ships without redaction wiring for now.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: router-diagnostics-spec
+  labels:
+    troubleshoot.sh/kind: support-bundle
+data:
+  support-bundle-spec: |
+{{ include "router-diagnostics.spec" . | indent 4 }}

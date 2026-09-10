@@ -1,0 +1,5 @@
+# Stub. `mode: job`'s Job resource is a separate, later piece of work — this file
+# exists so the chart's layout matches what specs/deployment/v1/v1.md describes, and so
+# `mode: job` renders without error today, but it creates nothing yet.
+{{- if eq .Values.mode "job" }}
+{{- end }}
