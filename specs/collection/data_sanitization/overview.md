@@ -103,31 +103,11 @@ These rules follow:
 
 A failed match here is silent: the field simply stays in the bundle unredacted. A pattern that looks correct against pretty-printed YAML can still fail against its escaped form so each must be tested against a real collected bundle.
 
-## The `helm` collector's output
-
-The `helm` collector captures a second copy of the same config values from the Helm values layer (see `specs/collection/base_spec.md` → `router.yaml` capture), so every secret targeted above appears here too, but in a different shape. Because the structure is real, `yamlPath` works here and is the mechanism to reach for. A hardcoded header value, for example, is reachable at:
-
-```
-*.releaseHistory.*.values.router.configuration.headers.all.request.*.insert.value
-```
-
-Two things to get right when writing a path:
-
-- **It must begin with `*`** — the file's root is a JSON array (`[]ReleaseInfo`), so the document opens `[ { "releaseName": ..., "releaseHistory": [...] } ]` ([`yaml.go#L88-135`](https://github.com/replicatedhq/troubleshoot/blob/v0.120.0/pkg/redact/yaml.go#L88)).
-- **Check the root shape per collector — it isn't always an array.** `cluster-resources/configmaps/*.json`, for instance, is a single object, so a path there would omit the leading `*`. A path that doesn't match the root shape masks nothing, silently.
-
-**Single-line `regex` is still right in two cases**, subject to the format-agnostic requirement in [Order independence on `helm/*.json`](#order-independence-on-helmjson):
-
-- **The secret is a substring, not a field** — a credential inside a URL can't be addressed by a path.
-- **As a safety net for a distinctive key** — matching `secret_access_key` anywhere also catches a copy outside the documented path, which a path-bound rule would miss.
-
 ## The 10MB line-length cap
 
-Single-line `regex` scans with a `bufio.Scanner` capped at `SCANNER_MAX_SIZE = 10MB` per line. If a line exceeds it, redaction of that file fails and the redacted copy is discarded. In this case the collector's unredacted original is what gets packaged with an error reported along with the support bundle. 
+Single-line `regex` scans with a `bufio.Scanner` capped at `SCANNER_MAX_SIZE = 10MB` per line. If a line exceeds it, redaction of that file fails and the redacted copy is discarded. In this case the collector's unredacted original is what gets packaged with an error reported along with the support bundle.
 
-Only `helm/*.json` is plausibly at risk — the `configmaps` surfaces are bounded well under the cap by Kubernetes' ~1MiB ConfigMap limit, but Helm's gzipped storage means a release's decompressed values aren't bounded the same way.
-
-**Remedy:** measure `helm/*.json`'s longest line against the largest realistic supergraph before treating these rules as verified, and read any reported collection error as [the bundle is not safe to share](#a-reported-error-means-the-bundle-is-not-safe-to-share).
+The `configmaps` surfaces are bounded well under the cap by Kubernetes' ~1MiB ConfigMap limit, so this is unlikely to fire in practice — but if it ever does, read the reported error as [the bundle is not safe to share](#a-reported-error-means-the-bundle-is-not-safe-to-share).
 
 ### A reported error means the bundle is not safe to share
 
@@ -147,32 +127,15 @@ Every mechanism here fails silently, so verification needs a way to tell a rule 
 - **`yamlPath` rows report `Line: 0`** — expected, not a defect.
 - **Never set `redactUri` in the shipped spec.** - It belongs only ina verification harness. It sends the report to an external endpoint.
 
-## Order independence on `helm/*.json`
-
-Because `helm/*.json` is the one surface where `yamlPath` and `regex` rules both apply, the order they run in has to not matter. This is because  A `yamlPath` redactor rewrites the file it changes as YAML. The `.json` extension is unchanged, so the file keeps its name and changes its syntax:
-
-```
-"secret_access_key": "AKIAIOSFODNN7EXAMPLE"   ->   secret_access_key: '***HIDDEN***'
-```
-
-**The requirement that follows: every regex targeting `helm/*.json` must match both forms.** Make the quoting optional rather than assuming it — `("?secret_access_key"?:\s*"?)` matches the JSON and YAML spellings alike, where `("secret_access_key": ")` matches only the pre-`yamlPath` one. A pattern that assumes JSON will fire or not fire depending on rule order.
-
-Two consequences worth carrying into testing:
-
-1. **A bundle may contain YAML in a `.json` file**, so tooling that assumes `helm/*.json` parses as JSON can break. Worth confirming against a real bundle rather than assuming.
-
-2. **This is why `subgraph_urls.md`'s schema patterns need checking on this surface specifically.** They target long single-line strings, a YAML re-marshal can re-emit a long scalar as a block scalar with real newlines, and a single-line regex cannot match across those.
-
 ## Choosing a mechanism
 
-The two surfaces are not equivalent, and the choice is forced by file shape, not preference:
+The `helm` collector never captures the router's configuration values — only release metadata (name, chart, version, revision history), since `collectValues` is never set to `true` (see `specs/collection/base_spec.md` → `router.yaml` capture). So `helm/*.json` never carries a router secret to redact in the first place, and every redactor in this directory has exactly one surface and one mechanism to reach for:
 
 | Surface | Shape | Mechanism |
 | --- | --- | --- |
 | `cluster-resources/configmaps/*.json`, `configmaps/*/*.json` | `router.yaml` as a JSON-escaped string — one long line | Single-line `regex`. |
-| `helm/*.json` | Genuine structured JSON, **array at the root** | **`yamlPath` where the field's path is known** (paths start with `*`). Single-line `regex` for value-substrings or as a safety net — must be format-agnostic. No two-line `regex`. |
 
-**Where the same secret appears on both surfaces, it needs two rules, one per shape.** The exception is a pattern that never depends on escaping or structure, such as `://user:pass@` inside a URL, which matches identically in both (see `subgraph_urls.md`).
+`yamlPath` is documented above as a mechanism this repo's redactors can use, but none of the current rules in this directory use it — there's currently no genuinely structured surface (an array or object root, rather than an embedded string) that needs redacting.
 
 ## How the `Redactor` document is delivered
 

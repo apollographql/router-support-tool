@@ -44,42 +44,7 @@ Single-line `regex` with a `mask` capture group. Six patterns: block-style and f
 - `insert.default`'s block pattern expects `path:` between `name:` and `default:`. `path` is required on the `FromBody` variant so it is always present, but **serde accepts mapping keys in any order** — the pattern matches the conventional authoring order, not a structural guarantee. Any other order won't match, same limitation as above.
 - `propagate.default`'s block pattern allows an optional `rename:` line between `named:` and `default:`, since `Propagate::Named` has an optional `rename` field that a customer may or may not include.
 
-## Redactor: the `helm` collector's output
-
-`helm/*.json` is structured JSON, so `yamlPath` masks each field by its exact path — order-independent, and precise rather than key-name matching:
-
-```yaml
-- name: router-headers-insert-literal-values-helm
-  fileSelector:
-    files:
-      - "helm/*.json"
-      - "helm/*/*.json"
-  removals:
-    yamlPath:
-      - "*.releaseHistory.*.values.router.configuration.headers.all.request.*.insert.value"
-      - "*.releaseHistory.*.values.router.configuration.headers.all.response.*.insert.value"
-      - "*.releaseHistory.*.values.router.configuration.headers.subgraphs.*.request.*.insert.value"
-      - "*.releaseHistory.*.values.router.configuration.headers.subgraphs.*.response.*.insert.value"
-      - "*.releaseHistory.*.values.router.configuration.headers.all.request.*.insert.default"
-      - "*.releaseHistory.*.values.router.configuration.headers.all.response.*.insert.default"
-      - "*.releaseHistory.*.values.router.configuration.headers.subgraphs.*.request.*.insert.default"
-      - "*.releaseHistory.*.values.router.configuration.headers.subgraphs.*.response.*.insert.default"
-- name: router-headers-propagate-default-helm
-  fileSelector:
-    files:
-      - "helm/*.json"
-      - "helm/*/*.json"
-  removals:
-    yamlPath:
-      - "*.releaseHistory.*.values.router.configuration.headers.all.request.*.propagate.default"
-      - "*.releaseHistory.*.values.router.configuration.headers.all.response.*.propagate.default"
-      - "*.releaseHistory.*.values.router.configuration.headers.subgraphs.*.request.*.propagate.default"
-      - "*.releaseHistory.*.values.router.configuration.headers.subgraphs.*.response.*.propagate.default"
-```
-
-`Insert` and `Propagate` are both `#[serde(untagged)]` ([`headers/mod.rs#L164`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/headers/mod.rs#L164), [`headers/mod.rs#L192`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/plugins/headers/mod.rs#L192)), so each variant's fields serialize flatly under `insert:`/`propagate:` — no variant-name segment in the path.
-
-**Required before this is considered done:** collect against a router with each of the three fields set to a distinct value — `insert.value`, `insert.default` (with the JSONPath deliberately unresolvable), and `propagate.default` (with the source header absent) — and confirm all three are masked in both the `configMap`/`clusterResources` output and the `helm` collector's output.
+**Required before this is considered done:** collect against a router with each of the three fields set to a distinct value — `insert.value`, `insert.default` (with the JSONPath deliberately unresolvable), and `propagate.default` (with the source header absent) — and confirm all three are masked in the `configMap`/`clusterResources` output.
 
 ## What's deliberately left visible
 
