@@ -52,14 +52,6 @@ spec:
           url: http://{{ include "router-diagnostics.routerServiceName" . | default "<router-metrics-host-not-found>" }}.{{ .Values.namespace }}.svc.cluster.local:9090/metrics
           {{- end }}
 
-    # collectValues is never set to true to avoid leaking secret-like values (including
-    # APOLLO_KEY) a customer passed via `--set` at install time, since Helm stores full
-    # resolved release values.
-    - helm:
-        collectorName: router-release-info
-        namespace: {{ .Values.namespace }}
-        collectValues: false
-
     - configMap:
         collectorName: router-config-rendered
         namespace: {{ .Values.namespace }}
