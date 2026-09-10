@@ -26,7 +26,7 @@ Each of these scenarios will be tested per deployment tier: the official Apollo 
 | 3 | **All routers misbehaving** | The "safe to run at any time" claim holds under genuine degradation. A bundle is still produced. |
 | 4 | **Routers under-resourced** | The negligible-resource-consumption claim holds when collection runs against a container already near its cgroup limit. This is also where an in-container collector would do the most damage if one is ever proposed — this scenario is the standing regression check against that. |
 | 5 | **Router recently restarted** | `logs` collector's previous-container request produces `<name>-previous.log` and startup-time errors are present in the bundle. |
-| 6 | **OOM in progress** | This scenario currently validates that an on-demand collection **during** an OOM does not itself worsen the situation. |
+| 6 | **OOM in progress**: the router container's memory usage is actively climbing toward its cgroup limit (not yet kernel-OOM-killed). |  Validates that running collection **while** this is happening doesn't push it over the edge. |
 
 ### Collector attribution scenarios
 
@@ -43,9 +43,9 @@ Redaction fails silently so every test run has to confirm the specific secret va
 
 1. Prove each redactor fired and that the secret is gone from the artifact a customer would receive.
 
-2. **Per-redactor verification:** the specific cases each redactor's spec calls out. See the table below and `specs/collection/data_sanitization/` for details. 
+2. **Per-redactor verification:** see the table below and `specs/collection/data_sanitization/` for details. 
 
-3. **`helm/*.json` order independence, regardless of redactor:** a `yamlPath` rule rewrites that file from JSON to YAML in place (see `overview.md` → Order independence on `helm/*.json`) so at least one run must apply redactors in both possible orders to confirm the format-agnostic regex requirement actually holds there.
+3. **`helm/*.json` order independence, regardless of redactor:** a `yamlPath` rule rewrites that file from JSON to YAML in place (see `specs/collection/data_sanitization/overview.md` → Order independence on `helm/*.json`) so at least one run must apply redactors in both possible orders to confirm the format-agnostic regex requirement holds.
 
 | Redactor | Required scenario (condensed from the redactor's own spec) |
 | --- | --- |
@@ -64,7 +64,7 @@ Test against various troubleshoot.sh versions for drift.
 - **The declared minimum version is set from a verified test run.** If this plan hasn't run the floor version yet, treat the minimum as unknown in `specs/deployment/v1/v1.md`.
 - **Whenever a spec change adds a field, verify what the floor version does with a field it doesn't recognize** — hard error or silent ignore.
 - Every run should read the produced bundle's `version.yaml` and compare it against the intended version.
-- This gets tested two ways: a static, offline lint per version and real execution per version (RTF). See [How this gets tested](#how-this-gets-tested).
+- This will get tested two ways: a static, offline lint per version and real execution per version (RTF). See [How this gets tested](#how-this-gets-tested).
 
 ### Chart rendering across tiers and modes
 
@@ -78,44 +78,40 @@ Used for everything behavioral: the router condition matrix, redaction, and trou
 
 #### What "environment" means for us
 
-Each scenario is a `K8sEnvironment` that RTF deploys, with the degradation for that scenario pre-baked into its manifests rather than triggered live. An environment for this tool needs:
+Each scenario is a `K8sEnvironment` that RTF deploys. An environment for this tool needs:
 
-- A router Deployment and its ConfigMap, matching the official Apollo Helm chart or raw-manifest tier (see [Deployment tiers](#deployment-tiers)) — start with the official chart tier since it needs the least customer-supplied config, and add the raw-manifest tier once the base case works.
-- The `router-diagnostics` chart's *rendered output* (`helm template`, not a live `helm install`, see the constraint below) included as one of the environment's manifests, for both `mode: local` and `mode: job`. That render is expected to already be known-good by the time it reaches here — see [Chart rendering across tiers and modes](#chart-rendering-across-tiers-and-modes) below for where its own correctness is checked.
-- Per-scenario degradation (resource limits, a failing probe, a timed self-restart or memory-pressure entrypoint) expressed as manifest templating variables, driven by the Test Plan's `matrix` so each row in the [router condition matrix](#router-condition-matrix) is a matrix dimension value, not a distinct hand-maintained environment file.
+- A router Deployment and its ConfigMap, matching the official Apollo Helm chart or raw-manifest tier (see [Deployment tiers](#deployment-tiers)).
+- The `router-diagnostics` chart's *rendered output* included as one of the environment's manifests, for both `mode: local` and `mode: job`.
+- A control process, present unmodified in every environment, what it does depends on the test case. See [Applying the router condition matrix to RTF](#applying-the-router-condition-matrix-to-rtf).
 - **The router's own container logs labeled `rtf.io/log-collection: "true"`.** This gets RTF to pull the *raw*, pre-redaction container logs into its own `output/logs/` alongside our tool's collected (redacted) bundle in the same run — see [Redaction verification technique](#redaction-verification-technique) below for why that matters.
-- A router config (`router.yaml`) that exercises every custom redactor's trigger conditions, not a minimal one — see [Redaction](#redaction) above.
-
-**Constraints:**
-
-1. No live cluster access from the Scenario. The Scenario container has no kubeconfig and no cluster-API-capable ServiceAccount — only the `deploy-environment` step does (`crates/rtf-orchestrator/src/k8s/job.rs`). Degradation has to already be true of the environment by the time the Scenario starts, baked into the manifest as above rather than triggered live.
-
-2. `K8sEnvironment` can't be run locally. A Kubernetes environment can be templated, checked, and resolved with the `rtf` CLI, but it can only be run via the Orchestrator.
+- A router config (`router.yaml`) that exercises every custom redactor's trigger conditions. See [Redaction](#redaction) above.
 
 #### Applying the router condition matrix to RTF
 
-Most rows are just a matrix dimension value picked up by the templated manifest described above. A few cases need a specific note:
+The manifest itself is the same across all but one of the test cases. What varies is the Scenario's own behavior. We will use one router image/Deployment shape for every scenario and run a second control process on its own port. Once the environment is healthy and the Scenario has started, it hits that port to make the router misbehave.
 
-- **Some routers misbehaving:** two Deployments, `router-healthy` and `router-degraded`, both labeled `app.kubernetes.io/name=router` under one Service — the shared label is what makes the tool's selector and the Service see them as one fleet. `router-degraded` gets a failing `livenessProbe` (not the resource-throttling used for "routers under-resourced," so the two scenarios test different failure modes).
+- **Some vs. all misbehaving:** A headless Service (`clusterIP: None`) gives the Scenario DNS-addressable access to each individual pod, so it can independently target each router instances own control process, sending the trigger to just one (or a few) for "some," and to every replica's for "all."
 
-- **All routers misbehaving:** reuse the `router-degraded` config from "some routers misbehaving," applied to every replica instead of a minority — no `router-healthy` Deployment for this scenario.
+- **Recently restarted:** use the control process to trigger an exit, triggering a normal k8s-managed restart.
 
-- **Routers under-resourced:** verify by reading `node-metrics/*.json` and `router-metrics/result.json` against `resources.limits`, not `output_collection.prometheus`.
+- **OOM in progress:** use the control process to ramp memory in the same container. For a router-internal trigger, we can craft an operation that makes the query planner allocate a `usize::MAX`-length `Vec`, for example.
+    - **Note:** if the control process does the memory-ramping rather than the router process itself, container/pod-level kubelet metrics (`nodeMetrics`) still show the pressure (same cgroup), but the router's own process-specific metric (`process_resident_memory_bytes`) may not.
 
-- **Router recently restarted** and **OOM in progress** both need their timing to live inside the pod's own entrypoint (a wrapper script, or a memory-ramping sidecar) rather than triggered externally. Don't assume a wrapper script's sleep interval lines up with Orchestrator provisioning time — this needs a throwaway RTF run to measure actual provisioning time before designing the timing. **TODO:** nothing in `rtf-morgue` does this kind of fault-injection timing (killing a process on a schedule, ramping memory) — its test plans are all steady-state load/perf/scalability/profiling.
+The manifest does differ for the Routers under-resourced test case, where `resources.limits` will be set tight from the start. Verify by reading `node-metrics/*.json` and `router-metrics/result.json` against `resources.limits`. Note: `router-metrics/result.json` only populates if the router's Prometheus exporter is enabled in this scenario's config.
 
 #### Applying the collector attribution scenarios to RTF
 
 Both are also just matrix dimension values on the same templated manifests, not separate environments:
 
 - **Metrics/observability not configured** — the router manifest omits the Prometheus scrape annotations/exporter config for this dimension value.
-- **RBAC permission declined** — the environment's Role manifest omits a specific permission (e.g. `nodes/proxy`) for this dimension value, rather than granting the full set every other row uses.
+
+- **RBAC permission declined** — the environment's Role manifest omits a specific permission (e.g. `nodes/proxy`) for this dimension value, rather than granting the full set every other test case uses.
 
 #### Redaction verification technique
 
-- Point the spec's `redactUri` at a throwaway endpoint (verification runs only, never the shipped spec) to get troubleshoot.sh's per-redactor report. Where this endpoint actually lives, a sidecar in the environment, or something outside the cluster the environment can reach depends on **TODO:** what networking a `K8sEnvironment`'s namespace allows.
+- Point the spec's `redactUri` at a throwaway endpoint to get troubleshoot.sh's per-redactor report. This will only set this for verification runs. We can use the endpoint one built for [bundle retrieval](#bundle-retrieval-in-rtf) for this use case as well.
 
-- Label the router service `rtf.io/log-collection: "true"` so RTF pulls its raw, pre-redaction logs alongside the redacted bundle in the same run, letting a known secret be diffed against both copies directly.
+- Label the router service `rtf.io/log-collection: "true"` so RTF pulls its raw, pre-redaction logs alongside the redacted bundle in the same run, allowing us to search for a known secret in both the pre-redacted and redaction versions of the bundle.
 
 #### Collection mode and troubleshoot.sh version coverage in RTF
 
@@ -123,7 +119,7 @@ The floor and current-release versions are two separate environment variants, di
 
 #### Bundle retrieval in RTF
 
-With job mode the Job already uploads the bundle to object storage on its own (`specs/deployment/v1/v1.md`). Point that upload at a throwaway test bucket, and have the Scenario poll it using object-storage credentials until the bundle appears, then download it. This also answers how the Scenario knows the Job is finished, since it has no way to check the Job's status directly.
+Use the `job.storage.provider: url` option (see `specs/storage/object_storage.md`). We will drop a plain `http.server` script into the environment via a file provider, run it reachably from the Job, and point `job.storage.url.endpoint` at it. The Job pushes the bundle there directly once collection finishes (via PUT request). This also answers how the Scenario knows the Job is done, the request arriving is the signal.
 
 ### Other CI checks
 
