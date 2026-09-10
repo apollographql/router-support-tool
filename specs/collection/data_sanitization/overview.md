@@ -9,6 +9,7 @@ This directory is where Apollo's custom redactors are specified, one file per se
 | GraphQL operation bodies reaching router logs | `operation_bodies.md` |
 | Subgraph routing URLs | `subgraph_urls.md` |
 | Redis credentials embedded in cache URLs | `redis_credentials.md` |
+| TLS private keys (`tls.supergraph`, `tls.subgraph.*`, `tls.connector.*`) | `tls_private_keys.md` |
 
 Every file here is scoped to the router's own `router.yaml` (captured per `specs/collection/base_spec.md` → `router.yaml` capture) and adjacent collected surfaces (logs, the schema ConfigMap). Generic secrets such as tokens with recognizable env-var names are already covered by troubleshoot's built-in redactors, which run unconditionally on every collected file. These docs exist because the router's own config shape has fields no generic pattern knows about.
 
