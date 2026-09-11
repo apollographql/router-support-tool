@@ -1,0 +1,20 @@
+name: Helm Chart Docs
+
+on:
+  pull_request:
+    paths:
+      - "router-diagnostics/**"
+
+jobs:
+  ensure_helm_docs_consistency:
+    name: Ensure Helm Chart Docs Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Run helm-docs
+        uses: losisin/helm-docs-github-action@3a4528e97c49a5e83de6b78c50c61c8ee5c9f944 # v2.0.0
+        with:
+          chart-search-root: 'router-diagnostics'
+          fail-on-diff: true
