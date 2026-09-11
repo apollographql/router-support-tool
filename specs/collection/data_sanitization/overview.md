@@ -18,7 +18,7 @@ troubleshoot.sh ships a default set of redactors that runs on every file regardl
 
 ## How custom redaction works
 
-Verified by reading `github.com/replicatedhq/troubleshoot` at `v0.120.0`. **Note:** This is the version the source citations below point at, not a minimum supported version, see `specs/deployment/v1.md` → Collection engine version.
+Verified by reading `github.com/replicatedhq/troubleshoot` at `v0.120.0`. **Note:** This is the version the source citations below point at, not a minimum supported version, see `specs/deployment/v1/v1.md` → troubleshoot.sh support-bundle version.
 
 Redactors are declared in a `kind: Redactor` document, delivered on the same discovered ConfigMap as the collection spec under its own `data` key. See [How the `Redactor` document is delivered](#how-the-redactor-document-is-delivered).
 

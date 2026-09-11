@@ -43,5 +43,19 @@ Where a design choice involved rejecting a viable alternative, the spec records 
 `router-diagnostics/README.md` is generated from `values.yaml`'s `# --` comments via [helm-docs](https://github.com/norwoodj/helm-docs). CI enforces it stays in sync (`fail-on-diff: true`) — after changing `router-diagnostics/values.yaml`, regenerate it locally and commit the result:
 
 ```bash
-helm-docs --chart-search-root router-diagnostics
+mise run generate-helm-docs
+```
+
+## GitHub Actions workflow formatting
+
+Workflow files under `.github/workflows/` are formatted with [ghafmt](https://github.com/jonathanrainer/ghafmt), and CI checks that they stay formatted. Before pushing a workflow change, check formatting locally:
+
+```bash
+mise run check-ghafmt
+```
+
+If it reports a diff, fix it in place:
+
+```bash
+docker run --rm -v "$(pwd)":/repo --workdir /repo ghcr.io/jonathanrainer/ghafmt:0.1.5 --mode=write .github/workflows/
 ```

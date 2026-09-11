@@ -10,7 +10,7 @@ Every bundle also carries a `meta.json` recording what the tool was configured t
 
 Collector names follow the conventions in `specs/collection/collector_naming.md`, which also lists the assigned name for every collector below.
 
-References to "the official Apollo router Helm chart" are pinned to `v2.17.0` and.  troubleshoot.sh is pinned to `v0.120.0` — see `specs/deployment/v1/v1.md` → Collection engine version.
+References to "the official Apollo router Helm chart" are pinned to `v2.17.0` and.  troubleshoot.sh is pinned to `v0.132.0` — see `specs/deployment/v1/v1.md` → troubleshoot.sh support-bundle version.
 
 | Source | Signal | Collected via | What it tells you | Requires | Resource consumed | Where | Notes |
 | ----- | ----- | ----- | ----- | ----- | ----- | ----- | ----- |
