@@ -9,9 +9,14 @@ On-demand troubleshoot.sh support-bundle collection for Apollo Router.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | configMapName | string | `""` | Raw-manifest / custom deployments only. Name of the ConfigMap holding the router's rendered config. Defaults to label-based discovery (via `selector`) — leave unset when the router was deployed via the official Apollo Helm chart. |
+| job | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"","tag":""},"podAnnotations":{},"podLabels":{},"ttlSecondsAfterFinished":3600}` | mode: job only |
+| job.image.repository | string | `""` | Required for mode: job. The image bundling the support-bundle binary Apollo publishes and pins the troubleshoot.sh version by tag — see specs/deployment/v1/v1.md -> troubleshoot.sh support-bundle version. Not yet published; set this to a real image before installing with mode: job. |
+| job.podAnnotations | object | `{}` | Annotations merged onto the Job's pod template. Customer-supplied keys win over the defaults below (sidecar.istio.io/inject: "false", linkerd.io/inject: disabled) rather than replacing them wholesale — see specs/deployment/v1/v1.md -> Service mesh environments. |
+| job.podLabels | object | `{}` | Arbitrary labels merged onto the Job's pod template. |
+| job.ttlSecondsAfterFinished | int | `3600` | Seconds after the Job finishes before Kubernetes garbage-collects it (and its pod). Keeps the cluster from accumulating a completed Job/pod per collection. |
 | logs.maxAge | string | `""` | Optional. Maps to the `logs` collector's `limits.maxAge`, e.g. `2h`. Left unset, collection is uncapped by age. |
 | logs.maxLines | string | `""` | Optional. Maps to `limits.maxLines`. Left unset, troubleshoot.sh's own default (10000) applies — this chart does not re-declare that default. |
-| mode | string | `""` | Required. `local` or `job`. `mode: job` is a stub in this chart version: the spec ConfigMap still renders, but no Job resource is created yet. |
+| mode | string | `""` | Required. `local` or `job`. |
 | namespace | string | `""` | Required. The router's namespace. Rendered into every collector that accepts a namespace, including `clusterResources.namespaces` as a single-element list. Never rely on the invoking kubectl context's default namespace. |
 | selector | string | `""` | Raw-manifest / custom deployments only. Pod label selector for the router, e.g. `app=my-router`. Defaults to the official chart's own `app.kubernetes.io/name=router` label — leave unset when the router was deployed via the official Apollo Helm chart. |
 

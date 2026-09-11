@@ -37,3 +37,11 @@ Specifications in `specs/` describe current intended behavior. They are reviewed
 Git history is the decision record. To understand why something is the way it is, read the PR that introduced it.
 
 Where a design choice involved rejecting a viable alternative, the spec records it in a **Rejected alternatives** section — not as history, but because knowing what was ruled out and why is part of understanding the current design. If you are considering an approach listed there, engage with the recorded reasoning rather than re-proposing it.
+
+## Helm chart documentation
+
+`router-diagnostics/README.md` is generated from `values.yaml`'s `# --` comments via [helm-docs](https://github.com/norwoodj/helm-docs). CI enforces it stays in sync (`fail-on-diff: true`) — after changing `router-diagnostics/values.yaml`, regenerate it locally and commit the result:
+
+```bash
+helm-docs --chart-search-root router-diagnostics
+```
