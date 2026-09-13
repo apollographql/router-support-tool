@@ -46,34 +46,29 @@ The tool supports three deployment tiers in v1:
 
 If you deployed the router with a hand-authored manifest or a custom chart that doesn't follow the official chart's conventions, this tool still works — you'll just need to supply more. None of the official chart's conventions (standard labels, known ConfigMap naming) apply, so the tool can't locate your router's config or pod on its own. Supply your namespace, pod selector, and ConfigMap name, and the same chart and collection engine used for every other tier handles the rest.
 
-### Setup, step one: install the collection plugin
-
-Unless you're using `mode: job` below, install the `support-bundle` kubectl plugin on the machine you'll collect from. This is a one-time step, and it's separate from installing the chart — the chart puts the collection spec in your cluster, and the plugin is what actually runs it:
-
-```bash
-kubectl krew install support-bundle
-```
-
-This installs a single binary in your path and deploys nothing to your cluster. If you don't use `krew`, or you're collecting from CI, download the standalone binary instead:
-
-```bash
-curl -L https://github.com/replicatedhq/troubleshoot/releases/latest/download/support-bundle_linux_amd64.tar.gz | tar xzvf -
-```
-
-`krew` always installs the latest release. If you're collecting from CI or work somewhere that needs a pinned, reproducible toolchain, use the standalone download instead and pin a specific release tag rather than `latest`.
-
-You don't need this if you're using `mode: job` — the Job runs collection in-cluster with the binary already in its image, so nothing is installed on your machine.
-
-### Setup, step two: one chart, two modes
-
+## Collection Modes
 Getting a spec into the cluster is done through a single Helm chart, `router-diagnostics`, with a `mode` value controlling how collection actually runs:
 
 - **`mode: local`** — renders the spec into a cluster ConfigMap. You run the collection yourself from a machine with kubectl access.
+
 - **`mode: job`** — renders the same spec plus a Kubernetes Job (and its ServiceAccount/RBAC) that runs the collection in-cluster. Use this if your own kubectl access to production is restricted — a platform team installs the chart and runs the Job on your behalf.
 
 Both modes use the same spec and collection engine; only who runs it and where differs.
 
 **If you use the Apollo Operator**, you don't need this chart at all — the Operator installs the same spec for you, with the values already filled in. You do still need the plugin from step one. Skip to [Apollo Operator customers](#apollo-operator-customers) below.
+
+## Local mode
+
+### Step 1: Install the Apollo router-diagnostics plugin
+Install the `router-diagnostics` Helm plugin on the machine you'll collect from.
+
+```bash
+helm plugin install https://github.com/apollographql/router-diagnostics-helm-plugin
+```
+
+This gives you a single `helm router-diagnostics collect` command for collecting a support bundle, see [Step two](#step-two-install-the-helm-chart) below. The plugin also comes with its own pinned copy of the troubleshoot.sh `support-bundle` binary, and, if your router's metrics are enabled, it sets up and tears down the port-forward `router-metrics` needs to reach them. See [Metrics require the Prometheus endpoint to be enabled](#metrics-require-the-prometheus-endpoint-to-be-enabled) below.
+
+### Step two: install the Helm chart
 
 **If you deployed with the official Apollo Helm chart:**
 
@@ -82,12 +77,6 @@ helm install router-diagnostics apollo/router-diagnostics \
   --namespace production \
   --set namespace=production \
   --set mode=local
-```
-
-Then invoke the collection:
-
-```bash
-kubectl support-bundle --load-cluster-specs
 ```
 
 `namespace` is the only value you need to supply. The chart's collectors target your router by its standard `app.kubernetes.io/name=router` label — no release name, selector, or ConfigMap name is needed **for the official chart.**
@@ -103,25 +92,15 @@ helm install router-diagnostics apollo/router-diagnostics \
   --set mode=local
 ```
 
-Then invoke the collection the same way:
-
-```bash
-kubectl support-bundle --load-cluster-specs
-```
-
 Since none of the official chart's conventions apply to your deployment, supply your pod selector and ConfigMap name in addition to the namespace, so the chart's collectors know where to find your router and its configuration.
 
-### Apollo Operator customers
-
-Zero configuration. The Operator writes the spec into a cluster ConfigMap directly, filling in its values from the deployment conventions it already knows. It is the same spec every other tier runs — only the values come from the Operator instead of from you. Run:
+### Step three: collect a support bundle
 
 ```bash
-kubectl support-bundle --load-cluster-specs
+helm router-diagnostics collect
 ```
 
-No chart install and no values to supply — the plugin from step one is the only thing you set up. Note: today this requires opting in via the Operator — check with your Operator configuration whether spec provisioning is enabled.
-
-### Restricted-access clusters (`mode: job`)
+## Job mode
 
 If you don't have kubectl access to production, use the same chart with `mode: job`. A platform team member with cluster access installs it:
 
@@ -136,9 +115,19 @@ If you're on a raw-manifest or custom deployment, also set `selector` and `confi
 
 The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle. See `specs/storage/`.
 
-The ServiceAccount needs the same read permissions as the local path — namespace-scoped, plus the cluster-scoped grants for node access and container metrics — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below. Applying them requires someone who can create Jobs, namespace RBAC, *and* cluster-scoped RBAC in the cluster — see [Setup, step two](#setup-step-two-one-chart-two-modes) above for what that means for who can install this mode.
+The ServiceAccount needs the same read permissions as the local path — namespace-scoped, plus the cluster-scoped grants for node access and container metrics — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below. Applying them requires someone who can create Jobs, namespace RBAC, *and* cluster-scoped RBAC in the cluster — see [Step two](#step-two-install-the-helm-chart) above for what that means for who can install this mode.
 
 **If your cluster runs a service mesh, the Job's pod doesn't join it by default.** Sidecar injection is disabled automatically so the Job reliably reaches `Completed` instead of getting stuck in `Running` waiting on a long-lived sidecar. If your platform team's policy requires every pod to be in the mesh, this can be overridden. See `specs/deployment/v1/v1.md` → Service mesh environments for how to override it.
+
+## Apollo Operator customers
+
+Zero configuration. The Operator writes the spec into a cluster ConfigMap directly, filling in its values from the deployment conventions it already knows. It is the same spec every other tier runs — only the values come from the Operator instead of from you. Run:
+
+```bash
+kubectl support-bundle --load-cluster-specs
+```
+
+No chart install and no values to supply — the `support-bundle` plugin from step one is the only thing you set up.
 
 ---
 
@@ -169,7 +158,9 @@ Note that the **router chart's** `serviceMonitor.enabled` value (not `router-dia
 
 If the exporter is off, or bound somewhere the collector can't reach, that section of the bundle will simply be empty — the rest of the bundle is unaffected.
 
-**If you're on a raw-manifest or custom deployment**, the collector has no way to discover your metrics port, so this section will be empty regardless of how your exporter is configured. Everything else in the bundle is unaffected, and your `router.yaml` still shows support how telemetry is set up.
+**Under `mode: local` on the official chart, reaching this port also requires bridging your machine to the cluster network**, since the router's Service DNS name doesn't resolve outside it. `helm router-diagnostics collect` handles this for you.
+
+**If you're on a raw-manifest or custom deployment**, the collector has no way to discover your metrics port so this section will be empty if metrics don't go to port `9090`.
 
 **If you're on the Apollo Operator**, see the Operator's own documentation for whether metrics are collected — the port is set by the Operator rather than by you, so it isn't something you configure.
 
@@ -187,11 +178,11 @@ Installing the chart creates a persistent object in your cluster — the spec Co
 helm uninstall router-diagnostics --namespace production
 ```
 
-If you expect to run diagnostics more than once, you may prefer to leave it installed — subsequent collections then only need `kubectl support-bundle --load-cluster-specs`, with no reinstall.
+If you expect to run diagnostics more than once, you may prefer to leave it installed. On `mode: local`, subsequent collections then only need `helm router-diagnostics collect`.
 
 ### Permissions for on-demand collection
 
-Installing with `mode: local` requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself. `kubectl support-bundle --load-cluster-specs` then runs using your existing kubectl credentials; no additional ServiceAccount is created for that step.
+Installing with `mode: local` requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself. `helm router-diagnostics collect` then runs using your existing kubectl credentials; no additional ServiceAccount is created for that step. Reaching `router-metrics` also needs `create` on the `pods/portforward` subresource in the router's namespace — port-forwarding to a Service resolves to one of its pods under the hood, and `helm router-diagnostics collect` does this on your behalf. Declining it doesn't fail collection, it only means `router-metrics` throws an error.
 
 Installing with `mode: job` requires more: creating a Job, a ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
 
