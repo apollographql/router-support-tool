@@ -1,0 +1,5 @@
+# Stub. The mode: job ServiceAccount/Role/RoleBinding and the nodeMetrics
+# ClusterRole/ClusterRoleBinding are a separate, later piece of work — see this file's
+# counterpart, templates/job.yaml.
+{{- if eq .Values.mode "job" }}
+{{- end }}

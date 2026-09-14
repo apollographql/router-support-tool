@@ -169,6 +169,8 @@ If the exporter is off, or bound somewhere the collector can't reach, that secti
 
 **A service mesh enforcing strict mTLS can also empty this section**, even with the exporter correctly configured above — this applies to `mode: local` and `mode: job` alike, since collection runs from outside the mesh either way. See `specs/deployment/v1/v1.md` → Running outside the mesh doesn't have to mean losing metrics.
 
+**If you're running `mode: local`**, there's one more step: your machine can't reach the router's in-cluster address on its own, so run `kubectl port-forward svc/<router-service> 9090:9090` in a separate terminal before collecting. Skip this and `router-metrics` fails with a connection error instead of coming back empty. `mode: job` doesn't need this — the Job runs inside the cluster already. See `specs/deployment/v1/v1.md` → Prerequisite: reaching router-metrics under `mode: local`.
+
 ### Redaction
 
 Redaction runs automatically with no configuration needed. JWT/auth config, header values, operation bodies in logs, subgraph URLs are redacted automatically. `APOLLO_KEY` is never collected under any circumstances.

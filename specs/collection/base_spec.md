@@ -50,6 +50,8 @@ The `http` collector targets the metrics endpoint at port `9090`. Three settings
 
 If any of the three is off or misconfigured, the collector returns empty and the rest of the bundle is unaffected.
 
+**A fourth prerequisite, independent of router configuration: whatever is running collection has to be able to reach the router's Service over the network.** Unlike the three above, this is a property of where collection runs. `mode: job` satisfies it automatically, since the Job's pod is itself inside the cluster network. `mode: local` does not: the `support-bundle` binary runs on the invoking user's own machine, which cannot resolve the router's in-cluster Service DNS name on its own. See `specs/deployment/v1/v1.md` → `mode: local` for the manual step this requires.
+
 ### Namespace scoping is mandatory
 
 `clusterResources`, `logs`, and `configMap` (when targeted by selector) all treat an empty namespace as "every namespace in the cluster". Therefore, namespace must be explicitly set on all three collectors.
