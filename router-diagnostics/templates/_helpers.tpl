@@ -45,3 +45,53 @@ true
 false
 {{- end -}}
 {{- end -}}
+
+{{/*
+job.storage has three credential paths: a customer-supplied existingSecret, a
+static credential value templated into a chart-created Secret, or neither (IRSA/Workload
+Identity via job.serviceAccount.annotations, resolved automatically at the API-call
+level with no Secret at all). Setting both existingSecret and a static value at once is
+most likely a mistake and will fail at `helm install`/`template`.
+*/}}
+{{- define "router-diagnostics.storageCredentialCheck" -}}
+{{- $hasStaticCreds := or (and .Values.job.storage.s3.accessKeyId .Values.job.storage.s3.secretAccessKey) .Values.job.storage.gcs.credentialsJson }}
+{{- if and .Values.job.storage.existingSecret $hasStaticCreds }}
+{{- fail "job.storage.existingSecret and a static job.storage.s3/gcs credential are mutually exclusive -- set at most one." }}
+{{- end }}
+{{- end -}}
+
+{{/*
+The Secret name job.yaml mounts credentials from. Empty when neither an
+existingSecret nor a static credential is set (the IRSA/Workload Identity path).
+*/}}
+{{- define "router-diagnostics.storageSecretName" -}}
+{{- include "router-diagnostics.storageCredentialCheck" . -}}
+{{- if .Values.job.storage.existingSecret -}}
+{{- .Values.job.storage.existingSecret -}}
+{{- else if or (and .Values.job.storage.s3.accessKeyId .Values.job.storage.s3.secretAccessKey) .Values.job.storage.gcs.credentialsJson -}}
+router-diagnostics-storage-credentials
+{{- end -}}
+{{- end -}}
+
+{{/*
+The Job's container command: run collection, then upload to job.storage if configured.
+*/}}
+{{- define "router-diagnostics.collectAndUploadScript" -}}
+set -eu
+support-bundle --load-cluster-specs
+{{- if .Values.job.storage.provider }}
+BUNDLE=$(ls -t support-bundle-*.tar.gz | head -n1)
+{{- if eq .Values.job.storage.provider "s3" }}
+{{- if .Values.job.storage.s3.forcePathStyle }}
+mkdir -p "$HOME/.aws"
+printf '[default]\ns3 =\n    addressing_style = path\n' > "$HOME/.aws/config"
+{{- end }}
+aws s3 cp "$BUNDLE" "s3://{{ .Values.job.storage.bucket }}/{{ .Values.job.storage.prefix }}$BUNDLE"{{ if .Values.job.storage.s3.region }} --region {{ .Values.job.storage.s3.region }}{{ end }}{{ if .Values.job.storage.s3.endpoint }} --endpoint-url {{ .Values.job.storage.s3.endpoint }}{{ end }}
+{{- else if eq .Values.job.storage.provider "gcs" }}
+{{- if .Values.job.storage.gcs.project }}
+gcloud config set project {{ .Values.job.storage.gcs.project }}
+{{- end }}
+gcloud storage cp "$BUNDLE" "gs://{{ .Values.job.storage.bucket }}/{{ .Values.job.storage.prefix }}$BUNDLE"
+{{- end }}
+{{- end }}
+{{- end -}}

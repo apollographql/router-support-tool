@@ -1,11 +1,9 @@
 # Only rendered for mode: job. Runs collection in-cluster using the namespace-scoped
 # ServiceAccount from job-rbac.yaml.
-#
-# UNVERIFIED: the exact container command depends on how Apollo's published image
-# packages the support-bundle binary (as a standalone binary vs. a kubectl plugin) --
-# `job.image.repository`/`tag` have no real image behind them yet (see values.yaml).
-# Confirm this command against the real image before treating this as tested.
 {{- if eq .Values.mode "job" }}
+{{- $secretName := include "router-diagnostics.storageSecretName" . }}
+{{- $useS3Secret := and $secretName (eq .Values.job.storage.provider "s3") }}
+{{- $useGCSSecret := and $secretName (eq .Values.job.storage.provider "gcs") }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -31,6 +29,28 @@ spec:
           image: "{{ .Values.job.image.repository }}:{{ .Values.job.image.tag }}"
           imagePullPolicy: {{ .Values.job.image.pullPolicy }}
           command:
-            - support-bundle
-            - --load-cluster-specs
+            - /bin/sh
+            - -c
+            - |
+              {{- include "router-diagnostics.collectAndUploadScript" . | nindent 14 }}
+          {{- if $useS3Secret }}
+          envFrom:
+            - secretRef:
+                name: {{ $secretName }}
+          {{- end }}
+          {{- if $useGCSSecret }}
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/run/secrets/router-diagnostics-storage/key.json
+          volumeMounts:
+            - name: storage-credentials
+              mountPath: /var/run/secrets/router-diagnostics-storage
+              readOnly: true
+          {{- end }}
+      {{- if $useGCSSecret }}
+      volumes:
+        - name: storage-credentials
+          secret:
+            secretName: {{ $secretName }}
+      {{- end }}
 {{- end }}
