@@ -1,0 +1,105 @@
+# Only rendered for mode: job. The namespace-scoped Role covers everything
+# clusterResources/logs/configMap/nodeMetrics need within .Values.namespace.
+# The ClusterRole is only for nodeMetrics's cluster-scoped grants (nodes, nodes/proxy,
+# nodes/stats).
+{{- if eq .Values.mode "job" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: router-diagnostics-job
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: router-diagnostics-job
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: [""]
+    resources:
+      - configmaps
+      - endpoints
+      - events
+      - limitranges
+      - persistentvolumeclaims
+      - pods
+      - pods/log
+      - resourcequotas
+      - serviceaccounts
+      - services
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources:
+      - daemonsets
+      - deployments
+      - replicasets
+      - statefulsets
+    verbs: ["get", "list"]
+  - apiGroups: ["batch"]
+    resources:
+      - cronjobs
+      - jobs
+    verbs: ["get", "list"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources:
+      - rolebindings
+      - roles
+    verbs: ["get", "list"]
+  - apiGroups: ["policy"]
+    resources:
+      - poddisruptionbudgets
+    verbs: ["get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: ["get", "list"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources:
+      - endpointslices
+    verbs: ["get", "list"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources:
+      - leases
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: router-diagnostics-job
+  namespace: {{ .Values.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: router-diagnostics-job
+subjects:
+  - kind: ServiceAccount
+    name: router-diagnostics-job
+    namespace: {{ .Release.Namespace }}
+---
+# Cluster-scoped: names include the namespace to avoid colliding with another
+# router-diagnostics install elsewhere in the same cluster.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: router-diagnostics-{{ .Values.namespace }}-nodemetrics
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["nodes/proxy", "nodes/stats"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: router-diagnostics-{{ .Values.namespace }}-nodemetrics
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: router-diagnostics-{{ .Values.namespace }}-nodemetrics
+subjects:
+  - kind: ServiceAccount
+    name: router-diagnostics-job
+    namespace: {{ .Release.Namespace }}
+{{- end }}

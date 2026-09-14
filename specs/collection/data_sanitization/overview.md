@@ -19,7 +19,7 @@ troubleshoot.sh ships a default set of redactors that runs on every file regardl
 
 ## How custom redaction works
 
-Verified by reading `github.com/replicatedhq/troubleshoot` at `v0.120.0`. **Note:** This is the version the source citations below point at, not a minimum supported version, see `specs/deployment/v1.md` → Collection engine version.
+Verified by reading `github.com/replicatedhq/troubleshoot` at `v0.120.0`. **Note:** This is the version the source citations below point at, not a minimum supported version, see `specs/deployment/v1/v1.md` → troubleshoot.sh support-bundle version.
 
 Redactors are declared in a `kind: Redactor` document, delivered on the same discovered ConfigMap as the collection spec under its own `data` key. See [How the `Redactor` document is delivered](#how-the-redactor-document-is-delivered).
 
@@ -140,4 +140,4 @@ The `helm` collector never captures the router's configuration values — only r
 
 ## How the `Redactor` document is delivered
 
-Collection discovers its spec by label (`troubleshoot.sh/kind: support-bundle` on a ConfigMap or Secret, per `specs/deployment/v1/v1.md`). The `Redactor` document rides along on that same object, under its own `data` key (`redactor-spec`, alongside the spec's own `support-bundle-spec`). So the chart's `spec-configmap.yaml` template just needs a second `data` key holding the rendered `Redactor` document.
+Collection discovers its spec by label (`troubleshoot.sh/kind: support-bundle` on a ConfigMap or Secret, per `specs/deployment/v1/v1.md`). The `Redactor` document rides along on that same object, under its own `data` key (`redactor-spec`, alongside the spec's own `support-bundle-spec`). So the chart's `base-spec-configmap.yaml` template just needs a second `data` key holding the rendered `Redactor` document.
