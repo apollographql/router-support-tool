@@ -1,5 +1,36 @@
-# Stub. `mode: job`'s Job resource is a separate, later piece of work — this file
-# exists so the chart's layout matches what specs/deployment/v1/v1.md describes, and so
-# `mode: job` renders without error today, but it creates nothing yet.
+# Only rendered for mode: job. Runs collection in-cluster using the namespace-scoped
+# ServiceAccount from job-rbac.yaml.
+#
+# UNVERIFIED: the exact container command depends on how Apollo's published image
+# packages the support-bundle binary (as a standalone binary vs. a kubectl plugin) --
+# `job.image.repository`/`tag` have no real image behind them yet (see values.yaml).
+# Confirm this command against the real image before treating this as tested.
 {{- if eq .Values.mode "job" }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: router-diagnostics-job
+  labels:
+    troubleshoot.sh/kind: support-bundle-job
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: {{ .Values.job.ttlSecondsAfterFinished | default 3600 }}
+  template:
+    metadata:
+      annotations:
+        {{- include "router-diagnostics.jobPodAnnotations" . | nindent 8 }}
+      {{- with .Values.job.podLabels }}
+      labels:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: router-diagnostics-job
+      restartPolicy: Never
+      containers:
+        - name: support-bundle
+          image: "{{ .Values.job.image.repository }}:{{ .Values.job.image.tag }}"
+          imagePullPolicy: {{ .Values.job.image.pullPolicy }}
+          command:
+            - support-bundle
+            - --load-cluster-specs
 {{- end }}
