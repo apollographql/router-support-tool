@@ -38,6 +38,17 @@ Git history is the decision record. To understand why something is the way it is
 
 Where a design choice involved rejecting a viable alternative, the spec records it in a **Rejected alternatives** section — not as history, but because knowing what was ruled out and why is part of understanding the current design. If you are considering an approach listed there, engage with the recorded reasoning rather than re-proposing it.
 
+## Local checks and git hooks
+
+This repo uses [mise](https://mise.jdx.dev) tasks (`mise-tasks/`) as the single source of truth for its static checks — CI (`.github/workflows/static-checks.yaml`) and local [lefthook](https://lefthook.dev) hooks (`lefthook.yml`) both just call `mise run <task>`, so there's one place to fix a check rather than two. After cloning, install the hooks once:
+
+```bash
+mise install
+mise exec -- lefthook install
+```
+
+`git commit` then runs the fast, local-only checks (`check-ghafmt`, `generate-helm-docs`, `helm-lint`) against whatever you changed, and `git push` additionally runs `spec-lint`, which needs the network (it downloads real `support-bundle` releases). CI runs all of them regardless, as the backstop for a skipped or bypassed hook.
+
 ## Helm chart documentation
 
 `router-diagnostics/README.md` is generated from `values.yaml`'s `# --` comments via [helm-docs](https://github.com/norwoodj/helm-docs). CI enforces it stays in sync (`fail-on-diff: true`) — after changing `router-diagnostics/values.yaml`, regenerate it locally and commit the result:

@@ -148,3 +148,4 @@ See `specs/deployment/v1/v1.md` for where each pin lives.
   ```bash
   mise run check-ghafmt
   ```
+- All of the above (plus `helm-lint`, `spec-lint`) are `mise-tasks/` scripts, the single source of truth CI and local [lefthook](https://lefthook.dev) hooks both call — see README.md → "Local checks and git hooks" for one-time setup (`mise exec -- lefthook install`).

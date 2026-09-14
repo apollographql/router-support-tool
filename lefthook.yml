@@ -1,0 +1,18 @@
+pre-commit:
+  commands:
+    ghafmt:
+      glob: ".github/workflows/*.{yml,yaml}"
+      run: mise run check-ghafmt
+    helm-docs:
+      glob: "router-diagnostics/values.yaml"
+      run: mise run generate-helm-docs
+      stage_fixed: true
+    helm-lint:
+      glob: "router-diagnostics/**"
+      run: mise run helm-lint
+
+pre-push:
+  commands:
+    spec-lint:
+      glob: "router-diagnostics/**"
+      run: mise run spec-lint
