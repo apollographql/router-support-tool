@@ -47,13 +47,18 @@ The tool supports three deployment tiers in v1:
 If you deployed the router with a hand-authored manifest or a custom chart that doesn't follow the official chart's conventions, this tool still works — you'll just need to supply more. None of the official chart's conventions (standard labels, known ConfigMap naming) apply, so the tool can't locate your router's config or pod on its own. Supply your namespace, pod selector, and ConfigMap name, and the same chart and collection engine used for every other tier handles the rest.
 
 ## Collection Modes
-Getting a spec into the cluster is done through a single Helm chart, `router-diagnostics`, with a `mode` value controlling how collection actually runs:
 
-- **`mode: local`** — renders the spec into a cluster ConfigMap. You run the collection yourself from a machine with kubectl access.
+Getting a spec into the cluster is done through a single Helm chart, `router-diagnostics`, with a `mode` value controlling how collection actually runs. Both modes collect the same spec, but the shape of what runs, where, and what it needs is genuinely different:
 
-- **`mode: job`** — renders the same spec plus a Kubernetes Job (and its ServiceAccount/RBAC) that runs the collection in-cluster. Use this if your own kubectl access to production is restricted — a platform team installs the chart and runs the Job on your behalf.
+| | `mode: local` | `mode: job` |
+| --- | --- | --- |
+| Who runs collection | You, from your own machine with your own kubectl access | A Kubernetes Job, in-cluster, using its own ServiceAccount |
+| What gets installed | Spec ConfigMap only | Spec ConfigMap + Job + ServiceAccount/RBAC (namespace-scoped and cluster-scoped) |
+| `support-bundle` binary | Pinned by the `router-diagnostics` Helm plugin | Pinned by Apollo's published Job image |
+| Where the bundle lands | Your current directory | In-cluster; your platform team retrieves it (`specs/storage/`) |
+| Use when | You have kubectl access to production | Your kubectl access is restricted and a platform team runs it on your behalf |
 
-Both modes use the same spec and collection engine; only who runs it and where differs.
+See [Permissions for on-demand collection](#permissions-for-on-demand-collection) below for exactly what each mode needs.
 
 **If you use the Apollo Operator**, you don't need this chart at all — the Operator installs the same spec for you, with the values already filled in. You do still need the plugin from step one. Skip to [Apollo Operator customers](#apollo-operator-customers) below.
 
@@ -113,9 +118,7 @@ helm install router-diagnostics apollo/router-diagnostics \
 
 If you're on a raw-manifest or custom deployment, also set `selector` and `configMapName` as shown above.
 
-The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle. See `specs/storage/`.
-
-The ServiceAccount needs the same read permissions as the local path — namespace-scoped, plus the cluster-scoped grants for node access and container metrics — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below. Applying them requires someone who can create Jobs, namespace RBAC, *and* cluster-scoped RBAC in the cluster — see [Step two](#step-two-install-the-helm-chart) above for what that means for who can install this mode.
+The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle. See `specs/storage/`. Installing this mode needs someone who can create Jobs, namespace RBAC, *and* cluster-scoped RBAC — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below for the full grant list.
 
 **If your cluster runs a service mesh, the Job's pod doesn't join it by default.** Sidecar injection is disabled automatically so the Job reliably reaches `Completed` instead of getting stuck in `Running` waiting on a long-lived sidecar. If your platform team's policy requires every pod to be in the mesh, this can be overridden. See `specs/deployment/v1/v1.md` → Service mesh environments for how to override it.
 
