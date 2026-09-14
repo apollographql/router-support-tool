@@ -142,5 +142,10 @@ See `specs/deployment/v1/v1.md` for where each pin lives.
 - Customer-supplied values (namespace, selector, ConfigMap name) cannot be passed as CLI flags — troubleshoot.sh takes spec *sources*, not collector parameters. Values reach the spec via the Helm chart.
 - `router-diagnostics/README.md` is generated from `values.yaml`'s `# --` comments via [helm-docs](https://github.com/norwoodj/helm-docs), and CI fails the PR if it's out of sync. After changing `router-diagnostics/values.yaml`, regenerate it and commit the result:
   ```bash
-  helm-docs --chart-search-root router-diagnostics
+  mise run generate-helm-docs
   ```
+- Workflow files under `.github/workflows/` are formatted with [ghafmt](https://github.com/jonathanrainer/ghafmt), and CI fails the PR if they're not. Before pushing a workflow change:
+  ```bash
+  mise run check-ghafmt
+  ```
+- All of the above (plus `helm-lint`, `spec-lint`) are `mise-tasks/` scripts, the single source of truth CI and local [lefthook](https://lefthook.dev) hooks both call — see README.md → "Local checks and git hooks" for one-time setup (`mise exec -- lefthook install`).

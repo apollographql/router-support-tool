@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+#MISE description="Render router-diagnostics across every tier/mode combo, helm lint + kubeconform each"
+set -euo pipefail
+
+CHART_PATH="router-diagnostics"
+WORKDIR=$(mktemp -d)
+trap 'rm -rf "$WORKDIR"' EXIT
+
+for tier in official-chart raw-manifest; do
+  for mode in local job; do
+    FLAGS="--set namespace=ci-test"
+
+    if [ "$tier" = "raw-manifest" ]; then
+      FLAGS="$FLAGS --set selector=app=hello-world --set configMapName=hello-world-config"
+    fi
+
+    if [ "$mode" = "local" ]; then
+      FLAGS="$FLAGS --set mode=local"
+    else
+      # Not a real image -- this only renders manifests, it never runs the Job.
+      FLAGS="$FLAGS --set mode=job --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0"
+    fi
+
+    echo "==> $tier / mode: $mode"
+    # shellcheck disable=SC2086
+    helm lint "$CHART_PATH" $FLAGS
+    # shellcheck disable=SC2086
+    helm template ci-test "$CHART_PATH" $FLAGS > "$WORKDIR/rendered.yaml"
+    kubeconform -strict -summary "$WORKDIR/rendered.yaml"
+    echo
+  done
+done
