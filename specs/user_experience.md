@@ -146,7 +146,7 @@ Collection produces a support bundle — a `support-bundle-<timestamp>.tar.gz` a
 - **`mode: job`** — the Job writes it in-cluster and your platform team retrieves it. See `specs/storage/`
 - **Apollo Operator** - see `specs/deployment/v1/operator.md`
 
-It includes router version, sanitized configuration, recent logs, metrics (if you've enabled the Prometheus endpoint), and pod status. Your Redis configuration and any Redis errors in the router logs are captured, so support can still see how Redis is configured and whether the router is failing against it.
+It includes router version, sanitized configuration, recent logs, metrics (if you've enabled the Prometheus endpoint), and pod status. Your Redis configuration and any Redis errors in the router logs are captured, so support can still see how Redis is configured and whether the router is failing against it. See `specs/collection/output.md` for exactly what the extracted archive looks like, including a worked directory-tree example.
 
 Sensitive data is redacted automatically before the output bundle is created — see [Redaction](#redaction) below. You can inspect the bundle contents before sharing. Nothing persists in the cluster after collection completes, though the chart itself remains installed unless you remove it — see [Cluster footprint](#cluster-footprint) below.
 
