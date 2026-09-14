@@ -125,7 +125,7 @@ jobs:
         id: versions
         run: |
           FLOOR=$(helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
-            --show-only templates/spec-configmap.yaml \
+            --show-only templates/base-spec-configmap.yaml \
             | yq '.data["support-bundle-spec"]' \
             | yq '.spec.collectors[] | select(has("data")) | .data.data' \
             | jq -r '.min_troubleshoot_version')
@@ -163,14 +163,14 @@ jobs:
       - name: "Extract rendered spec (mode: local)"
         run: |
           helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
-            --show-only templates/spec-configmap.yaml \
+            --show-only templates/base-spec-configmap.yaml \
             | yq '.data["support-bundle-spec"]' > rendered-spec.local.yaml
 
       - name: "Extract rendered spec (mode: job)"
         run: |
           helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=job \
             --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
-            --show-only templates/spec-configmap.yaml \
+            --show-only templates/base-spec-configmap.yaml \
             | yq '.data["support-bundle-spec"]' > rendered-spec.job.yaml
 
       - name: support-bundle lint
