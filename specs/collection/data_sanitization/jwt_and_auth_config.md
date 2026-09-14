@@ -38,37 +38,7 @@ Single-line `regex` with a `mask` capture group:
 - **Not scoped to the `jwks` block** — RE2 has no lookbehind, so it can't anchor on a parent key without missing later entries in the list. As a result it also masks any other `name:`/`value:` pair in the collected config, including unrelated ones swept up by `clusterResources`. Accepted trade: keys stay readable, double-masking is idempotent.
 - **Block style covers every entry, flow style covers only the first**, same RE2 limitation as `header_values.md`. A flow list past one entry is left unmasked.
 
-## Redactor: the `helm` collector's output
-
-```yaml
-- name: router-jwt-jwks-fetch-headers-helm
-  fileSelector:
-    files:
-      - "helm/*.json"
-      - "helm/*/*.json"
-  removals:
-    yamlPath:
-      - "*.releaseHistory.*.values.router.configuration.authentication.router.jwt.jwks.*.headers.*.value"
-- name: router-subgraph-aws-sigv4-hardcoded-helm
-  fileSelector:
-    files:
-      - "helm/*.json"
-      - "helm/*/*.json"
-  removals:
-    regex:
-      - redactor: '("?secret_access_key"?:\s*"?)(?P<mask>[^",\n]+)("?)'
-      - redactor: '("?access_key_id"?:\s*"?)(?P<mask>[^",\n]+)("?)'
-    yamlPath:
-      - "*.releaseHistory.*.values.router.configuration.authentication.subgraph.all.aws_sig_v4.hardcoded.access_key_id"
-      - "*.releaseHistory.*.values.router.configuration.authentication.subgraph.all.aws_sig_v4.hardcoded.secret_access_key"
-      - "*.releaseHistory.*.values.router.configuration.authentication.subgraph.subgraphs.*.aws_sig_v4.hardcoded.access_key_id"
-      - "*.releaseHistory.*.values.router.configuration.authentication.subgraph.subgraphs.*.aws_sig_v4.hardcoded.secret_access_key"
-```
-
-- **JWKS headers** use `yamlPath` on `helm` (exact path, order-independent) and the name-agnostic regex above on the embedded surface — see the notes above for what that trade costs.
-- **AWS keys use both `yamlPath` and regex.** `yamlPath` targets the four known locations precisely; the regex is a safety net, since `secret_access_key`/`access_key_id` are self-identifying enough to also catch a key pair placed outside the documented path (e.g. `extraEnvVars`). Missing a plaintext AWS key is worse than over-masking.
-
-**Required before this is considered done:** configure two non-`Authorization` JWKS fetch headers (one block-style, one single-entry flow, one quoted), a hardcoded `aws_sig_v4` key pair, and a `default_chain` block. On both surfaces, confirm all of them are masked while header names, JWKS URL, issuer, algorithms, and the `default_chain` profile survive. Also confirm the multi-entry flow-list gap: in a two-entry flow list, only the first value is masked.
+**Required before this is considered done:** configure two non-`Authorization` JWKS fetch headers (one block-style, one single-entry flow, one quoted), a hardcoded `aws_sig_v4` key pair, and a `default_chain` block. Confirm all of them are masked while header names, JWKS URL, issuer, algorithms, and the `default_chain` profile survive. Also confirm the multi-entry flow-list gap: in a two-entry flow list, only the first value is masked.
 
 ## What's deliberately left visible
 

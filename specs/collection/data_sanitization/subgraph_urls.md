@@ -12,26 +12,9 @@ A subgraph URL is masked in full because the address itself is the disclosure, a
 
 - An external host can reveal a business relationship.
 
-- Support does not need the address to use the field. What is diagnostically useful is *that* an override exists and *which* subgraph it applies to — and the subgraph name survives on the `helm` surface and in the schema. A customer can supply the URL directly if a specific question turns on it.
+- Support does not need the address to use the field. What is diagnostically useful is *that* an override exists and *which* subgraph it applies to — and the subgraph name survives in the schema. A customer can supply the URL directly if a specific question turns on it.
 
 Rejected alternative: mask only the userinfo, leaving the address.
-
-## Redactor: the `helm` collector's output
-
-`helm/*.json` is structured JSON, so `yamlPath` masks each value directly and leaves the subgraph names intact:
-
-```yaml
-- name: router-subgraph-url-helm
-  fileSelector:
-    files:
-      - "helm/*.json"
-      - "helm/*/*.json"
-  removals:
-    yamlPath:
-      - "*.releaseHistory.*.values.router.configuration.override_subgraph_url.*"
-```
-
-The trailing `*` wildcards over the map's keys, masking every value beneath `override_subgraph_url`.
 
 ## Redactor: `router.yaml` (`configMap`/`clusterResources` output)
 
@@ -48,7 +31,7 @@ This surface masks the **whole block**, keys included — RE2 has no lookbehind,
       - redactor: '(override_subgraph_url:)(?P<mask>(?:\\n\s+(?:[^\\]|\\")+)+)'
 ```
 
-**Consequence:** subgraph *names* survive on the `helm` surface but not in `router.yaml`, where the pattern can only mask the block wholesale. This is a side effect of the RE2 constraint.
+**Consequence:** subgraph *names* don't survive this surface — the pattern can only mask the block wholesale, a side effect of the RE2 constraint. They're only preserved via the schema (below), when one is collected.
 
 ## Redactor: subgraph URLs in the supergraph schema
 
@@ -70,8 +53,6 @@ That schema is collected whenever the customer sets `.Values.supergraphFile` —
     files:
       - "cluster-resources/configmaps/*.json"
       - "configmaps/*/*.json"
-      - "helm/*.json"
-      - "helm/*/*.json"
   removals:
     regex:
       - redactor: '(@join__graph\([^)]*url:\s*\\?")(?P<mask>[^"\\]*)(\\?")'
@@ -85,10 +66,10 @@ That schema is collected whenever the customer sets `.Values.supergraphFile` —
 - The second pattern anchors on `baseURL` directly to reach Apollo Connectors' external API addresses (`@source(http: { baseURL: … })`, nested inside `@join__directive`) — a connector base URL is usually third-party, making it the disclosure most likely to name a business relationship.
 - Managed-federation customers are unaffected: their schema comes from Uplink at runtime and never lands in a ConfigMap.
 
-**Required before this is considered done:** collect with (a) `override_subgraph_url` set for two subgraphs, one quoted and one not, followed by a top-level key, (b) a `supergraphFile` schema carrying `@join__graph` URLs and a connector `baseURL`, and (c) a `@link` directive. Confirm every address is masked on every surface, the key after the block is intact rather than swallowed, subgraph names and the `@link` URL survive, and — per `overview.md` → Order independence on `helm/*.json` — the schema patterns still fire after a `yamlPath` rule re-serializes that file as YAML.
+**Required before this is considered done:** collect with (a) `override_subgraph_url` set for two subgraphs, one quoted and one not, followed by a top-level key, (b) a `supergraphFile` schema carrying `@join__graph` URLs and a connector `baseURL`, and (c) a `@link` directive. Confirm every address is masked, the key after the block is intact rather than swallowed, and subgraph names and the `@link` URL survive.
 
 ## What's deliberately left visible
 
-- **Subgraph names**, everywhere they can be kept — `@join__graph(name: …)`, the `helm` map keys, and a connector's `graphs` argument. Knowing which subgraphs exist, and which one an override applies to, is what makes the field useful to support. The one exception is the `override_subgraph_url` block on the embedded surface, for the RE2 reason above; those same names survive on the other two surfaces in the same bundle.
+- **Subgraph names**, everywhere they can be kept — `@join__graph(name: …)` and a connector's `graphs` argument. Knowing which subgraphs exist, and which one an override applies to, is what makes the field useful to support. The one exception is the `override_subgraph_url` block itself, for the RE2 reason above; the same names survive via the schema when one is collected.
 - **`@link(url: …)`**, which pins the federation spec version rather than naming a customer host.
 - **A connector's `name`, `path`, and `queryParams`**, which describe the shape of a call without disclosing where it goes.
