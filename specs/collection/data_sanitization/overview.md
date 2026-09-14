@@ -176,4 +176,4 @@ The two surfaces are not equivalent, and the choice is forced by file shape, not
 
 ## How the `Redactor` document is delivered
 
-Collection discovers its spec by label (`troubleshoot.sh/kind: support-bundle` on a ConfigMap or Secret, per `specs/deployment/v1/v1.md`). The `Redactor` document rides along on that same object, under its own `data` key (`redactor-spec`, alongside the spec's own `support-bundle-spec`). So the chart's `spec-configmap.yaml` template just needs a second `data` key holding the rendered `Redactor` document.
+Collection discovers its spec by label (`troubleshoot.sh/kind: support-bundle` on a ConfigMap or Secret, per `specs/deployment/v1/v1.md`). The `Redactor` document rides along on that same object, under its own `data` key (`redactor-spec`, alongside the spec's own `support-bundle-spec`). So the chart's `base-spec-configmap.yaml` template just needs a second `data` key holding the rendered `Redactor` document.

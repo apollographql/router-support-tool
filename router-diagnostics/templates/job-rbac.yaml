@@ -1,12 +1,7 @@
 # Only rendered for mode: job. The namespace-scoped Role covers everything
 # clusterResources/logs/configMap/nodeMetrics need within .Values.namespace.
 # The ClusterRole is only for nodeMetrics's cluster-scoped grants (nodes, nodes/proxy,
-#
-# UNVERIFIED: this Role's resource list was derived from what clusterResources actually
-# populated in one real test bundle (see specs/collection/base_spec.md), not from
-# reading troubleshoot.sh's collector source line by line. Confirm against a real
-# mode: job run — collecting with this exact RBAC, not broader ambient access — before
-# treating it as complete.
+# nodes/stats).
 {{- if eq .Values.mode "job" }}
 apiVersion: v1
 kind: ServiceAccount
@@ -21,33 +16,33 @@ metadata:
 rules:
   - apiGroups: [""]
     resources:
+      - configmaps
+      - endpoints
+      - events
+      - limitranges
+      - persistentvolumeclaims
       - pods
       - pods/log
-      - events
-      - configmaps
-      - services
-      - endpoints
-      - limitranges
       - resourcequotas
-      - persistentvolumeclaims
       - serviceaccounts
+      - services
     verbs: ["get", "list"]
   - apiGroups: ["apps"]
     resources:
+      - daemonsets
       - deployments
       - replicasets
       - statefulsets
-      - daemonsets
     verbs: ["get", "list"]
   - apiGroups: ["batch"]
     resources:
-      - jobs
       - cronjobs
+      - jobs
     verbs: ["get", "list"]
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources:
-      - roles
       - rolebindings
+      - roles
     verbs: ["get", "list"]
   - apiGroups: ["policy"]
     resources:
@@ -55,8 +50,8 @@ rules:
     verbs: ["get", "list"]
   - apiGroups: ["networking.k8s.io"]
     resources:
-      - networkpolicies
       - ingresses
+      - networkpolicies
     verbs: ["get", "list"]
   - apiGroups: ["discovery.k8s.io"]
     resources:
