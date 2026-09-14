@@ -1,0 +1,103 @@
+# The base collection spec: a troubleshoot.sh SupportBundle resource
+# (see https://troubleshoot.sh/docs/collect/) declaring which collectors run, against
+# which targets, under which names.
+#
+# `<namespace>` below is the one value every namespace-scoped collector needs. It is
+# written here as a literal placeholder rather than Go-template syntax (e.g.
+# `{{ .Values.namespace }}`) — templating this into the `router-diagnostics` chart's
+# rendered spec will be added separately.
+apiVersion: troubleshoot.sh/v1beta2
+kind: SupportBundle
+metadata:
+  name: router-diagnostics-base
+spec:
+  collectors:
+    # An empty `namespaces` list here defaults to every namespace in the cluster, so it
+    # must always be set explicitly. `collectorName` is display-only.
+    # This collector's output path (cluster-resources/) is hardcoded by troubleshoot.sh.
+    # See https://troubleshoot.sh/docs/collect/cluster-resources.
+    - clusterResources:
+        collectorName: cluster-resources
+        namespaces:
+          - <namespace>
+
+    # router-logs — includes logs for all containers in the pod, including mesh/proxy sidecars.
+    # See https://troubleshoot.sh/docs/collect/logs.
+    #
+    # `<selector>` is also injectable — the chart's `selector` value, defaulting to
+    # `app.kubernetes.io/name=router` when unset (the official-chart tier).
+    - logs:
+        name: router-logs
+        namespace: <namespace>
+        selector:
+          - <selector>
+
+    # router-metrics — full Prometheus snapshot from the router's metrics endpoint.
+    # Returns empty whenever the exporter is disabled or bound to loopback,
+    # or the Service has no `metrics` port.
+    #
+    # `<router-metrics-host>` is a placeholder.
+    # This collector only accepts a literal URL and the router's Service name
+    # is derived from its Helm release name so it can't be hardcoded here. Resolving
+    # it is chart-authoring work (likely a Helm `lookup` by namespace + label) and will
+    # be included in a follow-up.
+    #
+    # The URL itself is also injectable on the chart's `mode` value: under `mode: local`
+    # it targets `http://localhost:9090/metrics` instead of the cluster-DNS form shown
+    # here (which is what `mode: job` renders).
+    #
+    # `name` controls the output directory for this collector, the result lands at
+    # `router-metrics/result.json`. See https://troubleshoot.sh/docs/collect/http.
+    - http:
+        name: router-metrics
+        get:
+          url: http://<router-metrics-host>.<namespace>.svc.cluster.local:9090/metrics
+
+    # router-config-rendered — the ConfigMap holding the rendered `configuration.yaml`,
+    # targeted by the official chart's standard label. Succeeds directly for the
+    # official Apollo router Helm chart tier, returns empty when no ConfigMap matches.
+    #
+    # Label-based: a namespace running more than one router release
+    # gets every release's config, one file per match.
+    #
+    # `<selector>` is injectable the same way as the `logs` collector above.
+    #
+    # The chart's `configMapName` value is also injectable.
+    # When set, this collector uses `name: <configMapName>` instead of `selector:`,
+    # targeting one specific ConfigMap by its literal name rather than by label.
+    #
+    # `collectorName` is display-only. This collector's output path
+    # is hardcoded from the namespace and the matched ConfigMap's own name.
+    # See https://troubleshoot.sh/docs/collect/configmap.
+    - configMap:
+        collectorName: router-config-rendered
+        namespace: <namespace>
+        selector:
+          - <selector>
+        includeAllData: true
+
+    # router-resource-usage — container CPU/memory from the kubelet Summary API. A
+    # fallback signal for customers who haven't enabled the Prometheus exporter yet,
+    # populating independently of it.
+    #
+    # `collectorName` is display-only. This collector's output path
+    # (node-metrics/<node-name>.json) is hardcoded by troubleshoot.sh.
+    # See https://troubleshoot.sh/docs/collect/node-metrics.
+    - nodeMetrics:
+        collectorName: router-resource-usage
+
+    # meta.json — the bundle's self-description.
+    #
+    # `<mode>` is injectable — the chart's `mode` value (`local` or `job`), rendered
+    # here directly.
+    #
+    # See https://troubleshoot.sh/docs/collect/data.
+    - data:
+        name: meta.json
+        data: |
+          {
+            "spec_version": "1",
+            "mode": "<mode>",
+            "namespace": "<namespace>",
+            "min_troubleshoot_version": "0.120.0"
+          }
