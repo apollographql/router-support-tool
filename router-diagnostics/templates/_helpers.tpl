@@ -84,8 +84,9 @@ support-bundle --load-cluster-specs
 BUNDLE=$(ls -t support-bundle-*.tar.gz | head -n1)
 {{- if eq .Values.job.storage.provider "s3" }}
 {{- if .Values.job.storage.s3.forcePathStyle }}
-mkdir -p "$HOME/.aws"
-printf '[default]\ns3 =\n    addressing_style = path\n' > "$HOME/.aws/config"
+mkdir -p /tmp/.aws-config
+printf '[default]\ns3 =\n    addressing_style = path\n' > /tmp/.aws-config/config
+export AWS_CONFIG_FILE=/tmp/.aws-config/config
 {{- end }}
 aws s3 cp "$BUNDLE" "s3://{{ .Values.job.storage.bucket }}/{{ .Values.job.storage.prefix }}$BUNDLE"{{ if .Values.job.storage.s3.region }} --region {{ .Values.job.storage.s3.region }}{{ end }}{{ if .Values.job.storage.s3.endpoint }} --endpoint-url {{ .Values.job.storage.s3.endpoint }}{{ end }}
 {{- else if eq .Values.job.storage.provider "gcs" }}
