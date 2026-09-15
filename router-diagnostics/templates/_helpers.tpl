@@ -61,8 +61,9 @@ most likely a mistake and will fail at `helm install`/`template`.
 {{- end -}}
 
 {{/*
-The Secret name job.yaml mounts credentials from. Empty when neither an
-existingSecret nor a static credential is set (the IRSA/Workload Identity path).
+The Secret name job.yaml mounts credentials/headers from. Empty when neither an
+existingSecret nor a static s3/gcs credential is set (the IRSA/Workload Identity path,
+or provider: url with no existingSecret).
 */}}
 {{- define "router-diagnostics.storageSecretName" -}}
 {{- include "router-diagnostics.storageCredentialCheck" . -}}
@@ -92,6 +93,18 @@ aws s3 cp "$BUNDLE" "s3://{{ .Values.job.storage.bucket }}/{{ .Values.job.storag
 gcloud config set project {{ .Values.job.storage.gcs.project }}
 {{- end }}
 gcloud storage cp "$BUNDLE" "gs://{{ .Values.job.storage.bucket }}/{{ .Values.job.storage.prefix }}$BUNDLE"
+{{- else if eq .Values.job.storage.provider "url" }}
+set --
+if [ -d /var/run/secrets/router-diagnostics-storage-headers ]; then
+  for f in /var/run/secrets/router-diagnostics-storage-headers/*; do
+    [ -f "$f" ] || continue
+    set -- "$@" -H "$(basename "$f"): $(cat "$f")"
+  done
+fi
+{{- range $k, $v := .Values.job.storage.url.headers }}
+set -- "$@" -H {{ printf "%s: %s" $k $v | quote }}
+{{- end }}
+curl -sSf -X {{ .Values.job.storage.url.method | default "PUT" }} -T "$BUNDLE" "$@" {{ .Values.job.storage.url.endpoint | quote }}
 {{- end }}
 {{- end }}
 {{- end -}}

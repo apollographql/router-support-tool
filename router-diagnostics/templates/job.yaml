@@ -4,6 +4,7 @@
 {{- $secretName := include "router-diagnostics.storageSecretName" . }}
 {{- $useS3Secret := and $secretName (eq .Values.job.storage.provider "s3") }}
 {{- $useGCSSecret := and $secretName (eq .Values.job.storage.provider "gcs") }}
+{{- $useURLSecret := and $secretName (eq .Values.job.storage.provider "url") }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -47,9 +48,21 @@ spec:
               mountPath: /var/run/secrets/router-diagnostics-storage
               readOnly: true
           {{- end }}
+          {{- if $useURLSecret }}
+          volumeMounts:
+            - name: storage-headers
+              mountPath: /var/run/secrets/router-diagnostics-storage-headers
+              readOnly: true
+          {{- end }}
       {{- if $useGCSSecret }}
       volumes:
         - name: storage-credentials
+          secret:
+            secretName: {{ $secretName }}
+      {{- end }}
+      {{- if $useURLSecret }}
+      volumes:
+        - name: storage-headers
           secret:
             secretName: {{ $secretName }}
       {{- end }}

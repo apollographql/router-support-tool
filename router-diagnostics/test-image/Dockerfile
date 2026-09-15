@@ -9,9 +9,10 @@
 # aws-cli is included (via Alpine's own package, not AWS's installer) to test the
 # S3 upload path against a real MinIO instance. gcloud is not included: it has no Alpine
 # package. The gcs path is verified by template rendering only, until RR-1145's production image exists.
+# curl is included to test the provider: url upload path.
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates aws-cli
+RUN apk add --no-cache ca-certificates aws-cli curl
 
 ARG SUPPORT_BUNDLE_VERSION=v0.134.0
 ARG TARGETARCH
