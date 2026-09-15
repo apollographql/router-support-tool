@@ -103,15 +103,10 @@ jobs:
       - name: Validate rendered manifests against Kubernetes schema
         run: kubeconform -strict -summary rendered.yaml
 
-  # Spec linting across troubleshoot.sh versions:
-  # Run yhr support-bundle lint against the rendered spec
-  # once per pinned troubleshoot.sh version in scope: the
-  # declared floor (read from the chart's own rendered meta.json) and the current release.
-  determine_support_bundle_versions:
-    name: Determine troubleshoot.sh Versions
+  # Keeps the plugin's real pin and the chart's declared troubleshoot_version in sync
+  check_troubleshoot_version:
+    name: "Check troubleshoot.sh Version Consistency"
     runs-on: ubuntu-latest
-    outputs:
-      versions: ${{ steps.versions.outputs.versions }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -121,31 +116,26 @@ jobs:
         with:
           version: v3.17.3
 
-      - name: Determine floor and current versions
-        id: versions
+      - name: Check version consistency
         run: |
-          FLOOR=$(helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
+          PLUGIN_VERSION=$(grep -m1 '^SUPPORT_BUNDLE_VERSION=' router-diagnostics-helm-plugin/scripts/install-binary.sh | sed -E 's/SUPPORT_BUNDLE_VERSION="([^"]+)"/\1/')
+
+          CHART_VERSION=$(helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
             --show-only templates/base-spec-configmap.yaml \
             | yq '.data["support-bundle-spec"]' \
             | yq '.spec.collectors[] | select(has("data")) | .data.data' \
-            | jq -r '.min_troubleshoot_version')
+            | jq -r '.troubleshoot_version')
 
-          CURRENT=$(curl -sL https://api.github.com/repos/replicatedhq/troubleshoot/releases/latest | jq -r '.tag_name | ltrimstr("v")')
+          echo "plugin: $PLUGIN_VERSION, chart: $CHART_VERSION"
+          if [ "$PLUGIN_VERSION" != "$CHART_VERSION" ]; then
+            echo "error: the chart's declared troubleshoot_version ($CHART_VERSION) doesn't match the plugin's actual pin ($PLUGIN_VERSION)." >&2
+            exit 1
+          fi
 
-          echo "Declared floor: $FLOOR"
-          echo "Current release: $CURRENT"
-
-          VERSIONS=$(jq -cn --arg floor "$FLOOR" --arg current "$CURRENT" '[$floor, $current] | unique')
-          echo "versions=$VERSIONS" >> "$GITHUB_OUTPUT"
-
+  # Spec linting against the pinned troubleshoot.sh version
   spec_lint:
-    name: "Spec Lint (support-bundle ${{ matrix.support_bundle_version }})"
-    needs: determine_support_bundle_versions
+    name: "Spec Lint (support-bundle)"
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        support_bundle_version: ${{ fromJson(needs.determine_support_bundle_versions.outputs.versions) }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -155,9 +145,21 @@ jobs:
         with:
           version: v3.17.3
 
-      - name: Install support-bundle ${{ matrix.support_bundle_version }}
+      - name: Determine pinned troubleshoot.sh version
+        id: version
         run: |
-          curl -sL "https://github.com/replicatedhq/troubleshoot/releases/download/v${{ matrix.support_bundle_version }}/support-bundle_linux_amd64.tar.gz" \
+          VERSION=$(helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
+            --show-only templates/base-spec-configmap.yaml \
+            | yq '.data["support-bundle-spec"]' \
+            | yq '.spec.collectors[] | select(has("data")) | .data.data' \
+            | jq -r '.troubleshoot_version')
+
+          echo "Pinned version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install support-bundle ${{ steps.version.outputs.version }}
+        run: |
+          curl -sSLf "https://github.com/replicatedhq/troubleshoot/releases/download/v${{ steps.version.outputs.version }}/support-bundle_linux_amd64.tar.gz" \
             | tar xz -C /usr/local/bin support-bundle
 
       - name: "Extract rendered spec (mode: local)"

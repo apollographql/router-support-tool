@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+#MISE description="Fail if the pinned troubleshoot.sh version drifts between the plugin and the chart"
+set -euo pipefail
+
+CHART_PATH="router-diagnostics"
+
+PLUGIN_VERSION=$(grep -m1 '^SUPPORT_BUNDLE_VERSION=' router-diagnostics-helm-plugin/scripts/install-binary.sh | sed -E 's/SUPPORT_BUNDLE_VERSION="([^"]+)"/\1/')
+
+CHART_VERSION=$(helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
+  --show-only templates/base-spec-configmap.yaml \
+  | yq '.data["support-bundle-spec"]' \
+  | yq '.spec.collectors[] | select(has("data")) | .data.data' \
+  | jq -r '.troubleshoot_version')
+
+echo "router-diagnostics-helm-plugin/scripts/install-binary.sh: $PLUGIN_VERSION"
+echo "router-diagnostics/templates/base-spec-configmap.yaml:    $CHART_VERSION"
+
+if [ "$PLUGIN_VERSION" = "$CHART_VERSION" ]; then
+  echo "In sync at $PLUGIN_VERSION."
+else
+  echo "error: the chart's declared troubleshoot_version ($CHART_VERSION) doesn't match the plugin's actual pin ($PLUGIN_VERSION) -- update one to match the other." >&2
+  exit 1
+fi

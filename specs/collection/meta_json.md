@@ -25,7 +25,7 @@ We generate this content **before** collection runs. The consequence is the cent
 | `mode` | Chart value | `local` or `job`. Establishes where collection ran |
 | `namespace` | Chart value | The namespace collection was scoped to |
 | `sidecar_injection_disabled` | Chart, `mode: job` only | Records that the Job ran outside the mesh.|
-| `min_troubleshoot_version` | Spec | The declared floor from `specs/deployment/v1/v1.md` → troubleshoot.sh support-bundle version. Compared against `version.yaml` by whoever reads the bundle. |
+| `troubleshoot_version` | Spec | The pinned version from `specs/deployment/v1/v1.md` → troubleshoot.sh support-bundle version. Compared against `version.yaml` by whoever reads the bundle. |
 
 ### Multiple router releases in one namespace
 
@@ -41,7 +41,7 @@ Every field this file actually specifies, for a `mode: job` install:
   "mode": "job",
   "namespace": "production",
   "sidecar_injection_disabled": true,
-  "min_troubleshoot_version": "0.132.0"
+  "troubleshoot_version": "0.134.1"
 }
 ```
 
