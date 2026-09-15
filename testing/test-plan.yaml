@@ -1,0 +1,77 @@
+name: Router support tool verification
+description: >
+  Verification plan from specs/verification_plan.md: deploys a router, runs
+  router-diagnostics against it, and retrieves the resulting bundle for checks.
+
+matrix:
+  dimensions:
+    condition: [healthy]
+    router_version: ["v2.17.0"] # latest Apollo Router release as of 2026-09-15
+
+environment:
+  inline:
+    name: router-env
+    description: A router instance plus a mock-backend receiver for the support bundle upload.
+
+    variable_definitions:
+      - name: router_version
+        description: "The Apollo Router image tag to deploy"
+
+    env_vars:
+      ROUTER_VERSION: "{{ router_version }}"
+
+    resources:
+      - name: router-manifest.yaml
+        kind: relative_path
+        path: data/router-manifest.yaml
+      - name: mock-backend-manifest.yaml
+        kind: relative_path
+        path: data/mock-backend-manifest.yaml
+
+    file_providers:
+      - name: mock_backend_server.py
+        env_var: MOCK_BACKEND_SCRIPT
+        kind: relative_path
+        path: data/mock_backend_server.py
+
+scenario:
+  inline:
+    name: run-router-diagnostics
+    description: Runs env_setup.sh to put the routers into the desired condition, then scenario.sh to install router-diagnostics live via helm, run it, and retrieve the resulting bundle.
+
+    variable_definitions:
+      - name: condition
+        description: "The router condition env_setup.sh should set up before scenario.sh runs diagnostics"
+
+    docker:
+      # TODO: needs helm added to this image
+      image: us-central1-docker.pkg.dev/platform-cross-environment/apollo-private-docker/rtf-toolbox
+      tag: edge
+      command: "sh $ENV_SETUP_SCRIPT && sh $SCRIPT"
+
+    env_vars:
+      CONDITION: "{{ condition }}"
+
+    file_providers:
+      - name: env_setup.sh
+        env_var: ENV_SETUP_SCRIPT
+        kind: relative_path
+        path: data/env_setup.sh
+
+      - name: scenario.sh
+        env_var: SCRIPT
+        kind: relative_path
+        path: data/scenario.sh
+
+      - name: router-diagnostics
+        env_var: CHART_DIR
+        kind: relative_dir
+        path: ../router-diagnostics
+        files:
+          - "Chart.yaml"
+          - "values.yaml"
+          - "templates/_helpers.tpl"
+          - "templates/base-spec-configmap.yaml"
+          - "templates/job-rbac.yaml"
+          - "templates/job-storage-secret.yaml"
+          - "templates/job.yaml"
