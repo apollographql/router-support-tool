@@ -22,11 +22,15 @@ Each of these scenarios will be tested per deployment tier: the official Apollo 
 |  | Scenario | What it validates |
 | --- | --- | --- |
 | 1 | **All routers healthy** | Bundle collects everything expected, redaction runs, `meta.json` is accurate. |
-| 2 | **Some routers misbehaving** | The tool identifies and collects from the affected pods. Healthy neighbors show no behavioral impact from collection running against degraded pods. |
-| 3 | **All routers misbehaving** | The "safe to run at any time" claim holds under genuine degradation. A bundle is still produced. |
+| 2 | **Some routers degraded** [1] | The tool identifies and collects from the affected pods. Healthy neighbors show no behavioral impact from collection running against degraded pods. |
+| 3 | **All routers degraded** [1] | The "safe to run at any time" claim holds under genuine degradation. A bundle is still produced. |
 | 4 | **Routers under-resourced** | The negligible-resource-consumption claim holds when collection runs against a container already near its cgroup limit. This is also where an in-container collector would do the most damage if one is ever proposed — this scenario is the standing regression check against that. |
 | 5 | **Router recently restarted** | `logs` collector's previous-container request produces `<name>-previous.log` and startup-time errors are present in the bundle. |
-| 6 | **OOM in progress**: the router container's memory usage is actively climbing toward its cgroup limit (not yet kernel-OOM-killed). |  Validates that running collection **while** this is happening doesn't push it over the edge. |
+| 6 | **OOM in progress**: the router container's memory usage is actively climbing toward its cgroup limit (not yet kernel-OOM-killed). | Validates that running collection **while** this is happening doesn't push it over the edge. |
+
+**[1]** We will test two degradation scenarios:
+1. The router's `/metrics` endpoint is unresponsive or returns errors while the router's main traffic port and k8s health checks are fine.
+2. The router returns errors on all client traffic.
 
 ### Collector attribution scenarios
 
@@ -55,17 +59,6 @@ Redaction fails silently so every test run has to confirm the specific secret va
 | `redis_credentials.md` | A URL-embedded credential in both `user:pass@` and pathless `:pass@` forms, `username`/`password` as separate fields (quoted in one cache block, unquoted in another), and at least one Redis-backed cache left unconfigured. Confirm masking on both surfaces and that the unconfigured cache's absence is attributable. |
 | `subgraph_urls.md` | `override_subgraph_url` set for two subgraphs (one quoted, one not) followed by a top-level key; a `supergraphFile` schema with `@join__graph` URLs and a connector `baseURL`; a `@link` directive. Confirm masking everywhere, the key after the block survives, subgraph names/`@link` URL survive, and schema patterns still fire on `helm/*.json` after a `yamlPath` rule re-serializes it as YAML. |
 
-
-### troubleshoot.sh version coverage
-
-Test against various troubleshoot.sh versions for drift.
-
-- **Test the declared floor and a current release**
-- **The declared minimum version is set from a verified test run.** If this plan hasn't run the floor version yet, treat the minimum as unknown in `specs/deployment/v1/v1.md`.
-- **Whenever a spec change adds a field, verify what the floor version does with a field it doesn't recognize** — hard error or silent ignore.
-- Every run should read the produced bundle's `version.yaml` and compare it against the intended version.
-- This will get tested two ways: a static, offline lint per version and real execution per version (RTF). See [How this gets tested](#how-this-gets-tested).
-
 ### Chart rendering across tiers and modes
 
 The `router-diagnostics` chart must render correctly (`helm template` succeeds, output is valid) for every deployment tier × collection mode combination in scope.
@@ -78,26 +71,27 @@ Used for everything behavioral: the router condition matrix, redaction, and trou
 
 #### What "environment" means for us
 
-Each scenario is a `K8sEnvironment` that RTF deploys. An environment for this tool needs:
+Each scenario is a `K8sEnvironment` that RTF deploys. We start with all routers healthy, a router Deployment and its ConfigMap, matching the official Apollo Helm chart or raw-manifest tier (see [Deployment tiers](#deployment-tiers)). An environment for this tool needs:
 
-- A router Deployment and its ConfigMap, matching the official Apollo Helm chart or raw-manifest tier (see [Deployment tiers](#deployment-tiers)).
-- The `router-diagnostics` chart's *rendered output* included as one of the environment's manifests, for both `mode: local` and `mode: job`.
-- A control process, present unmodified in every environment, what it does depends on the test case. See [Applying the router condition matrix to RTF](#applying-the-router-condition-matrix-to-rtf).
+- The healthy router Deployment and ConfigMap above.
+
 - **The router's own container logs labeled `rtf.io/log-collection: "true"`.** This gets RTF to pull the *raw*, pre-redaction container logs into its own `output/logs/` alongside our tool's collected (redacted) bundle in the same run — see [Redaction verification technique](#redaction-verification-technique) below for why that matters.
+
 - A router config (`router.yaml`) that exercises every custom redactor's trigger conditions. See [Redaction](#redaction) above.
+
+Everything that makes a test case *not* healthy happens after that, from the Scenario (see below).
 
 #### Applying the router condition matrix to RTF
 
-The manifest itself is the same across all but one of the test cases. What varies is the Scenario's own behavior. We will use one router image/Deployment shape for every scenario and run a second control process on its own port. Once the environment is healthy and the Scenario has started, it hits that port to make the router misbehave.
+The environment itself is the same across every test case, and so is the Scenario's `command`. What varies is the matrix's scenario value, passed into that same script via `env_vars` (e.g. `SCENARIO: "{{ scenario }}"`). The script branches internally on that value to put the environment into whatever shape the test case needs, then runs the actual collection/verification commands. "All routers healthy" is simply the no-op branch.
 
-- **Some vs. all misbehaving:** A headless Service (`clusterIP: None`) gives the Scenario DNS-addressable access to each individual pod, so it can independently target each router instances own control process, sending the trigger to just one (or a few) for "some," and to every replica's for "all."
+- **Some vs. all degraded:** `kubectl get pods -l app=router` lists the replicas directly, and the script `patch`es a subset of them (or all, for "all degraded") into whichever of the two degradation cases that test case needs — see the router condition matrix footnote above.
 
-- **Recently restarted:** use the control process to trigger an exit, triggering a normal k8s-managed restart.
+- **Recently restarted:** the script triggers a restart directly (e.g. `kubectl rollout restart`), timed however precisely the test needs relative to when collection runs.
 
-- **OOM in progress:** use the control process to ramp memory in the same container. For a router-internal trigger, we can craft an operation that makes the query planner allocate a `usize::MAX`-length `Vec`, for example.
-    - **Note:** if the control process does the memory-ramping rather than the router process itself, container/pod-level kubelet metrics (`nodeMetrics`) still show the pressure (same cgroup), but the router's own process-specific metric (`process_resident_memory_bytes`) may not.
+- **TODO: OOM in progress:** attach a sidecar container to the pod (sharing its cgroup) that continuously pushes onto a `Vec` to ramp memory usage — see `rtf-router-perf/lib/env-config/router-perf/environment.yaml` for a reference implementation of this pattern. **Note:** because the sidecar does the memory-ramping rather than the router process itself, container/pod-level kubelet metrics (`nodeMetrics`) show the pressure (same cgroup), but the router's own process-specific metric (`process_resident_memory_bytes`) won't — we also want to separately test what happens when the *router process itself* is the one under memory pressure (closer to a real customer incident), which likely needs a custom router build; not yet designed.
 
-The manifest does differ for the Routers under-resourced test case, where `resources.limits` will be set tight from the start. Verify by reading `node-metrics/*.json` and `router-metrics/result.json` against `resources.limits`. Note: `router-metrics/result.json` only populates if the router's Prometheus exporter is enabled in this scenario's config.
+The environment does differ for the Routers under-resourced test case, where `resources.limits` will be set tight from the start. We can verify this by reading `node-metrics/*.json` and `router-metrics/result.json` against `resources.limits`. Note: `router-metrics/result.json` only populates if the router's Prometheus exporter is enabled in this scenario's config and its worth checking whether the router can prioritize serving `/metrics` even under memory pressure, so this signal doesn't just go dark exactly when it matters most.
 
 #### Applying the collector attribution scenarios to RTF
 
@@ -109,7 +103,7 @@ Both are also just matrix dimension values on the same templated manifests, not 
 
 #### Redaction verification technique
 
-- Point the spec's `redactUri` at a throwaway endpoint to get troubleshoot.sh's per-redactor report. This will only set this for verification runs. We can use the endpoint one built for [bundle retrieval](#bundle-retrieval-in-rtf) for this use case as well.
+- Point the spec's `redactUri` at a throwaway endpoint to get troubleshoot.sh's per-redactor report. Only set this for verification runs, never in the shipped spec. Reuse the same endpoint built for [bundle retrieval](#bundle-retrieval-in-rtf) rather than standing up a second one.
 
 - Label the router service `rtf.io/log-collection: "true"` so RTF pulls its raw, pre-redaction logs alongside the redacted bundle in the same run, allowing us to search for a known secret in both the pre-redacted and redaction versions of the bundle.
 
