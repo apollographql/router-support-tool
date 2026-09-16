@@ -1,17 +1,15 @@
 # Adapted from runtime-testing-framework/mock-backend/server.py:
-# - drops the /gcs/ path restriction 
+# - drops the /gcs/ path restriction
+# - drops the fake Prometheus query_range endpoint
 # - accepts a PUT/GET on any path so the router-diagnostics Job can upload the
 #    bundle via job.storage.provider: url and the Scenario can retrieve it for verification.
 import http.server
-import json
 import sys
 import threading
 import urllib.parse
 
 _store: dict[str, bytes] = {}
 _lock = threading.Lock()
-
-QUERY_RANGE_PATH = "/api/v1/query_range"
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -30,42 +28,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             data = _store.get(path)
         print(f"GET {path}", file=sys.stderr, flush=True)
         self._respond(200, data) if data is not None else self._respond(404, b"not found")
-
-    def do_POST(self):
-        parsed = urllib.parse.urlparse(self.path)
-
-        if parsed.path == QUERY_RANGE_PATH:
-            length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length).decode()
-            self._handle_query_range(body)
-            return
-
-        self._respond(404, b"not found")
-
-    def _handle_query_range(self, raw_body: str):
-        params = urllib.parse.parse_qs(raw_body)
-        query = params.get("query", [""])[0]
-        start = params.get("start", ["0"])[0]
-        end = params.get("end", ["0"])[0]
-
-        print(f"POST {QUERY_RANGE_PATH} query={query!r}", file=sys.stderr, flush=True)
-
-        body = json.dumps(
-            {
-                "status": "success",
-                "data": {
-                    "resultType": "matrix",
-                    "result": [
-                        {
-                            "metric": {"query": query},
-                            "values": [[float(start), "1"], [float(end), "1"]],
-                        }
-                    ],
-                },
-            }
-        ).encode()
-
-        self._respond(200, body, content_type="application/json")
 
     def _respond(self, status: int, body: bytes, content_type: str | None = None):
         self.send_response(status)

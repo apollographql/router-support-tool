@@ -1,16 +1,15 @@
 #!/usr/bin/env sh
 set -eux
 
+sh "$ENV_SETUP_SCRIPT"
+
 NAMESPACE="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
 
-# TODO: job.image.repository/tag: router-diagnostics-test is only built locally so far
-# (see router-diagnostics/test-image/README.md) and this will fail to pull until it's
-# pushed somewhere the Orchestrator can reach.
 helm install router-diagnostics "$CHART_DIR" \
   --namespace "$NAMESPACE" \
   --set namespace="$NAMESPACE" \
   --set mode=job \
-  --set job.image.repository=TODO-push-router-diagnostics-test-image \
+  --set job.image.repository=us-central1-docker.pkg.dev/platform-cross-environment/apollo-private-docker/router-support-tool/router-diagnostics-test \
   --set job.image.tag=v0.134.0 \
   --set job.image.pullPolicy=IfNotPresent \
   --set job.storage.provider=url \
