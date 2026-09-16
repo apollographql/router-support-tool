@@ -1,7 +1,8 @@
 # Only rendered for mode: job. The namespace-scoped Role covers everything
 # clusterResources/logs/configMap/nodeMetrics need within .Values.namespace.
-# The ClusterRole is only for nodeMetrics's cluster-scoped grants (nodes, nodes/proxy,
-# nodes/stats).
+# The ClusterRole below is only for nodeMetrics's cluster-scoped grants (nodes,
+# nodes/proxy, nodes/stats) and is independently gated by job.collectNodeMetrics,
+# since the installing identity may not be grantable cluster-scoped RBAC.
 {{- if eq .Values.mode "job" }}
 apiVersion: v1
 kind: ServiceAccount
@@ -79,6 +80,7 @@ subjects:
   - kind: ServiceAccount
     name: router-diagnostics-job
     namespace: {{ .Release.Namespace }}
+{{- if .Values.job.collectNodeMetrics }}
 ---
 # Cluster-scoped: names include the namespace to avoid colliding with another
 # router-diagnostics install elsewhere in the same cluster.
@@ -106,4 +108,5 @@ subjects:
   - kind: ServiceAccount
     name: router-diagnostics-job
     namespace: {{ .Release.Namespace }}
+{{- end }}
 {{- end }}

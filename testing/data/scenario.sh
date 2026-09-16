@@ -5,6 +5,9 @@ sh "$ENV_SETUP_SCRIPT"
 
 NAMESPACE="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
 
+# job.collectNodeMetrics=false because the scenario service account can't be granted
+# the cluster-scoped ClusterRole/ClusterRoleBinding this collector needs.
+# We decline it up front rather than fail the whole install (Prometheus is preferred).
 helm install router-diagnostics "$CHART_DIR" \
   --namespace "$NAMESPACE" \
   --set namespace="$NAMESPACE" \
@@ -12,6 +15,7 @@ helm install router-diagnostics "$CHART_DIR" \
   --set job.image.repository=us-central1-docker.pkg.dev/platform-cross-environment/apollo-private-docker/router-support-tool/router-diagnostics-test \
   --set job.image.tag=v0.134.0 \
   --set job.image.pullPolicy=IfNotPresent \
+  --set job.collectNodeMetrics=false \
   --set job.storage.provider=url \
   --set job.storage.url.endpoint="http://mock-backend.${NAMESPACE}.svc.cluster.local:8080/bundle.tar.gz" \
   --wait --timeout=60s
