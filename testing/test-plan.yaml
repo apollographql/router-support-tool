@@ -34,6 +34,16 @@ environment:
         kind: relative_path
         path: data/mock_backend_server.py
 
+      - name: router-config.yaml
+        env_var: ROUTER_CONFIG
+        kind: relative_path
+        path: data/base-router-config.yaml
+
+      - name: supergraph.graphql
+        env_var: SUPERGRAPH_SCHEMA
+        kind: relative_path
+        path: data/supergraph.graphql
+
       - name: license.jwt
         env_var: LICENSE
         kind: offline_graphos_license
