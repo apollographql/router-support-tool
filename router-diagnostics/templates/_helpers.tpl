@@ -90,10 +90,7 @@ export AWS_CONFIG_FILE=/tmp/.aws-config/config
 {{- end }}
 aws s3 cp "$BUNDLE" "s3://{{ .Values.job.storage.bucket }}/{{ .Values.job.storage.prefix }}$BUNDLE"{{ if .Values.job.storage.s3.region }} --region {{ .Values.job.storage.s3.region }}{{ end }}{{ if .Values.job.storage.s3.endpoint }} --endpoint-url {{ .Values.job.storage.s3.endpoint }}{{ end }}
 {{- else if eq .Values.job.storage.provider "gcs" }}
-{{- if .Values.job.storage.gcs.project }}
-gcloud config set project {{ .Values.job.storage.gcs.project }}
-{{- end }}
-gcloud storage cp "$BUNDLE" "gs://{{ .Values.job.storage.bucket }}/{{ .Values.job.storage.prefix }}$BUNDLE"
+gcloud storage cp "$BUNDLE" "gs://{{ .Values.job.storage.bucket }}/{{ .Values.job.storage.prefix }}$BUNDLE"{{ if .Values.job.storage.gcs.project }} --project={{ .Values.job.storage.gcs.project }}{{ end }}
 {{- else if eq .Values.job.storage.provider "url" }}
 set --
 if [ -d /var/run/secrets/router-diagnostics-storage-headers ]; then
