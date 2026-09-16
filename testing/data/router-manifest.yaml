@@ -145,6 +145,7 @@ metadata:
     app: router
   annotations:
     rtf.io/log-collection: "true"
+    rtf.io/file-providers: "true"
 spec:
   replicas: 1
   selector:
@@ -165,7 +166,7 @@ spec:
             - "-c"
             - /etc/router/router.yaml
             - "--license"
-            - /dev/null
+            - "${LICENSE}"
           ports:
             - name: graphql
               containerPort: 4000

@@ -34,6 +34,11 @@ environment:
         kind: relative_path
         path: data/mock_backend_server.py
 
+      - name: license.jwt
+        env_var: LICENSE
+        kind: offline_graphos_license
+        graph_id: "starstuff"
+
 scenario:
   inline:
     name: run-router-support-tool
