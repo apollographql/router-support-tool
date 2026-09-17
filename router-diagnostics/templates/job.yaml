@@ -1,11 +1,10 @@
 # Only rendered for mode: job. Runs collection in-cluster using the namespace-scoped
 # ServiceAccount from job-rbac.yaml.
-#
-# UNVERIFIED: the exact container command depends on how Apollo's published image
-# packages the support-bundle binary (as a standalone binary vs. a kubectl plugin) --
-# `job.image.repository`/`tag` have no real image behind them yet (see values.yaml).
-# Confirm this command against the real image before treating this as tested.
 {{- if eq .Values.mode "job" }}
+{{- $secretName := include "router-diagnostics.storageSecretName" . }}
+{{- $useS3Secret := and $secretName (eq .Values.job.storage.provider "s3") }}
+{{- $useGCSSecret := and $secretName (eq .Values.job.storage.provider "gcs") }}
+{{- $useURLSecret := and $secretName (eq .Values.job.storage.provider "url") }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -31,6 +30,56 @@ spec:
           image: "{{ .Values.job.image.repository }}:{{ .Values.job.image.tag }}"
           imagePullPolicy: {{ .Values.job.image.pullPolicy }}
           command:
-            - support-bundle
-            - --load-cluster-specs
+            - /bin/sh
+            - -c
+            - |
+              {{- tpl (.Files.Get "files/collect-and-upload.sh.tpl") . | nindent 14 }}
+            - collect-and-upload
+            - {{ .Values.job.storage.provider | quote }}
+            {{- if eq .Values.job.storage.provider "s3" }}
+            - {{ .Values.job.storage.bucket | quote }}
+            - {{ .Values.job.storage.prefix | quote }}
+            - {{ .Values.job.storage.s3.region | quote }}
+            - {{ .Values.job.storage.s3.endpoint | quote }}
+            - {{ .Values.job.storage.s3.forcePathStyle | toString | quote }}
+            {{- else if eq .Values.job.storage.provider "gcs" }}
+            - {{ .Values.job.storage.bucket | quote }}
+            - {{ .Values.job.storage.prefix | quote }}
+            - {{ .Values.job.storage.gcs.project | quote }}
+            {{- else if eq .Values.job.storage.provider "url" }}
+            - {{ .Values.job.storage.url.endpoint | quote }}
+            - {{ .Values.job.storage.url.method | default "PUT" | quote }}
+            {{- end }}
+          {{- if $useS3Secret }}
+          envFrom:
+            - secretRef:
+                name: {{ $secretName }}
+          {{- end }}
+          {{- if $useGCSSecret }}
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/run/secrets/router-diagnostics-storage/key.json
+          volumeMounts:
+            - name: storage-credentials
+              mountPath: /var/run/secrets/router-diagnostics-storage
+              readOnly: true
+          {{- end }}
+          {{- if $useURLSecret }}
+          volumeMounts:
+            - name: storage-headers
+              mountPath: /var/run/secrets/router-diagnostics-storage-headers
+              readOnly: true
+          {{- end }}
+      {{- if $useGCSSecret }}
+      volumes:
+        - name: storage-credentials
+          secret:
+            secretName: {{ $secretName }}
+      {{- end }}
+      {{- if $useURLSecret }}
+      volumes:
+        - name: storage-headers
+          secret:
+            secretName: {{ $secretName }}
+      {{- end }}
 {{- end }}

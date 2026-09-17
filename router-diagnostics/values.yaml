@@ -44,3 +44,62 @@ job:
   # -- Seconds after the Job finishes before Kubernetes garbage-collects it (and its
   # pod). Keeps the cluster from accumulating a completed Job/pod per collection.
   ttlSecondsAfterFinished: 3600
+  serviceAccount:
+    # -- Merged onto the Job's ServiceAccount. Carries `eks.amazonaws.com/role-arn` for
+    # IRSA or `iam.gke.io/gcp-service-account` for Workload Identity, whichever matches
+    # `job.storage.provider` — the recommended credential path for `job.storage`, needing
+    # no Secret. See specs/storage/object_storage.md -> Credentials.
+    annotations: {}
+  storage:
+    # -- Optional. `s3`, `gcs`, or `url`. Leave unset (the default) to render the Job
+    # exactly as it would without this section: no upload step, bundle stays local to the
+    # completed pod until it's garbage-collected. See specs/storage/object_storage.md.
+    provider: ""
+    # -- Required for `provider: s3`/`gcs`. Destination bucket for the uploaded bundle.
+    bucket: ""
+    # -- Optional, `provider: s3`/`gcs` only. Key prefix within the bucket, e.g.
+    # `router-bundles/`.
+    prefix: ""
+    s3:
+      # -- Required for `provider: s3` unless using an S3-compatible store where the
+      # region is implied by `endpoint`.
+      region: ""
+      # -- Optional. Override for a non-AWS S3-compatible store (MinIO, Ceph RGW, etc).
+      endpoint: ""
+      # -- Optional. Most on-prem S3-compatible stores need this set true.
+      forcePathStyle: false
+      # -- Optional, not recommended. Static credential, templated directly into the
+      # Job's container — visible in `helm get values` and git history if committed.
+      # Prefer `existingSecret` or IRSA (`job.serviceAccount.annotations`) instead.
+      accessKeyId: ""
+      # -- Optional, not recommended. See `accessKeyId` above for why.
+      secretAccessKey: ""
+    gcs:
+      # -- Optional for `provider: gcs`. The GCP project `gcloud` bills API calls to.
+      project: ""
+      # -- Optional, not recommended. A GCP service-account JSON key, templated directly
+      # into the Job's container as a mounted file — visible in `helm get values` and git
+      # history if committed. Prefer `existingSecret` or Workload Identity
+      # (`job.serviceAccount.annotations`) instead. Set this via `-f values.yaml` or
+      # `--set-json`, never plain `--set` — Helm's `--set` parses commas and braces as
+      # its own list/map syntax and will silently mangle the JSON.
+      credentialsJson: ""
+    url:
+      # -- Required for `provider: url`. The bare HTTP(S) endpoint the bundle is
+      # uploaded to.
+      endpoint: ""
+      # -- Optional for `provider: url`. `PUT` or `POST`.
+      method: PUT
+      # -- Optional for `provider: url`. Static headers templated directly into the
+      # upload request — visible in `helm get values` and git history if committed. Sent
+      # alongside (not instead of) any headers sourced from `existingSecret` below. See
+      # specs/storage/object_storage.md -> Credentials.
+      headers: {}
+    # -- Optional. Name of a Secret the customer creates themselves. For `provider: s3`,
+    # holds `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` keys; for `provider: gcs`, a GCP
+    # service-account JSON key; for `provider: url`, arbitrary keys, each becoming a
+    # header on the upload request (key = header name, value = header value). Mutually
+    # exclusive with the static `s3`/`gcs` credential values above — set at most one
+    # credential path. Not mutually exclusive with `url.headers` for `provider: url`;
+    # see specs/storage/object_storage.md -> Credentials.
+    existingSecret: ""

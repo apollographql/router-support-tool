@@ -45,3 +45,31 @@ true
 false
 {{- end -}}
 {{- end -}}
+
+{{/*
+job.storage has three credential paths: a customer-supplied existingSecret, a
+static credential value templated into a chart-created Secret, or neither (IRSA/Workload
+Identity via job.serviceAccount.annotations, resolved automatically at the API-call
+level with no Secret at all). Setting both existingSecret and a static value at once is
+most likely a mistake and will fail at `helm install`/`template`.
+*/}}
+{{- define "router-diagnostics.storageCredentialCheck" -}}
+{{- $hasStaticCreds := or (and .Values.job.storage.s3.accessKeyId .Values.job.storage.s3.secretAccessKey) .Values.job.storage.gcs.credentialsJson }}
+{{- if and .Values.job.storage.existingSecret $hasStaticCreds }}
+{{- fail "job.storage.existingSecret and a static job.storage.s3/gcs credential are mutually exclusive -- set at most one." }}
+{{- end }}
+{{- end -}}
+
+{{/*
+The Secret name job.yaml mounts credentials/headers from. Empty when neither an
+existingSecret nor a static s3/gcs credential is set (the IRSA/Workload Identity path,
+or provider: url with no existingSecret).
+*/}}
+{{- define "router-diagnostics.storageSecretName" -}}
+{{- include "router-diagnostics.storageCredentialCheck" . -}}
+{{- if .Values.job.storage.existingSecret -}}
+{{- .Values.job.storage.existingSecret -}}
+{{- else if or (and .Values.job.storage.s3.accessKeyId .Values.job.storage.s3.secretAccessKey) .Values.job.storage.gcs.credentialsJson -}}
+router-diagnostics-storage-credentials
+{{- end -}}
+{{- end -}}
