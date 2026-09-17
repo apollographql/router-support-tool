@@ -73,36 +73,3 @@ or provider: url with no existingSecret).
 router-diagnostics-storage-credentials
 {{- end -}}
 {{- end -}}
-
-{{/*
-The Job's container command: run collection, then upload to job.storage if configured.
-*/}}
-{{- define "router-diagnostics.collectAndUploadScript" -}}
-set -eu
-support-bundle --load-cluster-specs
-{{- if .Values.job.storage.provider }}
-BUNDLE=$(ls -t support-bundle-*.tar.gz | head -n1)
-{{- if eq .Values.job.storage.provider "s3" }}
-{{- if .Values.job.storage.s3.forcePathStyle }}
-mkdir -p /tmp/.aws-config
-printf '[default]\ns3 =\n    addressing_style = path\n' > /tmp/.aws-config/config
-export AWS_CONFIG_FILE=/tmp/.aws-config/config
-{{- end }}
-aws s3 cp "$BUNDLE" "s3://{{ .Values.job.storage.bucket }}/{{ .Values.job.storage.prefix }}$BUNDLE"{{ if .Values.job.storage.s3.region }} --region {{ .Values.job.storage.s3.region }}{{ end }}{{ if .Values.job.storage.s3.endpoint }} --endpoint-url {{ .Values.job.storage.s3.endpoint }}{{ end }}
-{{- else if eq .Values.job.storage.provider "gcs" }}
-gcloud storage cp "$BUNDLE" "gs://{{ .Values.job.storage.bucket }}/{{ .Values.job.storage.prefix }}$BUNDLE"{{ if .Values.job.storage.gcs.project }} --project={{ .Values.job.storage.gcs.project }}{{ end }}
-{{- else if eq .Values.job.storage.provider "url" }}
-set --
-if [ -d /var/run/secrets/router-diagnostics-storage-headers ]; then
-  for f in /var/run/secrets/router-diagnostics-storage-headers/*; do
-    [ -f "$f" ] || continue
-    set -- "$@" -H "$(basename "$f"): $(cat "$f")"
-  done
-fi
-{{- range $k, $v := .Values.job.storage.url.headers }}
-set -- "$@" -H {{ printf "%s: %s" $k $v | quote }}
-{{- end }}
-curl -sSf -X {{ .Values.job.storage.url.method | default "PUT" }} -T "$BUNDLE" "$@" {{ .Values.job.storage.url.endpoint | quote }}
-{{- end }}
-{{- end }}
-{{- end -}}
