@@ -34,6 +34,11 @@ job:
     repository: ""
     tag: ""
     pullPolicy: IfNotPresent
+  # -- Optional. Set false to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding
+  # that grants the nodeMetrics collector its nodes/nodes-proxy/nodes-stats access and to
+  # decline that collector's data entirely up front.
+  # Prometheus is the preferred alternative. Defaults to true.
+  collectNodeMetrics: true
   # -- Annotations merged onto the Job's pod template. Customer-supplied keys win over
   # the defaults below (sidecar.istio.io/inject: "false", linkerd.io/inject: disabled)
   # rather than replacing them wholesale — see specs/deployment/v1/v1.md -> Service mesh

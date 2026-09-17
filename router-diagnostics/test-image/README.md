@@ -2,6 +2,12 @@
 
 This is a minimal base image for exercising `mode: job` locally. [RR-1145](https://apollographql.atlassian.net/browse/RR-1145) owns the real registry, versioning policy, and `aws-cli`/`gcloud` bundling. This one exists only to verify [RR-1077](https://apollographql.atlassian.net/browse/RR-1077)'s Job/RBAC templates against a real cluster and to carry some forward some of what e have learned thus far.
 
+For the RTF verification plan (`testing/`), this image is also pushed to
+`us-central1-docker.pkg.dev/platform-cross-environment/apollo-private-docker/router-support-tool/router-diagnostics-test:v0.134.0`
+so the Orchestrator can pull it - that's a stand-in location, not the RR-1145 decision, since
+pushing there requires write access to that path specifically (a plain `docker push` after
+`gcloud auth configure-docker us-central1-docker.pkg.dev` is all it takes if you have it).
+
 ## Build and load into a local `kind` cluster
 
 ```bash
