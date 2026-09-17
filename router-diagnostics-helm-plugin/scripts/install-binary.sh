@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Runs once at `helm plugin install`/`helm plugin update` time. Downloads a
 # pinned support-bundle release into this plugin's own directory
-set -euo pipefail
+set -eu
 
 # renovate: datasource=github-releases depName=replicatedhq/troubleshoot
 SUPPORT_BUNDLE_VERSION="0.134.1"

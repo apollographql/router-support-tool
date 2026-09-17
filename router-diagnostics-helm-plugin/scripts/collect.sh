@@ -1,6 +1,6 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # `helm router-diagnostics collect [release-name]`
-set -euo pipefail
+set -eu
 
 SUBCOMMAND="${1:-}"
 if [ "$SUBCOMMAND" != "collect" ]; then
@@ -50,8 +50,7 @@ else
 
   READY=0
   for _ in $(seq 1 30); do
-    if (exec 3<>"/dev/tcp/localhost/9090") 2>/dev/null; then
-      exec 3>&- 3<&-
+    if grep -q "Forwarding from" "$PF_LOG" 2>/dev/null; then
       READY=1
       break
     fi
