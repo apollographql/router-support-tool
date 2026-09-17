@@ -52,7 +52,7 @@ environment:
 scenario:
   inline:
     name: run-router-support-tool
-    description: Runs env_setup.sh to put the routers into the desired condition, then scenario.sh to install router-diagnostics via helm, run it, and retrieve the resulting bundle.
+    description: Runs env_setup.sh to put the routers into the desired condition, then scenario.sh to install router-diagnostics via helm, run it, retrieve the resulting bundle, and verify its contents.
 
     variable_definitions:
       - name: condition
