@@ -34,7 +34,7 @@ metadata:
     rtf.io/log-collection: "true"
     rtf.io/file-providers: "true"
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: router
@@ -52,6 +52,7 @@ spec:
             - "${SUPERGRAPH_SCHEMA}"
             - "-c"
             - "${ROUTER_CONFIG}"
+            - "--hot-reload"
             - "--license"
             - "${LICENSE}"
           ports:
