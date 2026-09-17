@@ -33,7 +33,7 @@ spec:
             - /bin/sh
             - -c
             - |
-              {{- tpl (.Files.Get "files/collect-and-upload.sh.tpl") . | nindent 14 }}
+              {{- tpl (.Files.Get "files/collect-and-upload.sh") . | nindent 14 }}
             - collect-and-upload
             - {{ .Values.job.storage.provider | quote }}
             {{- if eq .Values.job.storage.provider "s3" }}

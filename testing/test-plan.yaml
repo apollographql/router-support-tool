@@ -89,3 +89,4 @@ scenario:
           - "templates/job-rbac.yaml"
           - "templates/job-storage-secret.yaml"
           - "templates/job.yaml"
+          - "files/collect-and-upload.sh"
