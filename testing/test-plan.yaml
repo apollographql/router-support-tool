@@ -4,6 +4,7 @@ description: >
   router-diagnostics chart in job mode against it, and retrieves the resulting bundle for checks.
 
 matrix:
+  variant_names: "${condition}_${router_version}"
   dimensions:
     condition: [healthy, some-metrics-misconfigured, all-metrics-misconfigured]
     router_version: ["v2.17.0"] # latest Apollo Router release as of 2026-09-15
