@@ -5,6 +5,14 @@ sh "$ENV_SETUP_SCRIPT"
 
 NAMESPACE="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
 
+# Generates the log line the operation bodies' redactor needs to be tested against.
+# router.yaml logs raw request/response bodies, but only if an operation actually runs. 
+# The sentinel value travels in via a variable and is asserted redacted below.
+# tls.supergraph is also set in router.yaml, so this is https with -k for the self-signed cert.
+curl -sk -X POST "https://router.${NAMESPACE}.svc.cluster.local:4000/" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"query FetchSentinelUser($sentinelId: ID!) { user(id: $sentinelId) { id name } }","variables":{"sentinelId":"SENTINEL_OPERATION_BODY_VALUE"}}'
+
 # job.collectNodeMetrics=false because the scenario service account can't be granted
 # the cluster-scoped ClusterRole/ClusterRoleBinding this collector needs.
 # We decline it up front rather than fail the whole install (Prometheus is preferred).
@@ -83,12 +91,11 @@ jq -e '
 # should correctly come back with an empty items array.
 grep -qi "forbidden" "$BUNDLE_DIR/cluster-resources/nodes-errors.json"
 
-# configMap collector: assert the collected router.yaml matches the real config byte for
-# byte. $ROUTER_CONFIG is the same base-router-config.yaml baked into router-manifest.yaml's
-# static ConfigMap - declared as a file provider in both the environment and scenario
-# blocks.
+# configMap collector: assert the collected router.yaml matches the expected config byte
+# for byte. $EXPECTED_REDACTED_ROUTER_CONFIG is base-router-config.yaml with the redactors'
+# masking already applied.
 jq -j '.data["router.yaml"]' "$BUNDLE_DIR/configmaps/$NAMESPACE/router-config.json" > /tmp/collected-router-config.yaml
-diff "$ROUTER_CONFIG" /tmp/collected-router-config.yaml
+diff "$EXPECTED_REDACTED_ROUTER_CONFIG" /tmp/collected-router-config.yaml
 
 # Guard against the bug if the Service selector doesn't match,
 # the collector never reaches a router at all and returns an error.
@@ -114,6 +121,94 @@ if grep -rq "APOLLO_KEY" "$BUNDLE_DIR"; then
   echo "APOLLO_KEY found in bundle contents - this must never happen" >&2
   exit 1
 fi
+
+# --- Redaction tests: The sentinel value must be gone and something structurally
+# adjacent must survive, so an empty/absent section can't be mistaken for a rule that fired.
+CONFIGMAP_JSON=$(find "$BUNDLE_DIR/configmaps" -name 'router-config.json')
+test -n "$CONFIGMAP_JSON"
+
+# JWT and auth config redaction tests - JWKS-fetch headers,
+# block-style, single-entry flow, and two-entry flow all redacted.
+# url/issuers/algorithms are untouched.
+if grep -qE "SENTINEL_JWKS_HEADER_VALUE|SENTINEL_JWKS_FLOW_HEADER_SINGLE|SENTINEL_JWKS_FLOW_MULTI_FIRST|SENTINEL_JWKS_FLOW_MULTI_SECOND" "$CONFIGMAP_JSON"; then
+  echo "JWKS-fetch header sentinel found unredacted in bundle" >&2
+  exit 1
+fi
+grep -q "x-vault-token" "$CONFIGMAP_JSON"      # header name untouched
+grep -q "issuer.example.com" "$CONFIGMAP_JSON" # issuers/algorithms/url are not secret
+grep -q "RS256" "$CONFIGMAP_JSON"
+grep -q "jwks-not-found" "$CONFIGMAP_JSON"
+grep -q "x-flow-multi-a" "$CONFIGMAP_JSON"     # both flow-list header names are untouched
+grep -q "x-flow-multi-b" "$CONFIGMAP_JSON"
+
+# The pathless-URL and quoted-username/password sentinels here live in a commented-out
+# fixture in router.yaml. Redaction is plain text matching so a
+# commented-out line is still real input to it.
+if grep -qE "SENTINEL_REDIS_URL_PASSWORD|SENTINEL_REDIS_PATHLESS_PASSWORD|SENTINEL_REDIS_USERNAME|SENTINEL_REDIS_PASSWORD" "$CONFIGMAP_JSON"; then
+  echo "Redis credential sentinel found unredacted in bundle" >&2
+  exit 1
+fi
+grep -q "required_to_start" "$CONFIGMAP_JSON" # non-secret redis field survives
+if grep -qE "SENTINEL_AWS_ACCESS_KEY_ID|SENTINEL_AWS_SECRET_ACCESS_KEY" "$CONFIGMAP_JSON"; then
+  echo "AWS SigV4 hardcoded credential sentinel found unredacted in bundle" >&2
+  exit 1
+fi
+grep -q "service_name: vpc-lattice-svcs" "$CONFIGMAP_JSON" # non-secret sibling field survives
+
+# Header values redaction tests
+if grep -qE "SENTINEL_HEADER_INSERT_VALUE|SENTINEL_HEADER_INSERT_DEFAULT|SENTINEL_HEADER_PROPAGATE_DEFAULT" "$CONFIGMAP_JSON"; then
+  echo "Header plugin literal value sentinel found unredacted in bundle" >&2
+  exit 1
+fi
+grep -q "x-sentinel-static" "$CONFIGMAP_JSON"       # header names survive
+grep -q "x-sentinel-frombody" "$CONFIGMAP_JSON"
+grep -q "x-sentinel-source-header" "$CONFIGMAP_JSON"
+
+# Subgraph urls redaction tests
+if grep -q "SENTINEL_SUBGRAPH_URL_PASSWORD" "$CONFIGMAP_JSON"; then
+  echo "override_subgraph_url sentinel found unredacted in bundle" >&2
+  exit 1
+fi
+
+# Subgraph urls redaction tests - schema URLs, subgraph names untouched
+if grep -q "0.0.0.0:4200" "$CONFIGMAP_JSON"; then
+  echo "supergraph.graphql subgraph URL found unredacted in bundle" >&2
+  exit 1
+fi
+grep -qF 'name: \"accounts\"' "$CONFIGMAP_JSON"
+# @link pins the federation spec version, not a customer host - stays unredacted
+grep -qF 'specs.apollo.dev/link' "$CONFIGMAP_JSON"
+
+# TLS private keys - all three key locations masked,
+# certificates/chains untouched.
+KEY_COUNT=$(grep -o -- '-----BEGIN EC PRIVATE KEY-----[^-]*-----END EC PRIVATE KEY-----' "$CONFIGMAP_JSON" | grep -c '\*\*\*HIDDEN\*\*\*')
+test "$KEY_COUNT" -eq 3
+grep -q -- "-----BEGIN CERTIFICATE-----" "$CONFIGMAP_JSON"
+
+# Operation bodies - the request/response bodies logged for the sentinel operation
+# above must be masked, with everything else in the log line intact.
+ROUTER_LOG=$(find "$BUNDLE_DIR/router-logs" -name '*.log')
+test -n "$ROUTER_LOG"
+if grep -q "SENTINEL_OPERATION_BODY_VALUE" $ROUTER_LOG; then
+  echo "Operation body sentinel found unredacted in router logs" >&2
+  exit 1
+fi
+grep -q '"kind":"supergraph.request"' $ROUTER_LOG
+grep -q '"kind":"supergraph.response"' $ROUTER_LOG
+grep -q '"http.request.body":"\*\*\*HIDDEN\*\*\*"' $ROUTER_LOG
+grep -q '"http.response.body":"\*\*\*HIDDEN\*\*\*"' $ROUTER_LOG
+
+# Surrounding fields stay - the redaction must be scoped to the body value only.
+grep -q '"level":"INFO"' $ROUTER_LOG
+grep -q '"trace_id":"' $ROUTER_LOG
+grep -q '"target":"apollo_router::plugins::telemetry::config_new::events"' $ROUTER_LOG
+
+# The mask must not have run on past the closing quote it belongs to: the whole
+# quoted value must be exactly ***HIDDEN***.
+# (Checked this way, not by adjacency to a specific next key, since the router's
+# field order for headers vs. body isn't guaranteed across versions.)
+grep -ohE '"http\.request\.body":"[^"]*"' $ROUTER_LOG | grep -qxF '"http.request.body":"***HIDDEN***"'
+grep -ohE '"http\.response\.body":"[^"]*"' $ROUTER_LOG | grep -qxF '"http.response.body":"***HIDDEN***"'
 
 tar tzf /tmp/bundle.tar.gz > /tmp/bundle-contents.txt
 {

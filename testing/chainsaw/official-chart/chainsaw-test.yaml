@@ -49,6 +49,29 @@ spec:
               status:
                 (conditions[?type == 'Available']):
                 - status: "True"
+        # Operation bodies redaction testing - values.yaml's router.configuration enables
+        # telemetry.instrumentation.events.supergraph.{request,response} which logs the raw
+        # request/response body. This mutation carries a sentinel in a variable and an
+        # escaped quote in a string literalvto exercise the redactor's JSON-escaping-aware
+        # regex.
+        - script:
+            # kubectl run has to schedule a pod and pull curlimages/curl
+            # which can take a while on a cold/uncached node.
+            timeout: 60s
+            content: |
+              # The official chart's Service maps port 80 to the
+              # container's "http" port (4000), unlike raw-manifest's Service which
+              # exposes 4000 directly.
+              # --retry-connrefused: Available only guarantees the readinessProbe target
+              # responded, not that the GraphQL listener socket is bound yet - same class
+              # of race as the metrics port (see wait_for_metrics.sh).
+              kubectl run curl-sentinel --image=curlimages/curl:8.10.1 --rm -i --restart=Never -n "$NAMESPACE" -- \
+                curl -sk --retry 5 --retry-delay 2 --retry-connrefused -X POST "https://router.$NAMESPACE.svc.cluster.local:80/" \
+                -H "Content-Type: application/json" \
+                -d '{"query":"mutation InsertSentinel($sentinelId: ID!) { createProduct(upc: $sentinelId, name: \"SENTINEL_QUOTE_\\\"TEST\\\"\") { upc } }","variables":{"sentinelId":"SENTINEL_OPERATION_BODY_VALUE"}}'
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
         # Available only guarantees the chart's own readinessProbe target
         # (health_check, :8088) is responding, not the prometheus exporter
         # (:9090) - those can start a beat apart, especially under a slow/cold
@@ -71,7 +94,7 @@ spec:
             content: |
               ../scripts/verify_official_chart_bundle.sh "$NAMESPACE" \
                 ../../../router-diagnostics ../../../router-diagnostics-helm-plugin \
-                "test-graph@test" ../../fixtures/supergraph.graphql
+                "test-graph@test"
             env:
               - name: NAMESPACE
                 value: ($namespace)

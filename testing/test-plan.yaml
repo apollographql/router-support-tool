@@ -91,6 +91,11 @@ scenario:
         kind: relative_path
         path: data/base-router-config.yaml
 
+      - name: expected-redacted-router-config.yaml
+        env_var: EXPECTED_REDACTED_ROUTER_CONFIG
+        kind: relative_path
+        path: data/expected-redacted-router-config.yaml
+
       - name: router-diagnostics
         env_var: CHART_DIR
         kind: relative_dir

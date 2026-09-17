@@ -20,7 +20,7 @@ Single-line `regex` with a `mask` capture group:
   removals:
     regex:
       - redactor: '(name:\s*\\?"?[^"\\\n]*\\?"?\\n\s*value:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
-      - redactor: '(headers:\s*\[\s*\{(?:[^}\\]|\\")*?value:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?)'
+      - redactor: '(\{(?:[^}\\]|\\")*?value:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?)'
 - name: router-subgraph-aws-sigv4-hardcoded
   fileSelector:
     files:
@@ -35,10 +35,9 @@ Single-line `regex` with a `mask` capture group:
 **Notes on the JWKS rule:**
 
 - **Matches on the `{name, value}` shape, not the header's name** — so it catches any JWKS-fetch header (`X-API-Key`, `X-Vault-Token`, not just `Authorization`). The name stays in the captured prefix and survives; only the value is masked.
-- **Not scoped to the `jwks` block** — RE2 has no lookbehind, so it can't anchor on a parent key without missing later entries in the list. As a result it also masks any other `name:`/`value:` pair in the collected config, including unrelated ones swept up by `clusterResources`. Accepted trade: keys stay readable, double-masking is idempotent.
-- **Block style covers every entry, flow style covers only the first**, same RE2 limitation as `header_values.md`. A flow list past one entry is left unmasked.
+- **Not scoped to the `jwks` block, nor to `headers: [...]` specifically** — RE2 has no lookbehind, so it can't anchor on a parent key without missing later entries in the list. The flow-style pattern deliberately drops any `headers: [` anchor and matches every `{...value: ...}` object in the file independently — including unrelated ones swept up by `clusterResources`, and other flow-style `value:`/`default:` fields this directory's own `header_values.md` rules also touch.
 
-**Required before this is considered done:** configure two non-`Authorization` JWKS fetch headers (one block-style, one single-entry flow, one quoted), a hardcoded `aws_sig_v4` key pair, and a `default_chain` block. Confirm all of them are masked while header names, JWKS URL, issuer, algorithms, and the `default_chain` profile survive. Also confirm the multi-entry flow-list gap: in a two-entry flow list, only the first value is masked.
+**Required before this is considered done:** configure two non-`Authorization` JWKS fetch headers (one block-style, one single-entry flow, one quoted), a hardcoded `aws_sig_v4` key pair, and a `default_chain` block. Confirm all of them are masked while header names, JWKS URL, issuer, algorithms, and the `default_chain` profile survive. Also confirm a two-entry flow list masks both values.
 
 ## What's deliberately left visible
 

@@ -33,6 +33,22 @@ spec:
             - "/etc/router/router.yaml"
             - "--supergraph"
             - "/etc/router/supergraph.graphql"
+          # aws_sig_v4's default_chain (specs/collection/data_sanitization/jwt_and_auth_config.md)
+          # needs at least one credential source configured or the router refuses to
+          # boot at all ("the credential provider was not enabled") - AWS_EC2_METADATA_DISABLED
+          # alone removes the only one available here, which is worse. These fake
+          # env-var credentials satisfy the AWS SDK's credential chain without it ever
+          # touching a network - AWS_REGION additionally skips the SDK's separate IMDS
+          # region lookup, which otherwise hangs against a real cloud runner's actual
+          # metadata endpoint (only refused instantly on a bare Docker network) and
+          # pushed rollout past its timeout.
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              value: "AKIAIOSFODNN7TESTING"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "wJalrXUtnFEMItesting123fakekey"
+            - name: AWS_REGION
+              value: "us-east-1"
           ports:
             - containerPort: 4000
             - containerPort: 9090

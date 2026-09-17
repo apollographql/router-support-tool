@@ -41,6 +41,26 @@ spec:
               status:
                 (conditions[?type == 'Available']):
                 - status: "True"
+        # Operation bodies redaction testing - router.yaml enables
+        # telemetry.instrumentation.events.supergraph.{request,response} which logs the raw
+        # request/response body. This mutation carries a sentinel in a variable and an
+        # escaped quote in a string literal to exercise the redactor's JSON-escaping-aware
+        # regex.
+        - script:
+            # kubectl run has to schedule a pod and pull curlimages/curl
+            # which can take a while on a cold/uncached node.
+            timeout: 60s
+            content: |
+              # --retry-connrefused: Available only guarantees the readinessProbe target
+              # responded, not that the GraphQL listener socket is bound yet - same class
+              # of race as the metrics port (see wait_for_metrics.sh).
+              kubectl run curl-sentinel --image=curlimages/curl:8.10.1 --rm -i --restart=Never -n "$NAMESPACE" -- \
+                curl -sk --retry 5 --retry-delay 2 --retry-connrefused -X POST "https://router.$NAMESPACE.svc.cluster.local:4000/" \
+                -H "Content-Type: application/json" \
+                -d '{"query":"mutation InsertSentinel($sentinelId: ID!) { createProduct(upc: $sentinelId, name: \"SENTINEL_QUOTE_\\\"TEST\\\"\") { upc } }","variables":{"sentinelId":"SENTINEL_OPERATION_BODY_VALUE"}}'
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
         # kubelet's per-container PSI/pageFault stats (nodeMetrics collector,
         # KubeletPSI feature gate) need a stats-collection cycle to populate for a
         # container this fresh - without this, collection can run before they exist.
@@ -49,7 +69,7 @@ spec:
         - script:
             timeout: 120s
             content: |
-              ../scripts/verify_raw_manifest_bundle.sh "$NAMESPACE" resource.yaml router.yaml \
+              ../scripts/verify_raw_manifest_bundle.sh "$NAMESPACE" resource.yaml \
                 ../../../router-diagnostics ../../../router-diagnostics-helm-plugin
             env:
               - name: NAMESPACE

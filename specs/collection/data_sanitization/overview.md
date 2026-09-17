@@ -110,6 +110,12 @@ Single-line `regex` scans with a `bufio.Scanner` capped at `SCANNER_MAX_SIZE = 1
 
 The `configmaps` surfaces are bounded well under the cap by Kubernetes' ~1MiB ConfigMap limit, so this is unlikely to fire in practice — but if it ever does, read the reported error as [the bundle is not safe to share](#a-reported-error-means-the-bundle-is-not-safe-to-share).
 
+## A built-in redactor can over-redact past a masked URL
+
+Verified empirically (`v0.120.0`): troubleshoot's built-in "postgres/mysql connection string" redactor also fires on `override_subgraph_url`'s `scheme://user:pass@host:port/path` shape. Its final path-segment group (`[\w\d\S-_]+`) stops only at a real whitespace character and since a JSON-escaped newline is a literal `\n` two-character sequence, the match runs past the field into whatever YAML follows, up to the next actual space.
+
+**This is not a leak** — This causes over-masking. Adjacent non-sensitive config can be swallowed and lost from the bundle. No mitigation is available to us: built-ins run before our redactors in troubleshoot's pipeline, the `Redactor` API has no way to disable one by name, and the trigger is customer-authored key order, not anything our spec controls.
+
 ### A reported error means the bundle is not safe to share
 
 This should be included in our customer facing docs.
