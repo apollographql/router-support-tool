@@ -1,7 +1,5 @@
 # Always rendered, regardless of `mode`. `kubectl support-bundle --load-cluster-specs`
 # discovers this via the `troubleshoot.sh/kind: support-bundle` label.
-#
-# TODO: No `redactor-spec` key yet, this will be included in a follow-up PR
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -74,3 +72,117 @@ data:
                 {{- end }}
                 "troubleshoot_version": "0.134.1"
               }
+  redactor-spec: |
+    apiVersion: troubleshoot.sh/v1beta2
+    kind: Redactor
+    metadata:
+      name: router-diagnostics-redactors
+    spec:
+      redactors:
+        # specs/collection/data_sanitization/jwt_and_auth_config.md
+        - name: router-jwt-jwks-fetch-headers
+          fileSelector:
+            files:
+              - "cluster-resources/configmaps/*.json"
+              - "configmaps/*/*.json"
+          removals:
+            regex:
+              - redactor: '(name:\s*\\?"?[^"\\\n]*\\?"?\\n\s*value:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
+              - redactor: '(headers:\s*\[\s*\{(?:[^}\\]|\\")*?value:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?)'
+        - name: router-subgraph-aws-sigv4-hardcoded
+          fileSelector:
+            files:
+              - "cluster-resources/configmaps/*.json"
+              - "configmaps/*/*.json"
+          removals:
+            regex:
+              - redactor: '(secret_access_key:\s*\\?"?)(?P<mask>[^"\\\n]+?)(\\?"?\\n)'
+              - redactor: '(access_key_id:\s*\\?"?)(?P<mask>[^"\\\n]+?)(\\?"?\\n)'
+
+        # specs/collection/data_sanitization/header_values.md
+        - name: router-headers-insert-literal-values
+          fileSelector:
+            files:
+              - "cluster-resources/configmaps/*.json"
+              - "configmaps/*/*.json"
+          removals:
+            regex:
+              - redactor: '(insert:\\n\s*name:\s*\\?"?[^"\\\n]*\\?"?\\n\s*value:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
+              - redactor: '(insert:\s*\{(?:[^}\\]|\\")*?value:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?(?:[^}\\]|\\")*?\})'
+              - redactor: '(insert:\\n\s*name:\s*\\?"?[^"\\\n]*\\?"?\\n\s*path:\s*\\?"?[^"\\\n]*\\?"?\\n\s*default:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
+              - redactor: '(insert:\s*\{(?:[^}\\]|\\")*?default:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?(?:[^}\\]|\\")*?\})'
+        - name: router-headers-propagate-default
+          fileSelector:
+            files:
+              - "cluster-resources/configmaps/*.json"
+              - "configmaps/*/*.json"
+          removals:
+            regex:
+              - redactor: '(named:\s*\\?"?[^"\\\n]*\\?"?\\n\s*(?:rename:\s*\\?"?[^"\\\n]*\\?"?\\n\s*)?default:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
+              - redactor: '(propagate:\s*\{(?:[^}\\]|\\")*?default:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?(?:[^}\\]|\\")*?\})'
+
+        # specs/collection/data_sanitization/operation_bodies.md
+        - name: router-log-request-body
+          fileSelector:
+            files:
+              - "cluster-resources/pods/logs/*/*/*.log"
+              - "router-logs/*/*.log"
+          removals:
+            regex:
+              - redactor: '("http\.request\.body":")(?P<mask>(?:[^"\\]|\\.)*)(")'
+        - name: router-log-response-body
+          fileSelector:
+            files:
+              - "cluster-resources/pods/logs/*/*/*.log"
+              - "router-logs/*/*.log"
+          removals:
+            regex:
+              - redactor: '("http\.response\.body":")(?P<mask>(?:[^"\\]|\\.)*)(")'
+
+        # specs/collection/data_sanitization/subgraph_urls.md
+        - name: router-subgraph-url
+          fileSelector:
+            files:
+              - "cluster-resources/configmaps/*.json"
+              - "configmaps/*/*.json"
+          removals:
+            regex:
+              - redactor: '(override_subgraph_url:)(?P<mask>(?:\\n\s+(?:[^\\]|\\")+)+)'
+        - name: router-subgraph-url-schema
+          fileSelector:
+            files:
+              - "cluster-resources/configmaps/*.json"
+              - "configmaps/*/*.json"
+          removals:
+            regex:
+              - redactor: '(@join__graph\([^)]*url:\s*\\?")(?P<mask>[^"\\]*)(\\?")'
+              - redactor: '(baseURL:\s*\\?")(?P<mask>[^"\\]*)(\\?")'
+
+        # specs/collection/data_sanitization/redis_credentials.md
+        - name: router-redis-url-embedded-credentials
+          fileSelector:
+            files:
+              - "cluster-resources/configmaps/*.json"
+              - "configmaps/*/*.json"
+          removals:
+            regex:
+              - redactor: '((?:rediss?(?:-cluster|-sentinel)?):\/\/)(?P<mask>[^\/@"\\]*:[^\/@"\\]+)(@)'
+        - name: router-redis-username-password
+          fileSelector:
+            files:
+              - "cluster-resources/configmaps/*.json"
+              - "configmaps/*/*.json"
+          removals:
+            regex:
+              - redactor: '(username:\s*\\?"?)(?P<mask>[^"\\\n]+?)(\\?"?\\n)'
+              - redactor: '(password:\s*\\?"?)(?P<mask>[^"\\\n]+?)(\\?"?\\n)'
+
+        # specs/collection/data_sanitization/tls_private_keys.md
+        - name: router-tls-private-keys
+          fileSelector:
+            files:
+              - "cluster-resources/configmaps/*.json"
+              - "configmaps/*/*.json"
+          removals:
+            regex:
+              - redactor: '(-----BEGIN (?:RSA |EC |ENCRYPTED )?PRIVATE KEY-----)(?P<mask>.+?)(-----END (?:RSA |EC |ENCRYPTED )?PRIVATE KEY-----)'
