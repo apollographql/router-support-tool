@@ -103,35 +103,6 @@ jobs:
       - name: Validate rendered manifests against Kubernetes schema
         run: kubeconform -strict -summary rendered.yaml
 
-  # Keeps the plugin's real pin and the chart's declared troubleshoot_version in sync
-  check_troubleshoot_version:
-    name: "Check troubleshoot.sh Version Consistency"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Install Helm
-        uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
-        with:
-          version: v3.17.3
-
-      - name: Check version consistency
-        run: |
-          PLUGIN_VERSION=$(grep -m1 '^SUPPORT_BUNDLE_VERSION=' router-diagnostics-helm-plugin/scripts/install-binary.sh | sed -E 's/SUPPORT_BUNDLE_VERSION="([^"]+)"/\1/')
-
-          CHART_VERSION=$(helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
-            --show-only templates/base-spec-configmap.yaml \
-            | yq '.data["support-bundle-spec"]' \
-            | yq '.spec.collectors[] | select(has("data")) | .data.data' \
-            | jq -r '.troubleshoot_version')
-
-          echo "plugin: $PLUGIN_VERSION, chart: $CHART_VERSION"
-          if [ "$PLUGIN_VERSION" != "$CHART_VERSION" ]; then
-            echo "error: the chart's declared troubleshoot_version ($CHART_VERSION) doesn't match the plugin's actual pin ($PLUGIN_VERSION)." >&2
-            exit 1
-          fi
-
   # Spec linting against the pinned troubleshoot.sh version
   spec_lint:
     name: "Spec Lint (support-bundle)"

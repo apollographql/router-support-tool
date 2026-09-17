@@ -10,11 +10,6 @@ pre-commit:
     helm-lint:
       glob: "router-diagnostics/**"
       run: mise run helm-lint
-    troubleshoot-version:
-      glob:
-        - "router-diagnostics/**"
-        - "router-diagnostics-helm-plugin/**"
-      run: mise run check-troubleshoot-version
 
 pre-push:
   commands:

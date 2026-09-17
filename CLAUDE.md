@@ -128,7 +128,7 @@ Scenarios to validate against. Not exhaustive — add cases as failure modes are
 
 Both paths are Apollo-pinned: `mode: job`'s image tag, and `mode: local`'s `router-diagnostics` Helm plugin, which bundles its own pinned `support-bundle` release rather than relying on whatever the customer has installed.
 
-- **Bumping either pin is a deliberate, reviewed change**, called out explicitly in the PR, and tested against the new pinned version before merging.
+- **Bumping either pin is a deliberate, reviewed change**, called out explicitly in the PR, and tested against the new pinned version before merging. Renovate is what proposes these bumps. A single custom manager in `.github/renovate.json5` tracks both the plugin's `SUPPORT_BUNDLE_VERSION` and the chart's declared `troubleshoot_version` under the same dependency, so it raises one PR that bumps both together.
 - **When a bundle looks wrong, check `version.yaml` first.** Every bundle carries it, written by troubleshoot.sh with the version that produced it — so the support-bundle version behind any bundle is always knowable without asking the customer. Compare it against the pinned version in `meta.json`.
 
 See `specs/deployment/v1/v1.md` for where each pin lives.

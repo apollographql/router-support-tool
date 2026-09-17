@@ -1,3 +1,20 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json"
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Keep the plugin's pinned support-bundle binary and the chart's declared troubleshoot_version in lock-step — both match strings share a depName, so Renovate bumps them in the same PR.",
+      "fileMatch": [
+        "^router-diagnostics-helm-plugin/scripts/install-binary\\.sh$",
+        "^support-bundle/base_spec\\.yaml$",
+      ],
+      "matchStrings": [
+        "SUPPORT_BUNDLE_VERSION=\"(?<currentValue>.*?)\"",
+        "\"troubleshoot_version\": \"(?<currentValue>.*?)\"",
+      ],
+      "depNameTemplate": "replicatedhq/troubleshoot",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$",
+    },
+  ],
 }
