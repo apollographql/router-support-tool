@@ -28,6 +28,11 @@ helm install router-diagnostics "$CHART_DIR" \
 
 kubectl wait --for=condition=complete job/router-diagnostics-job -n "$NAMESPACE" --timeout=120s
 
+# Capture the Job's own container output into the scenario's log
+echo "--- router-diagnostics-job logs ---"
+kubectl logs -n "$NAMESPACE" job/router-diagnostics-job --all-containers --timestamps || true
+echo "--- end router-diagnostics-job logs ---"
+
 curl -sf "http://mock-backend.${NAMESPACE}.svc.cluster.local:8080/bundle.tar.gz" -o /tmp/bundle.tar.gz
 test -s /tmp/bundle.tar.gz
 

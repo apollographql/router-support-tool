@@ -1,4 +1,4 @@
-name: Plugin Integration
+name: Plugin Integration Test
 
 # Exercises `helm router-diagnostics collect` (mode: local) against a
 # kind cluster.
