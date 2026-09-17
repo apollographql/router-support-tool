@@ -128,7 +128,7 @@ Scenarios to validate against. Not exhaustive — add cases as failure modes are
 
 Both paths are Apollo-pinned: `mode: job`'s image tag, and `mode: local`'s `router-diagnostics` Helm plugin, which bundles its own pinned `support-bundle` release rather than relying on whatever the customer has installed.
 
-- **Bumping either pin is a deliberate, reviewed change**, called out explicitly in the PR, and tested against the new pinned version before merging.
+- **Bumping either pin is a deliberate, reviewed change**, called out explicitly in the PR, and tested against the new pinned version before merging. Renovate is what proposes these bumps. A single custom manager in `.github/renovate.json5` tracks both the plugin's `SUPPORT_BUNDLE_VERSION` and the chart's declared `troubleshoot_version` under the same dependency, so it raises one PR that bumps both together.
 - **When a bundle looks wrong, check `version.yaml` first.** Every bundle carries it, written by troubleshoot.sh with the version that produced it — so the support-bundle version behind any bundle is always knowable without asking the customer. Compare it against the pinned version in `meta.json`.
 
 See `specs/deployment/v1/v1.md` for where each pin lives.
@@ -138,7 +138,7 @@ See `specs/deployment/v1/v1.md` for where each pin lives.
 ## Working in this repo
 
 - Specs are YAML consumed by troubleshoot.sh. Validate changes against the collector documentation at https://troubleshoot.sh/docs/collect/ rather than assuming a field exists.
-- **Adopting a collector or field that raises the minimum supported troubleshoot.sh version is a deliberate, reviewed change — call it out explicitly in the PR.** Both paths are Apollo-pinned (`mode: job`'s image tag, `mode: local`'s Helm plugin), so raising the minimum means bumping that pin in the same change, not just documenting a risk the customer bears. Treating a raised minimum as a normal edit is how a silent behavior or compatibility change slips in; treating it as a change-control step is the whole mitigation. See [troubleshoot.sh support-bundle version](#troubleshootsh-support-bundle-version) above for what that requires in testing.
+- **Adopting a collector or field that requires a newer troubleshoot.sh version is a deliberate, reviewed change — call it out explicitly in the PR.** Both paths are Apollo-pinned (`mode: job`'s image tag, `mode: local`'s Helm plugin), so requiring a newer version means bumping that pin in the same change, not just documenting a risk the customer bears. Treating a version bump as a normal edit is how a silent behavior or compatibility change slips in; treating it as a change-control step is the whole mitigation. See [troubleshoot.sh support-bundle version](#troubleshootsh-support-bundle-version) above for what that requires in testing.
 - Customer-supplied values (namespace, selector, ConfigMap name) cannot be passed as CLI flags — troubleshoot.sh takes spec *sources*, not collector parameters. Values reach the spec via the Helm chart.
 - `router-diagnostics/README.md` is generated from `values.yaml`'s `# --` comments via [helm-docs](https://github.com/norwoodj/helm-docs), and CI fails the PR if it's out of sync. After changing `router-diagnostics/values.yaml`, regenerate it and commit the result:
   ```bash

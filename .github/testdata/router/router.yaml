@@ -1,0 +1,10 @@
+supergraph:
+  listen: 0.0.0.0:4000
+
+telemetry:
+  exporters:
+    metrics:
+      prometheus:
+        enabled: true
+        listen: 0.0.0.0:9090
+        path: /metrics

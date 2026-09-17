@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Run support-bundle lint against the rendered spec, for the declared floor and current troubleshoot.sh releases"
+#MISE description="Run support-bundle lint against the rendered spec, for the pinned troubleshoot.sh version"
 set -euo pipefail
 
 CHART_PATH="router-diagnostics"
@@ -17,16 +17,13 @@ case "$(uname -s)" in
   *) echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
 esac
 
-FLOOR=$(helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
+VERSION=$(helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
   --show-only templates/base-spec-configmap.yaml \
   | yq '.data["support-bundle-spec"]' \
   | yq '.spec.collectors[] | select(has("data")) | .data.data' \
-  | jq -r '.min_troubleshoot_version')
+  | jq -r '.troubleshoot_version')
 
-CURRENT=$(curl -sL https://api.github.com/repos/replicatedhq/troubleshoot/releases/latest | jq -r '.tag_name | ltrimstr("v")')
-
-echo "Declared floor: $FLOOR"
-echo "Current release: $CURRENT"
+echo "Pinned version: $VERSION"
 
 helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
   --show-only templates/base-spec-configmap.yaml \
@@ -37,10 +34,6 @@ helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=job \
   --show-only templates/base-spec-configmap.yaml \
   | yq '.data["support-bundle-spec"]' > "$WORKDIR/rendered-spec.job.yaml"
 
-for VERSION in $(printf '%s\n%s\n' "$FLOOR" "$CURRENT" | sort -u); do
-  echo "==> support-bundle $VERSION"
-  curl -sL "https://github.com/replicatedhq/troubleshoot/releases/download/v${VERSION}/${ASSET}" \
-    | tar xz -C "$WORKDIR" support-bundle
-  "$WORKDIR/support-bundle" lint --format json "$WORKDIR/rendered-spec.local.yaml" "$WORKDIR/rendered-spec.job.yaml"
-  echo
-done
+curl -sSLf "https://github.com/replicatedhq/troubleshoot/releases/download/v${VERSION}/${ASSET}" \
+  | tar xz -C "$WORKDIR" support-bundle
+"$WORKDIR/support-bundle" lint --format json "$WORKDIR/rendered-spec.local.yaml" "$WORKDIR/rendered-spec.job.yaml"

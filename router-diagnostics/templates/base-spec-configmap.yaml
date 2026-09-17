@@ -72,5 +72,5 @@ data:
                 {{- if eq .Values.mode "job" }}
                 "sidecar_injection_disabled": {{ include "router-diagnostics.sidecarInjectionDisabled" . }},
                 {{- end }}
-                "min_troubleshoot_version": "0.132.0"
+                "troubleshoot_version": "0.134.1"
               }

@@ -103,15 +103,10 @@ jobs:
       - name: Validate rendered manifests against Kubernetes schema
         run: kubeconform -strict -summary rendered.yaml
 
-  # Spec linting across troubleshoot.sh versions:
-  # Run yhr support-bundle lint against the rendered spec
-  # once per pinned troubleshoot.sh version in scope: the
-  # declared floor (read from the chart's own rendered meta.json) and the current release.
-  determine_support_bundle_versions:
-    name: Determine troubleshoot.sh Versions
+  # Spec linting against the pinned troubleshoot.sh version
+  spec_lint:
+    name: "Spec Lint (support-bundle)"
     runs-on: ubuntu-latest
-    outputs:
-      versions: ${{ steps.versions.outputs.versions }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -121,43 +116,21 @@ jobs:
         with:
           version: v3.17.3
 
-      - name: Determine floor and current versions
-        id: versions
+      - name: Determine pinned troubleshoot.sh version
+        id: version
         run: |
-          FLOOR=$(helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
+          VERSION=$(helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
             --show-only templates/base-spec-configmap.yaml \
             | yq '.data["support-bundle-spec"]' \
             | yq '.spec.collectors[] | select(has("data")) | .data.data' \
-            | jq -r '.min_troubleshoot_version')
+            | jq -r '.troubleshoot_version')
 
-          CURRENT=$(curl -sL https://api.github.com/repos/replicatedhq/troubleshoot/releases/latest | jq -r '.tag_name | ltrimstr("v")')
+          echo "Pinned version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-          echo "Declared floor: $FLOOR"
-          echo "Current release: $CURRENT"
-
-          VERSIONS=$(jq -cn --arg floor "$FLOOR" --arg current "$CURRENT" '[$floor, $current] | unique')
-          echo "versions=$VERSIONS" >> "$GITHUB_OUTPUT"
-
-  spec_lint:
-    name: "Spec Lint (support-bundle ${{ matrix.support_bundle_version }})"
-    needs: determine_support_bundle_versions
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        support_bundle_version: ${{ fromJson(needs.determine_support_bundle_versions.outputs.versions) }}
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Install Helm
-        uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
-        with:
-          version: v3.17.3
-
-      - name: Install support-bundle ${{ matrix.support_bundle_version }}
+      - name: Install support-bundle ${{ steps.version.outputs.version }}
         run: |
-          curl -sL "https://github.com/replicatedhq/troubleshoot/releases/download/v${{ matrix.support_bundle_version }}/support-bundle_linux_amd64.tar.gz" \
+          curl -sSLf "https://github.com/replicatedhq/troubleshoot/releases/download/v${{ steps.version.outputs.version }}/support-bundle_linux_amd64.tar.gz" \
             | tar xz -C /usr/local/bin support-bundle
 
       - name: "Extract rendered spec (mode: local)"
