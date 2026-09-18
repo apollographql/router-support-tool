@@ -77,11 +77,11 @@ jq -e '
         and .limits.cpu == "500m" and .limits.memory == "256Mi")
 ' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
 
-# clusterResources collector: node MemoryPressure/DiskPressure conditions are collected (nodes
-# aren't namespace-scoped, so this file always carries every node in the cluster). Every node
-# in this test cluster should be healthy.
-jq -e '[.items[].status.conditions[] | select(.type == "MemoryPressure") | .status] as $s | ($s | length > 0) and ($s | all(. == "False"))' "$BUNDLE_DIR/cluster-resources/nodes.json"
-jq -e '[.items[].status.conditions[] | select(.type == "DiskPressure") | .status] as $s | ($s | length > 0) and ($s | all(. == "False"))' "$BUNDLE_DIR/cluster-resources/nodes.json"
+# clusterResources collector: node MemoryPressure/DiskPressure - NOT positively testable
+# Listing nodes needs the same cluster-scoped "nodes: list" RBAC that
+# job.collectNodeMetrics=false already declines above so cluster-resources/nodes.json
+# should correctly come back with an empty items array.
+grep -qi "forbidden" "$BUNDLE_DIR/cluster-resources/nodes-errors.json"
 
 # configMap collector: assert the collected router.yaml matches the config in the ConfigMap.
 # $ROUTER_CONFIG is the same base-router-config.yaml baked into router-manifest.yaml's static ConfigMap,
