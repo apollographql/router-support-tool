@@ -56,10 +56,20 @@ grep -q "\"namespace\": *\"$NAMESPACE\"" "$BUNDLE_DIR/meta.json"
 grep -q '"sidecar_injection_disabled": *true' "$BUNDLE_DIR/meta.json"
 
 # Every section below should have data to collect. An empty one here is an error.
-test -s "$BUNDLE_DIR/router-metrics/result.json"                                # Prometheus scrape
 find "$BUNDLE_DIR/router-logs" -name '*.log' -size +0 | grep -q .               # router container logs
 find "$BUNDLE_DIR/cluster-resources/pods" -name '*.json' -size +0 | grep -q .   # pod listed by clusterResources
 find "$BUNDLE_DIR/configmaps" -name '*.json' -size +0 | grep -q .               # router-config found by name/label
+
+case "$CONDITION" in
+  all-metrics-misconfigured)
+  # all-metrics-misconfigured takes every router's /metrics endpoint down
+  # so the Prometheus scrape should come back empty
+    test ! -s "$BUNDLE_DIR/router-metrics/result.json"
+    ;;
+  *)
+    test -s "$BUNDLE_DIR/router-metrics/result.json"
+    ;;
+esac
 
 # --- APOLLO_KEY must never be collected ---
 if grep -rq "APOLLO_KEY" "$BUNDLE_DIR"; then
