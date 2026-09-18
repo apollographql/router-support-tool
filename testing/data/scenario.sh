@@ -56,10 +56,59 @@ grep -q "\"namespace\": *\"$NAMESPACE\"" "$BUNDLE_DIR/meta.json"
 grep -q '"sidecar_injection_disabled": *true' "$BUNDLE_DIR/meta.json"
 
 # Every section below should have data to collect. An empty one here is an error.
-test -s "$BUNDLE_DIR/router-metrics/result.json"                                # Prometheus scrape
 find "$BUNDLE_DIR/router-logs" -name '*.log' -size +0 | grep -q .               # router container logs
-find "$BUNDLE_DIR/cluster-resources/pods" -name '*.json' -size +0 | grep -q .   # pod listed by clusterResources
-find "$BUNDLE_DIR/configmaps" -name '*.json' -size +0 | grep -q .               # router-config found by name/label
+
+# clusterResources collector: assert the router pod's own image tag was captured correctly
+jq -e --arg version "$ROUTER_VERSION" '
+  [.items[] | select(.metadata.labels.app == "router") | .spec.containers[0].image]
+  | any(. == "ghcr.io/apollographql/router:" + $version)
+' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+
+# clusterResources collector: pod status and restart counts.
+# Every router pod should be Running with zero restarts by this point.
+jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.phase] | all(. == "Running")' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.containerStatuses[0].restartCount] | all(. == 0)' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+
+# clusterResources collector: configured resource requests/limits are captured - set on
+# the router container in router-manifest.yaml purely so this has a real value to check.
+jq -e '
+  [.items[] | select(.metadata.labels.app == "router") | .spec.containers[0].resources]
+  | all(.requests.cpu == "100m" and .requests.memory == "128Mi"
+        and .limits.cpu == "500m" and .limits.memory == "256Mi")
+' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+
+# clusterResources collector: node MemoryPressure/DiskPressure - NOT positively testable
+# Listing nodes needs the same cluster-scoped "nodes: list" RBAC that
+# job.collectNodeMetrics=false already declines above so cluster-resources/nodes.json
+# should correctly come back with an empty items array.
+grep -qi "forbidden" "$BUNDLE_DIR/cluster-resources/nodes-errors.json"
+
+# configMap collector: assert the collected router.yaml matches the real config byte for
+# byte. $ROUTER_CONFIG is the same base-router-config.yaml baked into router-manifest.yaml's
+# static ConfigMap - declared as a file provider in both the environment and scenario
+# blocks.
+jq -j '.data["router.yaml"]' "$BUNDLE_DIR/configmaps/$NAMESPACE/router-config.json" > /tmp/collected-router-config.yaml
+diff "$ROUTER_CONFIG" /tmp/collected-router-config.yaml
+
+# Guard against the bug if the Service selector doesn't match,
+# the collector never reaches a router at all and returns an error.
+if grep -q 'router-metrics-host-not-found' "$BUNDLE_DIR/router-metrics/result.json"; then
+  echo "router-metrics collector never resolved the router Service - selector/label mismatch?" >&2
+  exit 1
+fi
+
+case "$CONDITION" in
+  all-metrics-misconfigured)
+    # Every router has prometheus.enabled=false, so the scrape should genuinely fail -
+    # no metrics text anywhere in the result.
+    ! grep -q '# HELP' "$BUNDLE_DIR/router-metrics/result.json"
+    ;;
+  *)
+    # At least one router still has prometheus.enabled=true, so the scrape should return
+    # real metrics text, not just a non-empty error envelope.
+    grep -q '# HELP' "$BUNDLE_DIR/router-metrics/result.json"
+    ;;
+esac
 
 # --- APOLLO_KEY must never be collected ---
 if grep -rq "APOLLO_KEY" "$BUNDLE_DIR"; then

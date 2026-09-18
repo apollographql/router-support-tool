@@ -69,7 +69,29 @@ jobs:
       - name: Assert router-metrics scraped the router's real Prometheus output
         run: |
           DIR="${{ steps.bundle.outputs.dir }}"
-          jq -e '.response.body | contains("apollo_router_")' "$DIR/router-metrics/result.json"
+          jq -e '.response.status == 200 and (.response.body | contains("apollo_router_"))' "$DIR/router-metrics/result.json"
+
+      - name: nodeMetrics collector test - Assert router-resource-usage collected real kubelet data
+        run: |
+          DIR="${{ steps.bundle.outputs.dir }}"
+          find "$DIR/node-metrics" -name '*.json' -size +0 | grep -q .
+          jq -e '[.pods[].containers[].name] | contains(["router"])' "$DIR"/node-metrics/*.json
+
+          # TODO: cpu.psi/memory.psi are deliberately not asserted here - they require the
+          # KubeletPSI feature gate (alpha, off by default), which a stock kind cluster
+          # doesn't enable. See specs/collection/base_spec.md footnote [2].
+          jq -e '
+            ([.pods[].containers[] | select(.name == "router")] | first) as $c
+            | ($c.memory.workingSetBytes  | type) == "number"
+            and ($c.memory.rssBytes        | type) == "number"
+            and ($c.memory.usageBytes      | type) == "number"
+            and ($c.memory.pageFaults      | type) == "number"
+            and ($c.memory.majorPageFaults | type) == "number"
+            and ($c.cpu.usageNanoCores        | type) == "number"
+            and ($c.cpu.usageCoreNanoSeconds  | type) == "number"
+          ' "$DIR"/node-metrics/*.json
+
+          jq -e '(.node.memory.availableBytes | type) == "number"' "$DIR"/node-metrics/*.json
 
       - name: Assert router-config-rendered collected the router's config
         run: |

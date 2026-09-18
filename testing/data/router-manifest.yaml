@@ -34,7 +34,7 @@ metadata:
     rtf.io/log-collection: "true"
     rtf.io/file-providers: "true"
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: router
@@ -42,16 +42,29 @@ spec:
     metadata:
       labels:
         app: router
+      annotations:
+        # We set these so env_setup.sh can read the resolved
+        # file_providers paths straight off the pod
+        router-config-path: "${ROUTER_CONFIG}"
+        router-config-degraded-path: "${ROUTER_CONFIG_METRICS_DISABLED}"
     spec:
       containers:
         - name: router
           image: "ghcr.io/apollographql/router:${ROUTER_VERSION}"
           imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
           args:
             - "-s"
             - "${SUPERGRAPH_SCHEMA}"
             - "-c"
             - "${ROUTER_CONFIG}"
+            - "--hot-reload"
             - "--license"
             - "${LICENSE}"
           ports:

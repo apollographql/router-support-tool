@@ -3,3 +3,7 @@
 
 # MacOS DS_Store files
 .DS_Store
+
+# Python bytecode cache
+__pycache__/
+*.pyc

@@ -19,5 +19,5 @@ jobs:
 
       - uses: apollographql/release-tooling/rtf-orchestrator-run-known@2a86a497f7ba8a809b4903c63d0ccbb2d539ebc7
         with:
-          git_ref: dmallare/create-basic-rtf-test-plan
+          git_ref: ${{ github.head_ref || github.ref_name }}
           test_plan_id: d92be985-ca2a-457c-9fc8-d692256782ae

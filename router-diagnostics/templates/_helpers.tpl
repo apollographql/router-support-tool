@@ -1,8 +1,11 @@
 {{- define "router-diagnostics.routerServiceName" -}}
 {{- $svc := "" }}
+{{- $selector := .Values.selector | default "app.kubernetes.io/name=router" }}
+{{- $key := index (splitList "=" $selector) 0 }}
+{{- $value := index (splitList "=" $selector) 1 }}
 {{- $services := (lookup "v1" "Service" .Values.namespace "").items }}
 {{- range $services }}
-  {{- if eq (index .metadata.labels "app.kubernetes.io/name") "router" }}
+  {{- if eq (index .metadata.labels $key) $value }}
     {{- $svc = .metadata.name }}
   {{- end }}
 {{- end }}
