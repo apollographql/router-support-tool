@@ -42,6 +42,11 @@ spec:
     metadata:
       labels:
         app: router
+      annotations:
+        # We set these so env_setup.sh can read the resolved
+        # file_providers paths straight off the pod
+        router-config-path: "${ROUTER_CONFIG}"
+        router-config-degraded-path: "${ROUTER_CONFIG_METRICS_DISABLED}"
     spec:
       containers:
         - name: router

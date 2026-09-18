@@ -45,6 +45,11 @@ environment:
         kind: relative_path
         path: data/supergraph.graphql
 
+      - name: router-config-metrics-disabled.yaml
+        env_var: ROUTER_CONFIG_METRICS_DISABLED
+        kind: relative_path
+        path: data/router-config-metrics-disabled.yaml
+
       - name: license.jwt
         env_var: LICENSE
         kind: offline_graphos_license
@@ -72,11 +77,6 @@ scenario:
         env_var: ENV_SETUP_SCRIPT
         kind: relative_path
         path: data/env_setup.sh
-
-      - name: router-config-metrics-disabled.yaml
-        env_var: ROUTER_CONFIG_METRICS_DISABLED
-        kind: relative_path
-        path: data/router-config-metrics-disabled.yaml
 
       - name: scenario.sh
         env_var: SCRIPT
