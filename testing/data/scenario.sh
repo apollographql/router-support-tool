@@ -60,14 +60,23 @@ find "$BUNDLE_DIR/router-logs" -name '*.log' -size +0 | grep -q .               
 find "$BUNDLE_DIR/cluster-resources/pods" -name '*.json' -size +0 | grep -q .   # pod listed by clusterResources
 find "$BUNDLE_DIR/configmaps" -name '*.json' -size +0 | grep -q .               # router-config found by name/label
 
+# Check for metrics errors
+# A non-2xx or unreachable scrape still produces a non-empty result.json
+if grep -q 'router-metrics-host-not-found' "$BUNDLE_DIR/router-metrics/result.json"; then
+  echo "router-metrics collector never resolved the router Service - selector/label mismatch?" >&2
+  exit 1
+fi
+
 case "$CONDITION" in
   all-metrics-misconfigured)
-  # all-metrics-misconfigured takes every router's /metrics endpoint down
-  # so the Prometheus scrape should come back empty
-    test ! -s "$BUNDLE_DIR/router-metrics/result.json"
+    # Every router has prometheus.enabled=false, so the scrape should genuinely fail -
+    # no metrics text anywhere in the result.
+    ! grep -q '# HELP' "$BUNDLE_DIR/router-metrics/result.json"
     ;;
   *)
-    test -s "$BUNDLE_DIR/router-metrics/result.json"
+    # At least one router still has prometheus.enabled=true, so the scrape should return
+    # real metrics text, not just a non-empty error envelope.
+    grep -q '# HELP' "$BUNDLE_DIR/router-metrics/result.json"
     ;;
 esac
 
