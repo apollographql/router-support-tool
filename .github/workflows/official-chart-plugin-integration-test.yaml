@@ -1,0 +1,152 @@
+name: Official Chart Plugin Integration Test
+
+# Exercises `helm router-diagnostics collect` (mode: local) against a router deployed with
+# the *official* apollographql/router Helm chart, not our own raw-manifest testdata - the
+# "Official Apollo router Helm chart" deployment tier from specs/deployment/v1/v1.md.
+#
+# This exists specifically to cover the one row raw-manifest-plugin-integration-test.yaml
+# can't: APOLLO_GRAPH_REF/APOLLO_ROUTER_OFFICIAL_HELM_CHART env vars, which only the official
+# chart sets (see specs/collection/base_spec.md). Everything else this workflow checks is
+# already covered there too, but re-asserted here.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  CHART_PATH: router-diagnostics
+  PLUGIN_PATH: router-diagnostics-helm-plugin
+  RELEASE_NAME: router-diagnostics
+  ROUTER_CHART: oci://ghcr.io/apollographql/helm-charts/router
+  ROUTER_CHART_VERSION: 2.17.0
+  ROUTER_RELEASE_NAME: router
+  TEST_NAMESPACE: router-support-tool-test
+  TEST_ROUTER_DATA: .github/testdata/official-router
+
+jobs:
+  exercise_official_chart:
+    name: "Exercise collect.sh (mode: local) against the official router chart"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Create kind cluster
+        uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
+
+      - name: Install Helm
+        uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.17.3
+
+      - name: Deploy router via the official Helm chart
+        run: |
+          kubectl create namespace "$TEST_NAMESPACE"
+          helm install "$ROUTER_RELEASE_NAME" "$ROUTER_CHART" \
+            --version "$ROUTER_CHART_VERSION" \
+            -n "$TEST_NAMESPACE" \
+            --values "$TEST_ROUTER_DATA/values.yaml" \
+            --set-file supergraphFile=.github/testdata/router/supergraph.graphql
+          kubectl rollout status deployment/"$ROUTER_RELEASE_NAME" -n "$TEST_NAMESPACE" --timeout=90s
+
+          # The router-diagnostics Helm plugin's collect.sh port-forwards to the router's
+          # Service (not the pod directly) to reach :9090/metrics under mode: local. This
+          # chart only adds that port to the Service when serviceMonitor.enabled is true,
+          # which also renders an actual ServiceMonitor CRD object - unavailable on a stock
+          # kind cluster. Patch the port on directly instead of enabling that flag, so we
+          # don't need the prometheus-operator CRDs installed just for this.
+          kubectl patch service "$ROUTER_RELEASE_NAME" -n "$TEST_NAMESPACE" --type=json \
+            -p='[{"op": "add", "path": "/spec/ports/-", "value": {"name": "metrics", "port": 9090, "targetPort": 9090, "protocol": "TCP"}}]'
+
+      - name: "Install router-diagnostics chart (mode: local)"
+        run: |
+          helm install "$RELEASE_NAME" "$CHART_PATH" -n "$TEST_NAMESPACE" \
+            --set namespace="$TEST_NAMESPACE" \
+            --set mode=local
+
+      - name: Install router-diagnostics Helm plugin
+        run: helm plugin install "$PLUGIN_PATH"
+
+      - name: Run collect
+        run: helm router-diagnostics collect "$RELEASE_NAME" -n "$TEST_NAMESPACE"
+
+      - name: Extract bundle
+        id: bundle
+        run: |
+          BUNDLE=$(ls support-bundle-*.tar.gz)
+          tar xzf "$BUNDLE"
+          DIR="${BUNDLE%.tar.gz}"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Assert meta.json is accurate
+        run: |
+          DIR="${{ steps.bundle.outputs.dir }}"
+          jq -e --arg ns "$TEST_NAMESPACE" '.mode == "local" and .namespace == $ns' "$DIR/meta.json"
+
+      - name: Assert clusterResources captured APOLLO_GRAPH_REF and APOLLO_ROUTER_OFFICIAL_HELM_CHART
+        run: |
+          DIR="${{ steps.bundle.outputs.dir }}"
+          jq -e '
+            [.items[] | select(.metadata.labels["app.kubernetes.io/name"] == "router") | .spec.containers[0].env] as $envs
+            | ($envs | all(any(.[]; .name == "APOLLO_ROUTER_OFFICIAL_HELM_CHART" and .value == "true")))
+            and ($envs | all(any(.[]; .name == "APOLLO_GRAPH_REF" and .value == "test-graph@test")))
+          ' "$DIR/cluster-resources/pods/$TEST_NAMESPACE.json"
+
+      - name: Assert router-metrics scraped the router's real Prometheus output
+        run: |
+          DIR="${{ steps.bundle.outputs.dir }}"
+          jq -e '.response.status == 200 and (.response.body | contains("apollo_router_"))' "$DIR/router-metrics/result.json"
+
+      - name: Assert clusterResources captured real pod status, restarts, and resources
+        run: |
+          DIR="${{ steps.bundle.outputs.dir }}"
+          jq -e '
+            [.items[] | select(.metadata.labels["app.kubernetes.io/name"] == "router")] as $pods
+            | ($pods | all(.status.phase == "Running"))
+            and ($pods | all(.status.containerStatuses[0].restartCount == 0))
+            and ($pods | all(.spec.containers[0].resources.requests.cpu == "100m"
+                             and .spec.containers[0].resources.requests.memory == "128Mi"
+                             and .spec.containers[0].resources.limits.cpu == "500m"
+                             and .spec.containers[0].resources.limits.memory == "256Mi"))
+          ' "$DIR/cluster-resources/pods/$TEST_NAMESPACE.json"
+
+      - name: Assert router-config-rendered collected the official chart's real config
+        run: |
+          DIR="${{ steps.bundle.outputs.dir }}"
+          # The official chart's ConfigMap key is "configuration.yaml", not "router.yaml" -
+          # and it injects extra fields (telemetry.exporters.metrics.common.resource) on top
+          # of what we passed in values.yaml, so this can't be a byte-for-byte diff like the
+          # raw-manifest tier's check - assert the specific values we configured instead.
+          # The collector names its output file after the ConfigMap's own metadata.name -
+          # the official chart's ConfigMap is named via router.fullname, which resolves to
+          # just "router" here (our release name), not "router-config" like the
+          # raw-manifest tier's hand-named ConfigMap.
+          jq -r '.data["configuration.yaml"]' "$DIR/configmaps/$TEST_NAMESPACE/router.json" > /tmp/collected-configuration.yaml
+          yq -e '.telemetry.exporters.metrics.prometheus.enabled == true' /tmp/collected-configuration.yaml
+          yq -e '.telemetry.exporters.metrics.prometheus.listen == "0.0.0.0:9090"' /tmp/collected-configuration.yaml
+          yq -e '.telemetry.exporters.metrics.prometheus.path == "/metrics"' /tmp/collected-configuration.yaml
+
+      - name: Assert router-logs collected the router's startup log
+        run: |
+          DIR="${{ steps.bundle.outputs.dir }}"
+          jq -e 'select(.target == "apollo_router::axum_factory::axum_http_server_factory")' "$DIR"/router-logs/*/router.log
+
+      - name: Assert clusterResources captured node health conditions
+        run: |
+          DIR="${{ steps.bundle.outputs.dir }}"
+          jq -e '[.items[].status.conditions[] | select(.type == "MemoryPressure") | .status] as $s | ($s | length > 0) and ($s | all(. == "False"))' "$DIR/cluster-resources/nodes.json"
+          jq -e '[.items[].status.conditions[] | select(.type == "DiskPressure") | .status] as $s | ($s | length > 0) and ($s | all(. == "False"))' "$DIR/cluster-resources/nodes.json"
+
+      - name: Assert APOLLO_KEY never appears in the bundle
+        run: |
+          DIR="${{ steps.bundle.outputs.dir }}"
+          ! grep -rq "APOLLO_KEY" "$DIR"
+
+      - name: Upload bundle for inspection
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: official-chart-support-bundle
+          path: support-bundle-*.tar.gz
+          retention-days: 3

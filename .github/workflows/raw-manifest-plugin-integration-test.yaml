@@ -1,7 +1,17 @@
-name: Plugin Integration Test
+name: Raw-Manifest Plugin Integration Test
 
 # Exercises `helm router-diagnostics collect` (mode: local) against a
 # kind cluster.
+#
+# Coverage against specs/collection/base_spec.md's "What the base spec collects" tables:
+# deliberately NOT exercised here, same as the RTF test plan -
+#   - APOLLO_GRAPH_REF/APOLLO_ROUTER_OFFICIAL_HELM_CHART env vars - testdata/router/deployment.yaml
+#     doesn't set them (this isn't the official router Helm chart).
+#   - The <release>-supergraph schema ConfigMap - supergraphFile isn't set here.
+#   - Previous-container logs (-previous.log) - no restart scenario exists.
+#   - OOM kill occurrences/last state - needs a real OOM, no such scenario exists.
+#   - cpu.psi/memory.psi - needs the KubeletPSI feature gate, off by default on a stock
+#     kind cluster (see the TODO below).
 on:
   pull_request:
   push:
@@ -93,10 +103,35 @@ jobs:
 
           jq -e '(.node.memory.availableBytes | type) == "number"' "$DIR"/node-metrics/*.json
 
+      - name: Assert clusterResources collector captured pod status, image tag, restarts, and resources
+        run: |
+          DIR="${{ steps.bundle.outputs.dir }}"
+          EXPECTED_IMAGE=$(grep -m1 'image: ghcr.io/apollographql/router:' "$TEST_ROUTER_DATA/deployment.yaml" | sed 's/^ *image: *//')
+
+          jq -e --arg image "$EXPECTED_IMAGE" '
+            [.items[] | select(.metadata.labels["app.kubernetes.io/name"] == "router")] as $pods
+            | ($pods | all(.status.phase == "Running"))
+            and ($pods | all(.status.containerStatuses[0].restartCount == 0))
+            and ($pods | all(.spec.containers[0].image == $image))
+            and ($pods | all(.spec.containers[0].resources.requests.cpu == "100m"
+                             and .spec.containers[0].resources.requests.memory == "128Mi"
+                             and .spec.containers[0].resources.limits.cpu == "500m"
+                             and .spec.containers[0].resources.limits.memory == "256Mi"))
+          ' "$DIR/cluster-resources/pods/$TEST_NAMESPACE.json"
+
+      - name: Assert clusterResources collector captured node health conditions
+        run: |
+          DIR="${{ steps.bundle.outputs.dir }}"
+          # mode: local runs under the workflow's own kubeconfig (kind's admin context), which
+          # unlike the RTF job's namespace-scoped ServiceAccount actually has cluster-scoped
+          # "nodes: list" access - so this is genuinely testable here.
+          jq -e '[.items[].status.conditions[] | select(.type == "MemoryPressure") | .status] as $s | ($s | length > 0) and ($s | all(. == "False"))' "$DIR/cluster-resources/nodes.json"
+          jq -e '[.items[].status.conditions[] | select(.type == "DiskPressure") | .status] as $s | ($s | length > 0) and ($s | all(. == "False"))' "$DIR/cluster-resources/nodes.json"
+
       - name: Assert router-config-rendered collected the router's config
         run: |
           DIR="${{ steps.bundle.outputs.dir }}"
-          jq -e '.data["router.yaml"] | contains("prometheus")' "$DIR/configmaps/$TEST_NAMESPACE/router-config.json"
+          diff "$TEST_ROUTER_DATA/router.yaml" <(jq -j '.data["router.yaml"]' "$DIR/configmaps/$TEST_NAMESPACE/router-config.json")
 
       - name: Assert router-logs collected the router's startup log
         run: |
