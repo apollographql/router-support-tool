@@ -64,6 +64,19 @@ jq -e --arg version "$ROUTER_VERSION" '
   | any(. == "ghcr.io/apollographql/router:" + $version)
 ' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
 
+# clusterResources collector: pod status and restart counts.
+# Every router pod should be Running with zero restarts by this point.
+jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.phase] | all(. == "Running")' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.containerStatuses[0].restartCount] | all(. == 0)' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+
+# clusterResources collector: configured resource requests/limits are captured - set on
+# the router container in router-manifest.yaml purely so this has a real value to check.
+jq -e '
+  [.items[] | select(.metadata.labels.app == "router") | .spec.containers[0].resources]
+  | all(.requests.cpu == "100m" and .requests.memory == "128Mi"
+        and .limits.cpu == "500m" and .limits.memory == "256Mi")
+' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+
 # clusterResources collector: node MemoryPressure/DiskPressure conditions are collected (nodes
 # aren't namespace-scoped, so this file always carries every node in the cluster).
 jq -e '[.items[].status.conditions[] | select(.type == "MemoryPressure")] | length > 0' "$BUNDLE_DIR/cluster-resources/nodes.json"
