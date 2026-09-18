@@ -57,11 +57,23 @@ grep -q '"sidecar_injection_disabled": *true' "$BUNDLE_DIR/meta.json"
 
 # Every section below should have data to collect. An empty one here is an error.
 find "$BUNDLE_DIR/router-logs" -name '*.log' -size +0 | grep -q .               # router container logs
-find "$BUNDLE_DIR/cluster-resources/pods" -name '*.json' -size +0 | grep -q .   # pod listed by clusterResources
-find "$BUNDLE_DIR/configmaps" -name '*.json' -size +0 | grep -q .               # router-config found by name/label
 
-# Check for metrics errors
-# A non-2xx or unreachable scrape still produces a non-empty result.json
+# clusterResources collector: assert the router pod's own image tag was captured correctly
+jq -e --arg version "$ROUTER_VERSION" '
+  [.items[] | select(.metadata.labels.app == "router") | .spec.containers[0].image]
+  | any(. == "ghcr.io/apollographql/router:" + $version)
+' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+
+# clusterResources collector: node MemoryPressure/DiskPressure conditions are collected (nodes
+# aren't namespace-scoped, so this file always carries every node in the cluster).
+jq -e '[.items[].status.conditions[] | select(.type == "MemoryPressure")] | length > 0' "$BUNDLE_DIR/cluster-resources/nodes.json"
+jq -e '[.items[].status.conditions[] | select(.type == "DiskPressure")] | length > 0' "$BUNDLE_DIR/cluster-resources/nodes.json"
+
+# configMap collector: assert the collected router.yaml is our real rendered config.
+jq -e '.data["router.yaml"] | contains("prometheus")' "$BUNDLE_DIR/configmaps/$NAMESPACE/router-config.json"
+
+# Guard against the bug if the Service selector doesn't match,
+# the collector never reaches a router at all and returns an error.
 if grep -q 'router-metrics-host-not-found' "$BUNDLE_DIR/router-metrics/result.json"; then
   echo "router-metrics collector never resolved the router Service - selector/label mismatch?" >&2
   exit 1

@@ -63,6 +63,8 @@ scenario:
     variable_definitions:
       - name: condition
         description: "The router condition env_setup.sh should set up before a support bundle is collected."
+      - name: router_version
+        description: "The Apollo Router image tag deployed - used to assert clusterResources actually captured it."
 
     docker:
       image: us-central1-docker.pkg.dev/platform-cross-environment/apollo-private-docker/rtf-toolbox
@@ -71,6 +73,7 @@ scenario:
 
     env_vars:
       CONDITION: "{{ condition }}"
+      ROUTER_VERSION: "{{ router_version }}"
 
     file_providers:
       - name: env_setup.sh
