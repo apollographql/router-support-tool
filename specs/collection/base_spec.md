@@ -37,7 +37,7 @@ When `supergraphFile` is set, the schema renders into a separate ConfigMap (`<re
 
 ### Prometheus metrics prerequisites
 
-The `http` collector targets the metrics endpoint at port `9090` by default, for every tier. What differs for raw-manifest / custom deployments is *host* resolution under `mode: job`: the official chart has a fixed label to resolve its Service from, and a raw manifest does not, so `router-metrics` has no host to resolve on that tier under `mode: job` unless the customer sets the chart's `metricsPort` value — see [Raw-manifest metrics targeting](#raw-manifest-metrics-targeting) below. The rest of this section describes the three settings that are load-bearing for the collector to return anything once it has a target, from two different places:
+The `http` collector targets the metrics endpoint at port `9090` by default. What differs for raw-manifest / custom deployments is *host* resolution under `mode: job`: the official chart has a fixed label to resolve its Service from, and a raw manifest does not, so `router-metrics` has no host to resolve on that tier under `mode: job` unless the customer sets the chart's `metricsPort` value. See [Raw-manifest metrics targeting](#raw-manifest-metrics-targeting) below. The rest of this section describes the three settings that are load-bearing for the collector to return anything once it has a target, from two different places:
 
 **`router.yaml`** (via `.Values.router.configuration` in the Helm chart):
 
@@ -50,15 +50,15 @@ The `http` collector targets the metrics endpoint at port `9090` by default, for
 
 If any of the three is off or misconfigured, the collector returns empty and the rest of the bundle is unaffected.
 
-**A fourth prerequisite, independent of router configuration: whatever is running collection has to be able to reach the router's Service over the network.** Unlike the three above, this is a property of where collection runs. `mode: job` satisfies it automatically, since the Job's pod is itself inside the cluster network. `mode: local` does not: the `support-bundle` binary runs on the invoking user's own machine, which cannot resolve the router's in-cluster Service DNS name on its own. See `specs/deployment/v1/v1.md` → `mode: local` for the manual step this requires.
+**A fourth prerequisite, independent of router configuration: whatever is running collection has to be able to reach the router's Service over the network.** Unlike the three above, this is a property of where collection runs. `mode: job` satisfies it automatically, since the Job's pod is itself inside the cluster network. `mode: local` does not: the `support-bundle` binary runs on the invoking user's own machine, which cannot resolve the router's in-cluster Service DNS name on its own. See `specs/deployment/v1/v1.md` → `mode: local` for the bridging step `helm router-diagnostics collect` automates for this.
 
 ### Raw-manifest metrics targeting
 
-Raw-manifest / custom deployments opt into metrics collection under `mode: job` by setting the chart's `metricsPort` value (see `specs/deployment/v1/v1.md` → Chart values common to both modes) to the port their router's metrics endpoint listens on. `metricsPort` defaults to `9090`, and setting it changes host resolution.
+Raw-manifest / custom deployments opt into metrics collection under `mode: job` by setting the chart's `metricsPort` value (see `specs/deployment/v1/v1.md` → Chart values common to both modes) to the port their router's metrics endpoint listens on. `metricsPort` defaults to `9090` and setting it changes host resolution.
 
-Left unset under `mode: job`, `router-metrics` falls back to the official chart's fixed-label Service lookup, which could find nothing for a raw manifest, leaving the section empty. When set, the chart instead resolves a target from `selector` (the same value `logs` and the label-based `configMap` fallback already use): a Service whose `spec.selector` matches.
+Left unset under `mode: job`, `router-metrics` falls back to the official chart's fixed-label Service lookup, which could find nothing for a raw manifest, leaving the section empty. When set, the chart instead resolves a target from `selector`, using a Service whose `spec.selector` matches.
 
-`mode: local` never resolves a host at all — it always targets `localhost`, on the assumption that something is already port-forwarding there, the same as every other tier — so `metricsPort` only changes which local port it targets, from the default `9090`. Reaching that port still requires the customer to set up their own port-forward to it; automating that bridge for raw-manifest deployments (the way `helm router-diagnostics collect` already does for the official chart, see `specs/deployment/v1/v1.md` → `mode: local`) is a separate follow-up, not part of this collector-level support.
+`mode: local` never resolves a host at all, it always targets `localhost`, on the assumption that something is already port-forwarding there. `metricsPort` only changes which local port it targets, from the default `9090`. `helm router-diagnostics collect` (see `specs/deployment/v1/v1.md` → `mode: local`) automates that port-forward for both the official chart and raw-manifest / custom deployments: it resolves the router's Service via `selector` (falling back to the official chart's `app.kubernetes.io/name=router` label when unset) and forwards `metricsPort` (default `9090`) to the same local port. A customer who runs `support-bundle` directly, bypassing the plugin, still needs to set up that port-forward themselves.
 
 ### Namespace scoping is mandatory
 

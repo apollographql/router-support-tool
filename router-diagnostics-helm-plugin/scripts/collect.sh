@@ -24,6 +24,9 @@ fi
 # Raw-manifest/custom tier sets `selector` to its own pod label and falls back to
 # the official Apollo Helm chart's own label.
 SELECTOR=$(echo "$RELEASE_VALUES" | jq -r '.selector // "app.kubernetes.io/name=router"')
+# Raw-manifest/custom tier sets `metricsPort` when its exporter isn't on the official
+# chart's default port and defaults to 9090.
+METRICS_PORT=$(echo "$RELEASE_VALUES" | jq -r '.metricsPort // 9090')
 
 SVC_ERR=$(mktemp)
 PF_LOG=$(mktemp)
@@ -45,7 +48,7 @@ fi
 if [ -z "$SERVICE" ]; then
   echo "warning: no Service labeled $SELECTOR found in namespace $ROUTER_NAMESPACE, router-metrics will fail with a connection error." >&2
 else
-  kubectl port-forward -n "$ROUTER_NAMESPACE" "svc/$SERVICE" 9090:9090 >"$PF_LOG" 2>&1 &
+  kubectl port-forward -n "$ROUTER_NAMESPACE" "svc/$SERVICE" "$METRICS_PORT:$METRICS_PORT" >"$PF_LOG" 2>&1 &
   PF_PID=$!
 
   READY=0
