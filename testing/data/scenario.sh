@@ -78,12 +78,15 @@ jq -e '
 ' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
 
 # clusterResources collector: node MemoryPressure/DiskPressure conditions are collected (nodes
-# aren't namespace-scoped, so this file always carries every node in the cluster).
-jq -e '[.items[].status.conditions[] | select(.type == "MemoryPressure")] | length > 0' "$BUNDLE_DIR/cluster-resources/nodes.json"
-jq -e '[.items[].status.conditions[] | select(.type == "DiskPressure")] | length > 0' "$BUNDLE_DIR/cluster-resources/nodes.json"
+# aren't namespace-scoped, so this file always carries every node in the cluster). Every node
+# in this test cluster should be healthy.
+jq -e '[.items[].status.conditions[] | select(.type == "MemoryPressure") | .status] as $s | ($s | length > 0) and ($s | all(. == "False"))' "$BUNDLE_DIR/cluster-resources/nodes.json"
+jq -e '[.items[].status.conditions[] | select(.type == "DiskPressure") | .status] as $s | ($s | length > 0) and ($s | all(. == "False"))' "$BUNDLE_DIR/cluster-resources/nodes.json"
 
-# configMap collector: assert the collected router.yaml is our real rendered config.
-jq -e '.data["router.yaml"] | contains("prometheus")' "$BUNDLE_DIR/configmaps/$NAMESPACE/router-config.json"
+# configMap collector: assert the collected router.yaml matches the config in the ConfigMap.
+# $ROUTER_CONFIG is the same base-router-config.yaml baked into router-manifest.yaml's static ConfigMap,
+jq -j '.data["router.yaml"]' "$BUNDLE_DIR/configmaps/$NAMESPACE/router-config.json" > /tmp/collected-router-config.yaml
+diff "$ROUTER_CONFIG" /tmp/collected-router-config.yaml
 
 # Guard against the bug if the Service selector doesn't match,
 # the collector never reaches a router at all and returns an error.
