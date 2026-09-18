@@ -86,6 +86,11 @@ scenario:
         kind: relative_path
         path: data/scenario.sh
 
+      - name: router-config.yaml
+        env_var: ROUTER_CONFIG
+        kind: relative_path
+        path: data/base-router-config.yaml
+
       - name: router-diagnostics
         env_var: CHART_DIR
         kind: relative_dir

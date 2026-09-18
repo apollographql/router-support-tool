@@ -83,8 +83,10 @@ jq -e '
 # should correctly come back with an empty items array.
 grep -qi "forbidden" "$BUNDLE_DIR/cluster-resources/nodes-errors.json"
 
-# configMap collector: assert the collected router.yaml matches the config in the ConfigMap.
-# $ROUTER_CONFIG is the same base-router-config.yaml baked into router-manifest.yaml's static ConfigMap,
+# configMap collector: assert the collected router.yaml matches the real config byte for
+# byte. $ROUTER_CONFIG is the same base-router-config.yaml baked into router-manifest.yaml's
+# static ConfigMap - declared as a file provider in both the environment and scenario
+# blocks.
 jq -j '.data["router.yaml"]' "$BUNDLE_DIR/configmaps/$NAMESPACE/router-config.json" > /tmp/collected-router-config.yaml
 diff "$ROUTER_CONFIG" /tmp/collected-router-config.yaml
 
