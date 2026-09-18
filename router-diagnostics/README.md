@@ -32,6 +32,7 @@ On-demand troubleshoot.sh support-bundle collection for Apollo Router.
 | job.ttlSecondsAfterFinished | int | `3600` | Seconds after the Job finishes before Kubernetes garbage-collects it (and its pod). Keeps the cluster from accumulating a completed Job/pod per collection. |
 | logs.maxAge | string | `""` | Optional. Maps to the `logs` collector's `limits.maxAge`, e.g. `2h`. Left unset, collection is uncapped by age. |
 | logs.maxLines | string | `""` | Optional. Maps to `limits.maxLines`. Left unset, troubleshoot.sh's own default (10000) applies — this chart does not re-declare that default. |
+| metricsPort | string | `""` | Raw-manifest / custom deployments only. Port the router's metrics endpoint listens on, e.g. `9090`. Set this to collect metrics from a raw-manifest deployment — without it, this tier gets no metrics. Leave unset when the router was deployed via the official Apollo Helm chart. |
 | mode | string | `""` | Required. `local` or `job`. |
 | namespace | string | `""` | Required. The router's namespace. Rendered into every collector that accepts a namespace, including `clusterResources.namespaces` as a single-element list. Never rely on the invoking kubectl context's default namespace. |
 | selector | string | `""` | Raw-manifest / custom deployments only. Pod label selector for the router, e.g. `app=my-router`. Defaults to the official chart's own `app.kubernetes.io/name=router` label — leave unset when the router was deployed via the official Apollo Helm chart. |

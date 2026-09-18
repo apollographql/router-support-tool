@@ -42,9 +42,9 @@ The tool supports three deployment tiers in v1:
 | --- | --- | --- |
 | **Apollo Operator** | Full support, zero config once enabled | Nothing |
 | **Official Apollo router Helm chart** | Full support | `namespace` only |
-| **Raw manifests / custom deployment** | Supported | `namespace`, `selector`, `configMapName` |
+| **Raw manifests / custom deployment** | Supported | `namespace`, `selector`, `configMapName`, optionally `metricsPort` |
 
-If you deployed the router with a hand-authored manifest or a custom chart that doesn't follow the official chart's conventions, this tool still works — you'll just need to supply more. None of the official chart's conventions (standard labels, known ConfigMap naming) apply, so the tool can't locate your router's config or pod on its own. Supply your namespace, pod selector, and ConfigMap name, and the same chart and collection engine used for every other tier handles the rest.
+If you deployed the router with a hand-authored manifest or a custom chart that doesn't follow the official chart's conventions, this tool still works — you'll just need to supply more. None of the official chart's conventions (standard labels, known ConfigMap naming) apply, so the tool can't locate your router's config or pod on its own, and, if you're running collection as a Job (`mode: job`), it can't locate your metrics endpoint either, since that also relies on the same standard label. Supply your namespace, pod selector, and ConfigMap name, and the same chart and collection engine used for every other tier handles the rest. If you're on `mode: job` and your metrics exporter is enabled, also supply `metricsPort` to get metrics collected too. See [Metrics require the Prometheus endpoint to be enabled](#metrics-require-the-prometheus-endpoint-to-be-enabled) below.
 
 ## Collection Modes
 
@@ -152,10 +152,10 @@ Sensitive data is redacted automatically before the output bundle is created —
 
 ### Metrics require the Prometheus endpoint to be enabled
 
-The metrics collector targets the official chart's known metrics port (`9090`). Two settings in your `router.yaml` need to be in place for it to collect anything:
+The metrics collector targets port `9090` by default, on every tier — raw-manifest / custom deployments can override this via the chart's `metricsPort` value, see below. Two settings in your `router.yaml` need to be in place for it to collect anything:
 
 - `telemetry.exporters.metrics.prometheus.enabled: true` — turns the exporter on.
-- `telemetry.exporters.metrics.prometheus.listen` — the `host:port` the exporter binds to. The host must be reachable from outside the router container — binding to loopback won't work even with the exporter enabled. The port must also stay `9090`, as the collector targets that port specifically and has no way to discover a different one. Changing it (for example to avoid a conflict with another workload) makes this section empty the same way an unreachable host would.
+- `telemetry.exporters.metrics.prometheus.listen` — the `host:port` the exporter binds to. The host must be reachable from outside the router container — binding to loopback won't work even with the exporter enabled. On the official chart, the port must also stay `9090`, as the collector targets that port specifically and has no way to discover a different one there. Changing it (for example to avoid a conflict with another workload) makes this section empty the same way an unreachable host would.
 
 Note that the **router chart's** `serviceMonitor.enabled` value (not `router-diagnostics`) is a *different* switch. It exposes the metrics port on the Service and renders a ServiceMonitor for your own Prometheus, but it does not enable the exporter — the two settings above are what do that. You can have one without the other.
 
@@ -163,7 +163,7 @@ If the exporter is off, or bound somewhere the collector can't reach, that secti
 
 **Under `mode: local` on the official chart, reaching this port also requires bridging your machine to the cluster network**, since the router's Service DNS name doesn't resolve outside it. `helm router-diagnostics collect` handles this for you.
 
-**If you're on a raw-manifest or custom deployment**, the collector has no way to discover your metrics port so this section will be empty if metrics don't go to port `9090`.
+**If you're on a raw-manifest or custom deployment and using `mode: job`**, this section is empty unless you set the chart's `metricsPort` value to the port your exporter listens on — this tier has no fixed label the collector can use to resolve a host the way the official chart's does, and setting `metricsPort` is what tells the chart to resolve one from your `selector` instead. Left unset, the collector still assumes the default port `9090`, but with no host to try it. **Under `mode: local`**, the collector already just targets `localhost:9090` regardless of tier, so `metricsPort` only matters there if your exporter isn't on `9090` — set it to retarget the local port. Either way, `mode: local` never bridges your machine to the cluster for you the way `helm router-diagnostics collect` does for the official chart above — you'll need to reach that port yourself (a manual `kubectl port-forward`, for example) before collecting.
 
 **If you're on the Apollo Operator**, see the Operator's own documentation for whether metrics are collected — the port is set by the Operator rather than by you, so it isn't something you configure.
 

@@ -16,6 +16,12 @@ selector: ""
 # the router was deployed via the official Apollo Helm chart.
 configMapName: ""
 
+# -- Raw-manifest / custom deployments only. Port the router's metrics endpoint listens
+# on, e.g. `9090`. Set this to collect metrics from a raw-manifest deployment — without
+# it, this tier gets no metrics. Leave unset when the router was deployed via the
+# official Apollo Helm chart.
+metricsPort: ""
+
 logs:
   # -- Optional. Maps to the `logs` collector's `limits.maxAge`, e.g. `2h`. Left unset,
   # collection is uncapped by age.
