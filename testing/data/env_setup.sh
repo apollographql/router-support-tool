@@ -24,19 +24,11 @@ find_router_config_path() {
   done
 }
 
-# Overwrites one router pod's own config file with the degraded variant.
-#
-# Removes the file before writing a fresh one rather than overwriting it in place: the
-# init container that originally wrote it runs as a different (likely root) user than
-# the router process itself, so opening the existing file for writing fails with
-# "Permission denied" even though the containing directory is writable. Removing a file
-# only needs write permission on its directory, not on the file's own contents, so this
-# sidesteps the ownership mismatch instead of fighting it.
+# Overwrites one router pod's own config file in place with the degraded variant.
 misconfigure_metrics() {
   pod="$1"
   router_config_path=$(find_router_config_path "$pod")
   test -n "$router_config_path"
-  kubectl exec "$pod" -n "$NAMESPACE" -- rm -f "$router_config_path"
   kubectl exec -i "$pod" -n "$NAMESPACE" -- cp /dev/stdin "$router_config_path" < "$ROUTER_CONFIG_METRICS_DISABLED"
 }
 
