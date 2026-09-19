@@ -1,0 +1,8 @@
+{
+  "namespace": "test-ns",
+  "name": "router",
+  "configMapExists": true,
+  "data": {
+    "configuration.yaml": "supergraph:\n  listen: 0.0.0.0:4000\nhealth_check:\n  listen: 0.0.0.0:8088\ntelemetry:\n  exporters:\n    metrics:\n      common:\n        resource:\n          service.name: router\n      prometheus:\n        enabled: true\n        listen: 0.0.0.0:9090\n        path: /metrics\n"
+  }
+}

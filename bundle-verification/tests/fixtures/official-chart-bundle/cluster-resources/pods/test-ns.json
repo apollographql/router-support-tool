@@ -1,0 +1,40 @@
+{
+  "items": [
+    {
+      "metadata": {
+        "name": "router-xyz789",
+        "labels": { "app.kubernetes.io/name": "router" }
+      },
+      "status": {
+        "phase": "Running",
+        "containerStatuses": [
+          {
+            "name": "router",
+            "state": { "running": { "startedAt": "2026-09-18T18:36:28Z" } },
+            "lastState": {},
+            "ready": true,
+            "restartCount": 0,
+            "image": "ghcr.io/apollographql/router:2.17.0",
+            "imageID": "ghcr.io/apollographql/router@sha256:b4e70cbcff5a5c3a8825aa2b201257b57a2052bbe2d7751e74d129ebaa09ffe6",
+            "containerID": "containerd://a1b2c3d4e5f6"
+          }
+        ]
+      },
+      "spec": {
+        "containers": [
+          {
+            "image": "ghcr.io/apollographql/router:2.17.0",
+            "resources": {
+              "requests": { "cpu": "100m", "memory": "128Mi" },
+              "limits": { "cpu": "500m", "memory": "256Mi" }
+            },
+            "env": [
+              { "name": "APOLLO_ROUTER_OFFICIAL_HELM_CHART", "value": "true" },
+              { "name": "APOLLO_GRAPH_REF", "value": "test-graph@test" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

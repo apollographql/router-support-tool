@@ -1,0 +1,7 @@
+{
+  "response": {
+    "status": 200,
+    "body": "# HELP apollo_router_cache_size Cache size\n# TYPE apollo_router_cache_size gauge\napollo_router_cache_size{kind=\"APQ\"} 0\n",
+    "headers": { "Content-Type": "text/plain; version=0.0.4" }
+  }
+}
