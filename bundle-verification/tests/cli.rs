@@ -122,19 +122,17 @@ fn missing_required_field_fails_with_a_clear_message() {
     assert!(stderr.contains("graph_ref"));
 }
 
-/// checks::pods_are_healthy filters an already-collected pods.json in-memory by the label
-/// Tier::label() returns for --tier. This test purposely passes
-/// --tier official-chart (which filters for app.kubernetes.io/name=router) against the
-/// raw-manifest-bundle fixture (whose pods are labeled app=router instead), simulating
-/// someone running this CLI with the wrong --tier for the bundle they actually collected.
-/// That mismatch makes the filter match zero pods, and without an explicit empty check,
-/// "all matched pods are healthy" is vacuously true over an empty list so our verification
-/// tool would Pass having verified nothing. This proves we fail in this case.
+/// checks::pods_are_healthy filters an already-collected pods.json in-memory by
+/// app.kubernetes.io/name=router. Without an explicit empty-match check, "all matched pods
+/// are healthy" is vacuously true over an empty list, so the tool would PASS having
+/// verified nothing - e.g. if the real router pod's label ever silently changed, or the
+/// wrong namespace's pods.json got read. This fixture has only an unrelated pod (no
+/// router-labeled one at all) to prove that empty match fails loudly instead.
 #[test]
-fn wrong_label_selector_fails_instead_of_silently_passing() {
-    let dir = fixture("raw-manifest-bundle");
+fn no_matching_pods_fails_instead_of_silently_passing() {
+    let dir = fixture("no-matching-pods-bundle");
     let expected_values = write_expected_values(
-        "wrong-label",
+        "no-matching-pods",
         serde_json::json!({ "graph_ref": "test-graph@test" }),
     );
 
@@ -154,7 +152,7 @@ fn wrong_label_selector_fails_instead_of_silently_passing() {
 
     assert!(
         !output.status.success(),
-        "expected failure on a label mismatch"
+        "expected failure when no pods match the expected label"
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("FAIL"));

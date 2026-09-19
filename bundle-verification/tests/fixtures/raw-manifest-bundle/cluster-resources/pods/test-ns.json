@@ -1,7 +1,10 @@
 {
   "items": [
     {
-      "metadata": { "name": "router-abc123", "labels": { "app": "router" } },
+      "metadata": {
+        "name": "router-abc123",
+        "labels": { "app.kubernetes.io/name": "router" }
+      },
       "status": {
         "phase": "Running",
         "containerStatuses": [

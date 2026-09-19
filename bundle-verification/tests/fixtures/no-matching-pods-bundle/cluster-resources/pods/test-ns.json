@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "metadata": {
+        "name": "unrelated-pod",
+        "labels": { "app.kubernetes.io/name": "mock-backend" }
+      },
+      "status": { "phase": "Running" },
+      "spec": { "containers": [{ "image": "python:3.14-slim" }] }
+    }
+  ]
+}
