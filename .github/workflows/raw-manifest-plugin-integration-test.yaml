@@ -5,8 +5,9 @@ name: Raw-Manifest Plugin Integration Test
 #
 # Coverage against specs/collection/base_spec.md's "What the base spec collects" tables:
 # deliberately NOT exercised here, same as the RTF test plan -
-#   - APOLLO_GRAPH_REF/APOLLO_ROUTER_OFFICIAL_HELM_CHART env vars - testdata/router/deployment.yaml
-#     doesn't set them (this isn't the official router Helm chart).
+#   - APOLLO_GRAPH_REF/APOLLO_ROUTER_OFFICIAL_HELM_CHART env vars -
+#     testdata/raw-manifest-deployment/deployment.yaml doesn't set them (this isn't the
+#     official router Helm chart).
 #   - The <release>-supergraph schema ConfigMap - supergraphFile isn't set here.
 #   - Previous-container logs (-previous.log) - no restart scenario exists.
 #   - OOM kill occurrences/last state - needs a real OOM, no such scenario exists.
@@ -23,7 +24,7 @@ env:
   PLUGIN_PATH: router-diagnostics-helm-plugin
   RELEASE_NAME: router-diagnostics
   TEST_NAMESPACE: router-support-tool-test
-  TEST_ROUTER_DATA: .github/testdata/router
+  TEST_ROUTER_DATA: .github/testdata/raw-manifest-deployment
 
 jobs:
   exercise_local_plugin:
@@ -71,77 +72,24 @@ jobs:
           DIR="${BUNDLE%.tar.gz}"
           echo "dir=$DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Assert meta.json is accurate
+      - name: Build bundle-verification
+        run: cargo build --release --manifest-path bundle-verification/Cargo.toml
+
+      - name: Verify the bundle against specs/collection/base_spec.md
         run: |
           DIR="${{ steps.bundle.outputs.dir }}"
-          jq -e --arg ns "$TEST_NAMESPACE" '.mode == "local" and .namespace == $ns' "$DIR/meta.json"
 
-      - name: Assert router-metrics scraped the router's real Prometheus output
-        run: |
-          DIR="${{ steps.bundle.outputs.dir }}"
-          jq -e '.response.status == 200 and (.response.body | contains("apollo_router_"))' "$DIR/router-metrics/result.json"
-
-      - name: nodeMetrics collector test - Assert router-resource-usage collected real kubelet data
-        run: |
-          DIR="${{ steps.bundle.outputs.dir }}"
-          find "$DIR/node-metrics" -name '*.json' -size +0 | grep -q .
-          jq -e '[.pods[].containers[].name] | contains(["router"])' "$DIR"/node-metrics/*.json
-
-          # TODO: cpu.psi/memory.psi are deliberately not asserted here - they require the
-          # KubeletPSI feature gate (alpha, off by default), which a stock kind cluster
-          # doesn't enable. See specs/collection/base_spec.md footnote [2].
-          jq -e '
-            ([.pods[].containers[] | select(.name == "router")] | first) as $c
-            | ($c.memory.workingSetBytes  | type) == "number"
-            and ($c.memory.rssBytes        | type) == "number"
-            and ($c.memory.usageBytes      | type) == "number"
-            and ($c.memory.pageFaults      | type) == "number"
-            and ($c.memory.majorPageFaults | type) == "number"
-            and ($c.cpu.usageNanoCores        | type) == "number"
-            and ($c.cpu.usageCoreNanoSeconds  | type) == "number"
-          ' "$DIR"/node-metrics/*.json
-
-          jq -e '(.node.memory.availableBytes | type) == "number"' "$DIR"/node-metrics/*.json
-
-      - name: Assert clusterResources collector captured pod status, image tag, restarts, and resources
-        run: |
-          DIR="${{ steps.bundle.outputs.dir }}"
+          # image is extracted at runtime (not checked into a static fixture) so it can't
+          # drift from Renovate bumping the pinned version in deployment.yaml.
           EXPECTED_IMAGE=$(grep -m1 'image: ghcr.io/apollographql/router:' "$TEST_ROUTER_DATA/deployment.yaml" | sed 's/^ *image: *//')
+          jq -n --arg image "$EXPECTED_IMAGE" --arg config_file "$TEST_ROUTER_DATA/router.yaml" \
+            '{image: $image, config_file: $config_file}' > /tmp/expected-values.json
 
-          jq -e --arg image "$EXPECTED_IMAGE" '
-            [.items[] | select(.metadata.labels["app.kubernetes.io/name"] == "router")] as $pods
-            | ($pods | all(.status.phase == "Running"))
-            and ($pods | all(.status.containerStatuses[0].restartCount == 0))
-            and ($pods | all(.spec.containers[0].image == $image))
-            and ($pods | all(.spec.containers[0].resources.requests.cpu == "100m"
-                             and .spec.containers[0].resources.requests.memory == "128Mi"
-                             and .spec.containers[0].resources.limits.cpu == "500m"
-                             and .spec.containers[0].resources.limits.memory == "256Mi"))
-          ' "$DIR/cluster-resources/pods/$TEST_NAMESPACE.json"
-
-      - name: Assert clusterResources collector captured node health conditions
-        run: |
-          DIR="${{ steps.bundle.outputs.dir }}"
-          # mode: local runs under the workflow's own kubeconfig (kind's admin context), which
-          # unlike the RTF job's namespace-scoped ServiceAccount actually has cluster-scoped
-          # "nodes: list" access - so this is genuinely testable here.
-          jq -e '[.items[].status.conditions[] | select(.type == "MemoryPressure") | .status] as $s | ($s | length > 0) and ($s | all(. == "False"))' "$DIR/cluster-resources/nodes.json"
-          jq -e '[.items[].status.conditions[] | select(.type == "DiskPressure") | .status] as $s | ($s | length > 0) and ($s | all(. == "False"))' "$DIR/cluster-resources/nodes.json"
-
-      - name: Assert router-config-rendered collected the router's config
-        run: |
-          DIR="${{ steps.bundle.outputs.dir }}"
-          diff "$TEST_ROUTER_DATA/router.yaml" <(jq -j '.data["router.yaml"]' "$DIR/configmaps/$TEST_NAMESPACE/router-config.json")
-
-      - name: Assert router-logs collected the router's startup log
-        run: |
-          DIR="${{ steps.bundle.outputs.dir }}"
-          jq -e 'select(.target == "apollo_router::axum_factory::axum_http_server_factory")' "$DIR"/router-logs/*/router.log
-
-      - name: Assert APOLLO_KEY never appears in the bundle
-        run: |
-          DIR="${{ steps.bundle.outputs.dir }}"
-          ! grep -rq "APOLLO_KEY" "$DIR"
+          ./bundle-verification/target/release/bundle-verification \
+            --bundle-dir "$DIR" \
+            --namespace "$TEST_NAMESPACE" \
+            --tier raw-manifest \
+            --expected-values /tmp/expected-values.json
 
       - name: Upload bundle for inspection
         if: always()

@@ -1,0 +1,6 @@
+{
+  "spec_version": "1",
+  "mode": "local",
+  "namespace": "test-ns",
+  "troubleshoot_version": "0.134.1"
+}

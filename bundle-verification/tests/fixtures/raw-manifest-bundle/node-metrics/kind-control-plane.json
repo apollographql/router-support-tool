@@ -1,0 +1,24 @@
+{
+  "node": {
+    "nodeName": "kind-control-plane",
+    "memory": { "availableBytes": 7584931840 }
+  },
+  "pods": [
+    {
+      "podRef": { "name": "router-abc123", "namespace": "test-ns" },
+      "containers": [
+        {
+          "name": "router",
+          "cpu": { "usageNanoCores": 7378348, "usageCoreNanoSeconds": 148949000 },
+          "memory": {
+            "workingSetBytes": 20664320,
+            "rssBytes": 18739200,
+            "usageBytes": 20664320,
+            "pageFaults": 100,
+            "majorPageFaults": 1
+          }
+        }
+      ]
+    }
+  ]
+}

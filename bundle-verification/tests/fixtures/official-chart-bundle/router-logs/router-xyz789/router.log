@@ -1,0 +1,2 @@
+{"timestamp":"2026-09-18T18:36:29.770006521Z","level":"INFO","message":"state machine transitioned","event":"UpdateSchema","state":"Startup","previous_state":"Startup","target":"apollo_router::state_machine","resource":{}}
+{"timestamp":"2026-09-18T18:36:29.814723069Z","level":"INFO","message":"GraphQL endpoint exposed at http://0.0.0.0:4000/ 🚀","target":"apollo_router::axum_factory::axum_http_server_factory","resource":{"service.name":"unknown_service:router","service.version":"2.17.0","process.executable.name":"router"}}
