@@ -11,7 +11,8 @@ fn main() -> anyhow::Result<ExitCode> {
         Mode::Local => "local",
         Mode::Job => "job",
     };
-    let (label_key, label_value) = args.tier.label();
+    let label_key = "app.kubernetes.io/name";
+    let label_value = "router";
     let (configmap_name, configmap_key) = args.tier.configmap();
     let expected = load_expected_values(args.expected_values.as_ref())?;
 

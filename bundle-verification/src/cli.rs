@@ -45,13 +45,6 @@ pub enum Mode {
 }
 
 impl Tier {
-    pub fn label(&self) -> (&'static str, &'static str) {
-        match self {
-            Tier::RawManifest => ("app", "router"),
-            Tier::OfficialChart => ("app.kubernetes.io/name", "router"),
-        }
-    }
-
     pub fn configmap(&self) -> (&'static str, &'static str) {
         match self {
             // Matches the name used in raw-manifest-plugin-integration-test.yaml's own
