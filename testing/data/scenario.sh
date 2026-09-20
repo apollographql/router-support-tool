@@ -103,9 +103,8 @@ case "$CONDITION" in
     # no metrics text anywhere in the result.
     ! grep -q '# HELP' "$BUNDLE_DIR/router-metrics/result.json"
     ;;
-  *)
-    # At least one router still has prometheus.enabled=true, so the scrape should return
-    # real metrics text, not just a non-empty error envelope.
+  healthy)
+    # The scrape should return real metrics text.
     grep -q '# HELP' "$BUNDLE_DIR/router-metrics/result.json"
     ;;
 esac
