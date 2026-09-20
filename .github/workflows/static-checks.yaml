@@ -27,14 +27,19 @@ jobs:
 
   verification_tool_checks:
     name: "Plugin Verification CLI Checks"
+    runs-on: ubuntu-latest
     steps:
-      - name: Check formatting
-        run: |
-          cargo clippy --manifest-path=bundle-verification/Cargo.toml
+      - name: Checkout Code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Build
+        run: cargo build --manifest-path=bundle-verification/Cargo.toml
+
+      - name: Run clippy
+        run: cargo clippy --manifest-path=bundle-verification/Cargo.toml
 
       - name: Run verification CLI tests
-        run: |
-          cargo test --manifest-path=bundle-verification/Cargo.toml
+        run: cargo test --manifest-path=bundle-verification/Cargo.toml
 
   format_github_actions_workflows:
     name: "Check GitHub Actions Workflow Formatting"
