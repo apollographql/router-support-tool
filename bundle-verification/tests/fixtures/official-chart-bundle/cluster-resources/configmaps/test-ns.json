@@ -1,0 +1,14 @@
+{
+  "items": [
+    {
+      "metadata": { "name": "router-supergraph" },
+      "data": {
+        "supergraph-schema.graphql": "schema\n  @link(url: \"https://specs.apollo.dev/link/v1.0\")\n  @link(url: \"https://specs.apollo.dev/join/v0.3\", for: EXECUTION) {\n  query: Query\n  mutation: Mutation\n}"
+      }
+    },
+    {
+      "metadata": { "name": "router" },
+      "data": { "configuration.yaml": "supergraph:\n  listen: 0.0.0.0:4000\n" }
+    }
+  ]
+}

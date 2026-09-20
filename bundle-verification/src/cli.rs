@@ -74,6 +74,10 @@ pub struct ExpectedValues {
     /// see checks::config_has_prometheus_fields).
     pub config_file: Option<PathBuf>,
 
+    /// Local supergraph.graphql file the collected <release>-supergraph ConfigMap must
+    /// match.
+    pub supergraph_schema_file: Option<PathBuf>,
+
     /// Expected telemetry.exporters.metrics.prometheus.listen in the rendered config.
     pub metrics_listen: String,
 
@@ -93,6 +97,7 @@ impl Default for ExpectedValues {
             image: None,
             graph_ref: None,
             config_file: None,
+            supergraph_schema_file: None,
             metrics_listen: "0.0.0.0:9090".to_string(),
             metrics_path: "/metrics".to_string(),
             resources: ExpectedResources::default(),

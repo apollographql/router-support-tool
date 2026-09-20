@@ -1,13 +1,12 @@
 name: Official Chart Plugin Integration Test
 
 # Exercises `helm router-diagnostics collect` (mode: local) against a router deployed with
-# the *official* apollographql/router Helm chart, not our own raw-manifest testdata - the
-# "Official Apollo router Helm chart" deployment tier from specs/deployment/v1/v1.md.
+# the official apollographql/router Helm chart.
 #
-# This exists specifically to cover the one row raw-manifest-plugin-integration-test.yaml
-# can't: APOLLO_GRAPH_REF/APOLLO_ROUTER_OFFICIAL_HELM_CHART env vars, which only the official
-# chart sets (see specs/collection/base_spec.md). Everything else this workflow checks is
-# already covered there too, but re-asserted here.
+# Coverage against specs/collection/base_spec.md's "What the base spec collects" tables
+# deliberately not checked here
+#   - Previous-container logs (-previous.log) - no restart scenario exists.
+#   - OOM kill occurrences/last state
 on:
   pull_request:
   push:
@@ -34,6 +33,8 @@ jobs:
 
       - name: Create kind cluster
         uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
+        with:
+          config: .github/testdata/kind-config.yaml
 
       - name: Install Helm
         uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
@@ -47,7 +48,7 @@ jobs:
             --version "$ROUTER_CHART_VERSION" \
             -n "$TEST_NAMESPACE" \
             --values "$TEST_ROUTER_DATA/values.yaml" \
-            --set-file supergraphFile=.github/testdata/raw-manifest-deployment/supergraph.graphql
+            --set-file supergraphFile=.github/testdata/supergraph.graphql
           kubectl rollout status deployment/"$ROUTER_RELEASE_NAME" -n "$TEST_NAMESPACE" --timeout=90s
 
           # The router-diagnostics Helm plugin's collect.sh port-forwards to the router's

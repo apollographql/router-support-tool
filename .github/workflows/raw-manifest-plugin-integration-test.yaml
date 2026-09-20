@@ -3,16 +3,13 @@ name: Raw-Manifest Plugin Integration Test
 # Exercises `helm router-diagnostics collect` (mode: local) against a
 # kind cluster.
 #
-# Coverage against specs/collection/base_spec.md's "What the base spec collects" tables:
-# deliberately NOT exercised here, same as the RTF test plan -
+# Coverage against specs/collection/base_spec.md's "What the base spec collects" tables
+# deliberately not checked here:
 #   - APOLLO_GRAPH_REF/APOLLO_ROUTER_OFFICIAL_HELM_CHART env vars -
 #     testdata/raw-manifest-deployment/deployment.yaml doesn't set them (this isn't the
 #     official router Helm chart).
-#   - The <release>-supergraph schema ConfigMap - supergraphFile isn't set here.
 #   - Previous-container logs (-previous.log) - no restart scenario exists.
-#   - OOM kill occurrences/last state - needs a real OOM, no such scenario exists.
-#   - cpu.psi/memory.psi - needs the KubeletPSI feature gate, off by default on a stock
-#     kind cluster (see the TODO below).
+#   - OOM kill occurrences/last state
 on:
   pull_request:
   push:
@@ -36,6 +33,8 @@ jobs:
 
       - name: Create kind cluster
         uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
+        with:
+          config: .github/testdata/kind-config.yaml
 
       - name: Install Helm
         uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
@@ -47,7 +46,7 @@ jobs:
           kubectl create namespace "$TEST_NAMESPACE"
           kubectl create configmap router-config -n "$TEST_NAMESPACE" \
             --from-file=router.yaml="$TEST_ROUTER_DATA/router.yaml" \
-            --from-file=supergraph.graphql="$TEST_ROUTER_DATA/supergraph.graphql"
+            --from-file=supergraph.graphql=.github/testdata/supergraph.graphql
           kubectl label configmap router-config -n "$TEST_NAMESPACE" app.kubernetes.io/name=router
           kubectl apply -n "$TEST_NAMESPACE" -f "$TEST_ROUTER_DATA/deployment.yaml"
           kubectl rollout status deployment/router -n "$TEST_NAMESPACE" --timeout=90s

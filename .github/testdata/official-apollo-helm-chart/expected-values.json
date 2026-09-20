@@ -1,3 +1,4 @@
 {
-  "graph_ref": "test-graph@test"
+  "graph_ref": "test-graph@test",
+  "supergraph_schema_file": ".github/testdata/supergraph.graphql"
 }
