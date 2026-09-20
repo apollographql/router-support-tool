@@ -68,7 +68,10 @@ fn official_chart_bundle_passes_every_check() {
     let dir = fixture("official-chart-bundle");
     let expected_values = write_expected_values(
         "official-chart-pass",
-        serde_json::json!({ "graph_ref": "test-graph@test" }),
+        serde_json::json!({
+            "graph_ref": "test-graph@test",
+            "supergraph_schema_file": dir.join("expected-supergraph.graphql"),
+        }),
     );
 
     let output = Command::new(bin())
@@ -94,6 +97,7 @@ fn official_chart_bundle_passes_every_check() {
         .contains("PASS  APOLLO_GRAPH_REF and APOLLO_ROUTER_OFFICIAL_HELM_CHART env vars present"));
     assert!(stdout.contains("PASS  configMap has the expected prometheus fields"));
     assert!(stdout.contains("PASS  nodeMetrics collected real kubelet data"));
+    assert!(stdout.contains("PASS  <release>-supergraph ConfigMap matches the real schema"));
 }
 
 /// --expected-values is optional - every field should fall back to its documented default
@@ -133,7 +137,10 @@ fn no_matching_pods_fails_instead_of_silently_passing() {
     let dir = fixture("no-matching-pods-bundle");
     let expected_values = write_expected_values(
         "no-matching-pods",
-        serde_json::json!({ "graph_ref": "test-graph@test" }),
+        serde_json::json!({
+            "graph_ref": "test-graph@test",
+            "supergraph_schema_file": dir.join("cluster-resources/pods/test-ns.json"),
+        }),
     );
 
     let output = Command::new(bin())

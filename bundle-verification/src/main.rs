@@ -102,6 +102,23 @@ fn main() -> anyhow::Result<ExitCode> {
                     &expected.metrics_path,
                 ),
             ));
+
+            let supergraph_schema_file = expected.supergraph_schema_file.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "--expected-values must set supergraph_schema_file for --tier official-chart"
+                )
+            })?;
+            results.push((
+                "<release>-supergraph ConfigMap matches the real schema",
+                checks::supergraph_schema_matches_file(
+                    &args.bundle_dir,
+                    &args.namespace,
+                    // router.fullname + "-supergraph" (templates/supergraph-cm.yaml) -
+                    // hardcoded the same way configmap_name assumes release name "router".
+                    "router-supergraph",
+                    &supergraph_schema_file,
+                ),
+            ));
         }
     }
 

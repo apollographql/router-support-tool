@@ -25,6 +25,17 @@ jobs:
           chart-search-root: 'router-diagnostics'
           fail-on-diff: true
 
+  verification_tool_checks:
+    name: "Plugin Verification CLI Checks"
+    steps:
+      - name: Check formatting
+        run: |
+          cargo clippy --manifest-path=bundle-verification/Cargo.toml
+
+      - name: Run verification CLI tests
+        run: |
+          cargo test --manifest-path=bundle-verification/Cargo.toml
+
   format_github_actions_workflows:
     name: "Check GitHub Actions Workflow Formatting"
     runs-on: ubuntu-latest

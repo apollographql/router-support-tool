@@ -98,6 +98,10 @@ pub fn node_metrics_has_real_kubelet_data(bundle_dir: &Path) -> CheckResult {
                                 "cpu.usageCoreNanoSeconds",
                                 &container["cpu"]["usageCoreNanoSeconds"],
                             ),
+                            // Requires the KubeletPSI feature gate - see
+                            // .github/testdata/kind-config.yaml.
+                            ("cpu.psi", &container["cpu"]["psi"]),
+                            ("memory.psi", &container["memory"]["psi"]),
                         ] {
                             if val.is_null() {
                                 return Err(anyhow!(
@@ -496,5 +500,59 @@ pub fn config_matches_file_exactly(
                 expected_file.display()
             ));
     }
+    Ok(())
+}
+
+/// Check the <release>-supergraph schema ConfigMap.
+/// See specs/collection/base_spec.md's Schema collection section.
+/// This ConfigMap carries the router chart's standard label so the
+/// clusterResources collector sweeps it up alongside every other
+/// namespace ConfigMap (it's not collected by our own configMap collector,
+///  which only targets the rendered router config.)
+///
+/// Trimmed on both sides before comparing: the chart's `|-` (strip) YAML chomping means the
+/// collected content has no trailing newline, while the real source file does.
+pub fn supergraph_schema_matches_file(
+    bundle_dir: &Path,
+    namespace: &str,
+    configmap_name: &str,
+    expected_file: &Path,
+) -> CheckResult {
+    let path = bundle_dir
+        .join("cluster-resources/configmaps")
+        .join(format!("{namespace}.json"));
+    let doc = read_json(&path)?;
+
+    let items = doc["items"].as_array().map(|v| v.as_slice()).unwrap_or(&[]);
+    let configmap = items
+        .iter()
+        .find(|item| item["metadata"]["name"].as_str() == Some(configmap_name))
+        .ok_or_else(|| {
+            anyhow!(
+                "no ConfigMap named {configmap_name:?} found in {}",
+                path.display()
+            )
+        })?;
+
+    let collected = configmap["data"]["supergraph-schema.graphql"]
+        .as_str()
+        .ok_or_else(|| {
+            anyhow!(
+                "ConfigMap {configmap_name:?}: data[\"supergraph-schema.graphql\"] missing or not a string"
+            )
+        })?;
+
+    let expected = fs::read_to_string(expected_file)
+        .with_context(|| format!("reading {}", expected_file.display()))?;
+
+    if collected.trim_end() != expected.trim_end() {
+        return Err(anyhow!(
+            "collected supergraph schema doesn't match {}\n--- expected ---\n{}\n--- collected ---\n{}",
+            expected_file.display(),
+            expected,
+            collected
+        ));
+    }
+
     Ok(())
 }

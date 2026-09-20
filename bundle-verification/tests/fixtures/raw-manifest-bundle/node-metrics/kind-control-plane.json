@@ -9,13 +9,24 @@
       "containers": [
         {
           "name": "router",
-          "cpu": { "usageNanoCores": 7378348, "usageCoreNanoSeconds": 148949000 },
+          "cpu": {
+            "usageNanoCores": 7378348,
+            "usageCoreNanoSeconds": 148949000,
+            "psi": {
+              "full": { "total": 0, "avg10": 0.0, "avg60": 0.0, "avg300": 0.0 },
+              "some": { "total": 0, "avg10": 0.0, "avg60": 0.0, "avg300": 0.0 }
+            }
+          },
           "memory": {
             "workingSetBytes": 20664320,
             "rssBytes": 18739200,
             "usageBytes": 20664320,
             "pageFaults": 100,
-            "majorPageFaults": 1
+            "majorPageFaults": 1,
+            "psi": {
+              "full": { "total": 0, "avg10": 0.0, "avg60": 0.0, "avg300": 0.0 },
+              "some": { "total": 0, "avg10": 0.0, "avg60": 0.0, "avg300": 0.0 }
+            }
           }
         }
       ]
