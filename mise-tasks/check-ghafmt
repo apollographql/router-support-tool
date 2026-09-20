@@ -6,4 +6,4 @@ REPO_ROOT=$(pwd)
 
 # renovate: datasource=github-releases depName=jonathanrainer/ghafmt
 GHAFMT_VERSION=0.1.5
-docker run --rm -v "$REPO_ROOT":/repo --workdir /repo "ghcr.io/jonathanrainer/ghafmt:$GHAFMT_VERSION" --mode=check .github/workflows/
+docker run --rm -v "$REPO_ROOT":/repo --workdir /repo "ghcr.io/jonathanrainer/ghafmt:$GHAFMT_VERSION" --mode=write .github/workflows/

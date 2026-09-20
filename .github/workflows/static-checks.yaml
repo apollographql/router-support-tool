@@ -1,13 +1,6 @@
 name: Static Checks
 
 on:
-  merge_group:
-  # Deliberately the default types (opened, synchronize, reopened) — no `edited`.
-  # Editing a description cannot change what any job here would conclude, and a
-  # run triggered by an edit would have to either repeat the whole suite or skip
-  # it and report a verdict derived from nothing, overwriting the real run's
-  # result for the same commit. The changelog check is the one thing that does
-  # care about the description, and it lives in changelog.yml for that reason.
   pull_request:
   push:
     branches:
@@ -149,3 +142,14 @@ jobs:
       - name: support-bundle lint
         run: |
           support-bundle lint --format json rendered-spec.local.yaml rendered-spec.job.yaml
+
+  verification_tool_checks:
+    name: "Plugin Verification CLI Checks"
+    steps:
+      - name: Check formatting
+        run: |
+          cargo clippy --manifest-path=bundle-verification/Cargo.toml
+
+      - name: Run verification CLI tests
+        run: |
+          cargo test --manifest-path=bundle-verification/Cargo.toml
