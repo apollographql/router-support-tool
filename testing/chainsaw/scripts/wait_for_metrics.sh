@@ -30,7 +30,7 @@ for i in $(seq 1 40); do
   if [ -n "$POD_IP" ]; then
     CURL_EXIT=0
     BODY=$(kubectl exec "$PROBE_POD" -n "$NAMESPACE" -- curl -s -w '\nHTTP_STATUS:%{http_code}' "http://${POD_IP}:${PORT}/metrics" 2>&1) || CURL_EXIT=$?
-    if echo "$BODY" | grep -q "apollo_router_"; then
+    if grep -q "apollo_router_" <<< "$BODY"; then
       echo "metrics ready"
       exit 0
     fi

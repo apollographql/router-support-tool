@@ -41,7 +41,7 @@ META="$DIR/meta.json"
 # --- router-metrics/result.json (http collector): a real Prometheus scrape ---
 RESULT="$DIR/router-metrics/result.json"
 [ "$(jq -r '.response.status' "$RESULT")" = "200" ] || fail "router-metrics: response.status != 200"
-jq -r '.response.body' "$RESULT" | grep -q "apollo_router_" || fail "router-metrics: body doesn't contain real router metrics"
+grep -q "apollo_router_" <<< "$(jq -r '.response.body' "$RESULT")" || fail "router-metrics: body doesn't contain real router metrics"
 
 # --- clusterResources: pod is Running, zero restarts, expected resources ---
 # No image check here (unlike raw-manifest) - the official chart pins its own image tag,
@@ -150,7 +150,7 @@ fi
 if grep -q "demo.starstuff.dev" "$SCHEMA_CONFIG"; then
   fail "the real subgraph URL domain was found unredacted in the supergraph schema"
 fi
-if jq -r '[.items[] | select(.metadata.name == "router-supergraph")][0].data["supergraph-schema.graphql"]' "$SCHEMA_CONFIG" | grep -q "SENTINEL"; then
+if grep -q "SENTINEL" <<< "$(jq -r '[.items[] | select(.metadata.name == "router-supergraph")][0].data["supergraph-schema.graphql"]' "$SCHEMA_CONFIG")"; then
   fail "a sentinel value was found unredacted in the supergraph schema"
 fi
 
