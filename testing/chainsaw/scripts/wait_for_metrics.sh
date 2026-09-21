@@ -25,14 +25,18 @@ trap cleanup EXIT
 kubectl run "$PROBE_POD" --image=curlimages/curl:8.10.1 -n "$NAMESPACE" --restart=Never --command -- sleep 300
 kubectl wait --for=condition=Ready "pod/$PROBE_POD" -n "$NAMESPACE" --timeout=60s
 
-for _ in $(seq 1 40); do
+for i in $(seq 1 40); do
   POD_IP=$(kubectl get pods -n "$NAMESPACE" -l "$SELECTOR" --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || true)
   if [ -n "$POD_IP" ]; then
-    BODY=$(kubectl exec "$PROBE_POD" -n "$NAMESPACE" -- curl -s "http://${POD_IP}:${PORT}/metrics" 2>/dev/null) || true
+    CURL_EXIT=0
+    BODY=$(kubectl exec "$PROBE_POD" -n "$NAMESPACE" -- curl -s -w '\nHTTP_STATUS:%{http_code}' "http://${POD_IP}:${PORT}/metrics" 2>&1) || CURL_EXIT=$?
     if echo "$BODY" | grep -q "apollo_router_"; then
       echo "metrics ready"
       exit 0
     fi
+    echo "[attempt $i] pod_ip=$POD_IP curl_exit=$CURL_EXIT response(first 200 chars)=$(echo "$BODY" | head -c 200)" >&2
+  else
+    echo "[attempt $i] no Running pod found matching selector '$SELECTOR'" >&2
   fi
   sleep 3
 done
