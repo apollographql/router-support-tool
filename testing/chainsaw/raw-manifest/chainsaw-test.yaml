@@ -12,6 +12,12 @@ spec:
   #
   # All paths here are relative to this test's own directory
   # because that's how Chainsaw resolves them.
+  #
+  # Not concurrency-safe with the official-chart test: router-diagnostics-helm-plugin's
+  # collect.sh port-forwards to a hardcoded local port (9090) to reach the router's
+  # metrics endpoint, and a local TCP port is a single-machine resource regardless of
+  # which cluster/namespace either test targets.
+  concurrent: false
   steps:
     - try:
         - script:
