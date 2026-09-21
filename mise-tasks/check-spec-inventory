@@ -22,7 +22,6 @@ extract() {
 COLLECTORS=$(extract "support-bundle-spec" \
   '[.spec.collectors[] | to_entries[0] as $e | {kind: "collector", type: $e.key, name: ($e.value.name // $e.value.collectorName)}]')
 
-# TODO: base-spec-configmap.yaml's redactor-spec
 REDACTORS=$(extract "redactor-spec" \
   '[.spec.redactors[] | {kind: "redactor", type: "redactor", name: .name}]')
 
