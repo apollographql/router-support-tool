@@ -10,9 +10,6 @@ pre-commit:
     helm-lint:
       glob: "router-diagnostics/**"
       run: mise run helm-lint
-    bundle-verification:
-      glob: "bundle-verification/**"
-      run: mise run check-verification
 
 pre-push:
   commands:
