@@ -48,7 +48,7 @@ jobs:
             --version "$ROUTER_CHART_VERSION" \
             -n "$TEST_NAMESPACE" \
             --values "$TEST_ROUTER_DATA/values.yaml" \
-            --set-file supergraphFile=.github/testdata/supergraph.graphql
+            --set-file supergraphFile=testing/fixtures/supergraph.graphql
           kubectl rollout status deployment/"$ROUTER_RELEASE_NAME" -n "$TEST_NAMESPACE" --timeout=90s
 
           # The router-diagnostics Helm plugin's collect.sh port-forwards to the router's

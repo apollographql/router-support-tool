@@ -9,3 +9,6 @@ __pycache__/
 *.pyc
 
 bundle-verification/target
+
+# Created when we run `helm router-diagnostics collect` when a Chainsaw test runs locally
+support-bundle-*.tar.gz

@@ -1,27 +1,14 @@
 name: Raw-Manifest Plugin Integration Test
 
-# Exercises `helm router-diagnostics collect` (mode: local) against a
-# kind cluster.
-#
-# Coverage against specs/collection/base_spec.md's "What the base spec collects" tables
-# deliberately not checked here:
-#   - APOLLO_GRAPH_REF/APOLLO_ROUTER_OFFICIAL_HELM_CHART env vars -
-#     testdata/raw-manifest-deployment/deployment.yaml doesn't set them (this isn't the
-#     official router Helm chart).
-#   - Previous-container logs (-previous.log) - no restart scenario exists.
-#   - OOM kill occurrences/last state
+# Exercises `helm router-diagnostics collect` (mode: local) against a kind cluster, via
+# the Chainsaw test at testing/chainsaw/raw-manifest. This workflow only orchestrates -
+# cluster creation and the test itself are both plain mise tasks, runnable identically
+# from a laptop (`mise run kind-up && mise run e2e-chainsaw`).
 on:
   pull_request:
   push:
     branches:
       - main
-
-env:
-  CHART_PATH: router-diagnostics
-  PLUGIN_PATH: router-diagnostics-helm-plugin
-  RELEASE_NAME: router-diagnostics
-  TEST_NAMESPACE: router-support-tool-test
-  TEST_ROUTER_DATA: .github/testdata/raw-manifest-deployment
 
 jobs:
   exercise_local_plugin:
@@ -31,69 +18,25 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
+      - name: Install mise tools
+        uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
+
       - name: Create kind cluster
         uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
         with:
           config: testing/kind-config.yaml
 
-      - name: Install Helm
-        uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
-        with:
-          version: v3.17.3
-
-      - name: Deploy router
-        run: |
-          kubectl create namespace "$TEST_NAMESPACE"
-          kubectl create configmap router-config -n "$TEST_NAMESPACE" \
-            --from-file=router.yaml="$TEST_ROUTER_DATA/router.yaml" \
-            --from-file=supergraph.graphql=.github/testdata/supergraph.graphql
-          kubectl label configmap router-config -n "$TEST_NAMESPACE" app.kubernetes.io/name=router
-          kubectl apply -n "$TEST_NAMESPACE" -f "$TEST_ROUTER_DATA/deployment.yaml"
-          kubectl rollout status deployment/router -n "$TEST_NAMESPACE" --timeout=90s
-
-      - name: "Install router-diagnostics chart (mode: local)"
-        run: |
-          helm install "$RELEASE_NAME" "$CHART_PATH" -n "$TEST_NAMESPACE" \
-            --set namespace="$TEST_NAMESPACE" \
-            --set mode=local
-
-      - name: Install router-diagnostics Helm plugin
-        run: helm plugin install "$PLUGIN_PATH"
-
-      - name: Run collect
-        run: helm router-diagnostics collect "$RELEASE_NAME" -n "$TEST_NAMESPACE"
-
-      - name: Extract bundle
-        id: bundle
-        run: |
-          BUNDLE=$(ls support-bundle-*.tar.gz)
-          tar xzf "$BUNDLE"
-          DIR="${BUNDLE%.tar.gz}"
-          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
-
-      - name: Build bundle-verification
-        run: cargo build --release --manifest-path bundle-verification/Cargo.toml
-
-      - name: Verify the bundle against specs/collection/base_spec.md
-        run: |
-          DIR="${{ steps.bundle.outputs.dir }}"
-
-          # image is extracted at runtime (not checked into a static fixture) so it can't
-          # drift from Renovate bumping the pinned version in deployment.yaml.
-          EXPECTED_IMAGE=$(grep -m1 'image: ghcr.io/apollographql/router:' "$TEST_ROUTER_DATA/deployment.yaml" | sed 's/^ *image: *//')
-          jq -n --arg image "$EXPECTED_IMAGE" --arg config_file "$TEST_ROUTER_DATA/router.yaml" \
-            '{image: $image, config_file: $config_file}' > /tmp/expected-values.json
-
-          ./bundle-verification/target/release/bundle-verification \
-            --bundle-dir "$DIR" \
-            --namespace "$TEST_NAMESPACE" \
-            --tier raw-manifest \
-            --expected-values /tmp/expected-values.json
+      - name: Run the raw-manifest Chainsaw test
+        run: mise run e2e-chainsaw
+        env:
+          CHAINSAW_TEST_DIRS: testing/chainsaw/raw-manifest
 
       - name: Upload bundle for inspection
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: support-bundle
-          path: support-bundle-*.tar.gz
+          # Chainsaw's script steps run with the test's own directory as their working
+          # directory, not the repo root - this is where collect.sh actually leaves it.
+          path: testing/chainsaw/raw-manifest/support-bundle-*.tar.gz
           retention-days: 3
