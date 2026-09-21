@@ -9,7 +9,7 @@ spec:
   #   - OOM kill occurrences/last state
   #
   # All paths here are relative to this test's own directory, because that's how
-  # Chainsaw resolves them - including inside script content.
+  # Chainsaw resolves them.
   steps:
     - try:
         - script:

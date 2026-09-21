@@ -64,4 +64,4 @@ else
   fi
 fi
 
-"$HELM_PLUGIN_DIR/bin/support-bundle" --load-cluster-specs
+"$HELM_PLUGIN_DIR/bin/support-bundle" --load-cluster-specs --namespace "$RELEASE_NAMESPACE"

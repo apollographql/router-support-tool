@@ -2,7 +2,7 @@
 #MISE description="Run the Chainsaw plugin integration test suite against a running cluster"
 set -euo pipefail
 
-# CHAINSAW_TEST_DIRS temporarily restricts which test directories run, e.g. while
-# migrating tests over one at a time. Defaults to the whole suite.
+# CHAINSAW_TEST_DIRS scopes this to one tier's test directory.
+# Defaults to the whole suite, for a local run against a cluster.
 read -ra TEST_DIRS <<< "${CHAINSAW_TEST_DIRS:-testing/chainsaw}"
 chainsaw test --config .chainsaw.yaml "${TEST_DIRS[@]}"

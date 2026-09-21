@@ -22,7 +22,9 @@ helm plugin install ./router-diagnostics-helm-plugin
    label (falling back to the official chart's own `app.kubernetes.io/name=router`
    when `selector` is unset, same as `base-spec-configmap.yaml`'s collectors),
    bridges its metrics port with a temporary `kubectl port-forward` (torn down
-   on exit, success or failure), then runs `support-bundle --load-cluster-specs`.
+   on exit, success or failure), then runs `support-bundle --load-cluster-specs
+   --namespace <release namespace>` - scoped, so a second router-diagnostics
+   release in another namespace can't get its spec picked up instead.
 
 No Service found, or the port-forward never becomes ready? Collection still
 runs and `router-metrics` fails with an attributable connection error rather
