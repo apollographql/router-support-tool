@@ -1,0 +1,47 @@
+---
+title: Getting Started
+subtitle: Choose how you'll run the Router Support Tool
+description: Pick between mode local and mode job, and confirm what your Helm values need to supply based on how you deployed the router.
+---
+
+Getting a spec into the cluster is done through a single Helm chart, `router-diagnostics`, with a `mode` value controlling how collection actually runs. Both modes collect the same spec — the same collectors, the same redactors — but who runs it, where it runs, and what it needs from you are genuinely different.
+
+There are two independent things to figure out before you install anything:
+
+1. **Which mode fits your access?** This is the bigger decision — it changes the command you run, what gets installed in your cluster, and what permissions are required.
+2. **How was the router deployed?** This changes a couple of chart values, regardless of which mode you picked.
+
+## 1. Choose a mode
+
+| | `mode: local` | `mode: job` |
+| --- | --- | --- |
+| Who runs collection | You, from your own machine, with your own kubectl access | A Kubernetes Job, in-cluster, using its own ServiceAccount |
+| What gets installed | Spec ConfigMap only | Spec ConfigMap + Job + ServiceAccount/RBAC (namespace-scoped and cluster-scoped) |
+| Where the bundle lands | Your current directory | In-cluster, until it's retrieved — see [Job mode](./job-mode) |
+| Use when | You have kubectl access to production | Your kubectl access is restricted, and a platform team runs collection on your behalf |
+
+Not sure which applies? If you can run `kubectl get pods` against production yourself right now, you want `mode: local`. If someone else on a platform team has to do that for you, you want `mode: job`.
+
+- [Running the tool locally (`mode: local`)](./local-mode)
+- [Running the tool as a Kubernetes Job (`mode: job`)](./job-mode)
+
+**Deploying via the Apollo Operator?** You don't need this chart, or a mode decision — the Operator installs the same spec directly, with its values already filled in from the deployment conventions it manages. See the Operator's own documentation for what it collects and how to trigger a collection.
+
+## 2. Confirm how the router was deployed
+
+Whichever mode you picked, the chart needs to know how to find your router. That depends on how it was deployed:
+
+| Deployment | What you supply | Why |
+| --- | --- | --- |
+| **Official Apollo router Helm chart** | `namespace` only | The chart's collectors target your router by its standard `app.kubernetes.io/name=router` label, and know the ConfigMap name and ports it uses |
+| **Raw manifests / custom deployment** | `namespace`, `selector`, `configMapName` | None of the official chart's conventions apply, so nothing about your router's location or config can be assumed |
+
+Both the [local mode](./local-mode) and [job mode](./job-mode) pages show the install command for each case — pick the one matching your deployment when you get there.
+
+## Full reference
+
+The pages above cover the values you need to get a first bundle collected. For the complete set of chart values, and exactly what RBAC each mode grants and why, see:
+
+- [`mode: local` reference](../local-mode-details)
+- [`mode: job` reference](../job-mode-details)
+- [Data Collected](../data-collected) — what's gathered, what each signal requires, and what's lost if you decline a permission
