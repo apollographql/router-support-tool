@@ -22,7 +22,8 @@ RELEASE_NAME="router-diagnostics"
 
 helm install "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
   --set namespace="$NAMESPACE" \
-  --set mode=local
+  --set mode=local \
+  --set metricsPort=9091
 
 helm plugin list | grep -q router-diagnostics || helm plugin install "$PLUGIN_PATH"
 

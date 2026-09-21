@@ -9,11 +9,12 @@
 #
 # One probe pod is created up front and reused via `kubectl exec` for every retry.
 #
-# Usage: wait_for_metrics.sh <namespace>
+# Usage: wait_for_metrics.sh <namespace> [selector] [port]
 set -euo pipefail
 
 NAMESPACE=$1
-SELECTOR="app.kubernetes.io/name=router"
+SELECTOR="${2:-app.kubernetes.io/name=router}"
+PORT="${3:-9090}"
 PROBE_POD="metrics-probe-$$"
 
 cleanup() {
@@ -27,7 +28,7 @@ kubectl wait --for=condition=Ready "pod/$PROBE_POD" -n "$NAMESPACE" --timeout=60
 for _ in $(seq 1 40); do
   POD_IP=$(kubectl get pods -n "$NAMESPACE" -l "$SELECTOR" --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || true)
   if [ -n "$POD_IP" ]; then
-    BODY=$(kubectl exec "$PROBE_POD" -n "$NAMESPACE" -- curl -s "http://${POD_IP}:9090/metrics" 2>/dev/null) || true
+    BODY=$(kubectl exec "$PROBE_POD" -n "$NAMESPACE" -- curl -s "http://${POD_IP}:${PORT}/metrics" 2>/dev/null) || true
     if echo "$BODY" | grep -q "apollo_router_"; then
       echo "metrics ready"
       exit 0
@@ -36,5 +37,5 @@ for _ in $(seq 1 40); do
   sleep 3
 done
 
-echo "router :9090/metrics never served real content within the timeout" >&2
+echo "router :${PORT}/metrics never served real content within the timeout" >&2
 exit 1
