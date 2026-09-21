@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Delete the local KinD cluster used by the plugin integration tests and Chainsaw"
+set -euo pipefail
+
+CLUSTER_NAME="${KIND_CLUSTER_NAME:-router-support-tool-test}"
+
+kind delete cluster --name "$CLUSTER_NAME"

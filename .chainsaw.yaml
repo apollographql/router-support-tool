@@ -1,0 +1,9 @@
+apiVersion: chainsaw.kyverno.io/v1alpha2
+kind: Configuration
+metadata:
+  name: router-support-tool
+spec:
+  namespace:
+    template:
+      metadata:
+        name: (join('-', ['chainsaw', $test.metadata.name]))
