@@ -51,11 +51,10 @@ router:
                 service_name: vpc-lattice-svcs
 
     # Header values redaction tests - block style (name/value on
-    # separate lines) and flow style (name/value inline), one pair per field.
-    # insert.default/propagate.default use ACCEPTED_GAP_* rather than a SENTINEL_* name -
-    # unlike insert.value, they're not expected to be redacted on this tier (Helm's own
-    # YAML marshaling re-serializes maps alphabetically, and the block-style redactor
-    # regex requires name:/named: before default: - see verify_official_chart_bundle.sh).
+    # separate lines) and flow style (name/value inline), one pair per field. The
+    # official chart's own YAML marshaling re-serializes maps alphabetically (unlike
+    # raw-manifest's hand-authored router.yaml), so this tier is what actually exercises
+    # the block-style redactors' order independence.
     headers:
       all:
         request:
@@ -66,13 +65,13 @@ router:
             - insert:
                 name: x-sentinel-frombody
                 path: "$.doesNotExist"
-                default: ACCEPTED_GAP_HEADER_INSERT_DEFAULT
+                default: SENTINEL_HEADER_INSERT_DEFAULT
             - propagate:
                 named: x-sentinel-source-header
-                default: ACCEPTED_GAP_HEADER_PROPAGATE_DEFAULT
+                default: SENTINEL_HEADER_PROPAGATE_DEFAULT
             - insert: { name: x-sentinel-flow-static, value: SENTINEL_FLOW_INSERT_VALUE }
-            - insert: { name: x-sentinel-flow-frombody, path: "$.doesNotExist", default: ACCEPTED_GAP_FLOW_INSERT_DEFAULT }
-            - propagate: { named: x-sentinel-flow-source, default: ACCEPTED_GAP_FLOW_PROPAGATE_DEFAULT }
+            - insert: { name: x-sentinel-flow-frombody, path: "$.doesNotExist", default: SENTINEL_FLOW_INSERT_DEFAULT }
+            - propagate: { named: x-sentinel-flow-source, default: SENTINEL_FLOW_PROPAGATE_DEFAULT }
 
     # Subgraph urls redaction tests - two subgraphs, one quoted, one not.
     override_subgraph_url:

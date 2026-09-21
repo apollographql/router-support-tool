@@ -139,14 +139,11 @@ SCHEMA_CONFIG="$DIR/cluster-resources/configmaps/$NAMESPACE.json"
 # mistaken for a rule that fired. The router's config here lives under
 # "configuration.yaml" (router.json).
 #
-# insert.default/propagate.default are deliberately NOT named SENTINEL_* in values.yaml
-# (they use ACCEPTED_GAP_* instead) - specs/collection/data_sanitization/header_values.md
-# documents block-style redaction there as order-dependent (the regex has no lookbehind,
-# so it requires name:/named: before value:/default:), and the chart's own YAML
-# marshaling re-serializes maps alphabetically, so those two fields land unmasked here as
-# an accepted limitation. Naming them outside the SENTINEL_* convention means this
-# blanket check needs no exception list - raw-manifest's hand-authored router.yaml keeps
-# the required order and is the real positive control for all three header fields.
+# This tier is what actually exercises the block-style header redactors' order
+# independence: the official chart's own YAML marshaling re-serializes maps
+# alphabetically (unlike raw-manifest's hand-authored router.yaml, which happens to
+# already write name:/named: before value:/default:), so insert.default and
+# propagate.default only get proven order-independent here.
 if grep -q "SENTINEL" "$CONFIG"; then
   fail "a sentinel value was found unredacted in the collected config"
 fi

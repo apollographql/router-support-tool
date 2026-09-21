@@ -10,6 +10,11 @@ spec:
   #   - Previous-container logs (-previous.log) - no restart scenario exists.
   #   - OOM kill occurrences/last state
   #
+  # resource.yaml labels the router app.kubernetes.io/name=router, the chart's own
+  # default selector, so this test only exercises values.yaml's selector left unset.
+  # The custom-selector override path (--set selector=...) is covered by RTF's
+  # scenario.sh, which deliberately uses a non-default app=router label.
+  #
   # All paths here are relative to this test's own directory
   # because that's how Chainsaw resolves them.
   #

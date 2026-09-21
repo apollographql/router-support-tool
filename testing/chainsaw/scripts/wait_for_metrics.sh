@@ -7,19 +7,27 @@
 # also means kube-proxy/Endpoints propagation lag can't be a second source of flakiness
 # on top of that.
 #
+# One probe pod is created up front and reused via `kubectl exec` for every retry.
+#
 # Usage: wait_for_metrics.sh <namespace>
 set -euo pipefail
 
 NAMESPACE=$1
 SELECTOR="app.kubernetes.io/name=router"
+PROBE_POD="metrics-probe-$$"
 
-for _ in $(seq 1 20); do
+cleanup() {
+  kubectl delete pod "$PROBE_POD" -n "$NAMESPACE" --ignore-not-found --wait=false > /dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+kubectl run "$PROBE_POD" --image=curlimages/curl:8.10.1 -n "$NAMESPACE" --restart=Never --command -- sleep 300
+kubectl wait --for=condition=Ready "pod/$PROBE_POD" -n "$NAMESPACE" --timeout=60s
+
+for _ in $(seq 1 40); do
   POD_IP=$(kubectl get pods -n "$NAMESPACE" -l "$SELECTOR" --field-selector=status.phase=Running -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || true)
   if [ -n "$POD_IP" ]; then
-    BODY=$(kubectl run "metrics-probe-$(date +%s%N)" --rm -i --restart=Never --quiet \
-      --pod-running-timeout=10s \
-      --image=curlimages/curl:8.10.1 -n "$NAMESPACE" -- \
-      curl -s "http://${POD_IP}:9090/metrics" 2>/dev/null) || true
+    BODY=$(kubectl exec "$PROBE_POD" -n "$NAMESPACE" -- curl -s "http://${POD_IP}:9090/metrics" 2>/dev/null) || true
     if echo "$BODY" | grep -q "apollo_router_"; then
       echo "metrics ready"
       exit 0

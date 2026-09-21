@@ -107,9 +107,9 @@ data:
               - "configmaps/*/*.json"
           removals:
             regex:
-              - redactor: '(insert:\\n\s*name:\s*\\?"?[^"\\\n]*\\?"?\\n\s*value:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
+              - redactor: '(insert:\\n(?:\s*name:\s*\\?"?[^"\\\n]*\\?"?\\n)*\s*value:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
               - redactor: '(insert:\s*\{(?:[^}\\]|\\")*?value:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?(?:[^}\\]|\\")*?\})'
-              - redactor: '(insert:\\n\s*name:\s*\\?"?[^"\\\n]*\\?"?\\n\s*path:\s*\\?"?[^"\\\n]*\\?"?\\n\s*default:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
+              - redactor: '(insert:\\n(?:\s*(?:name|path):\s*\\?"?[^"\\\n]*\\?"?\\n)*\s*default:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
               - redactor: '(insert:\s*\{(?:[^}\\]|\\")*?default:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?(?:[^}\\]|\\")*?\})'
         - name: router-headers-propagate-default
           fileSelector:
@@ -118,7 +118,7 @@ data:
               - "configmaps/*/*.json"
           removals:
             regex:
-              - redactor: '(named:\s*\\?"?[^"\\\n]*\\?"?\\n\s*(?:rename:\s*\\?"?[^"\\\n]*\\?"?\\n\s*)?default:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
+              - redactor: '(propagate:\\n(?:\s*(?:named|rename):\s*\\?"?[^"\\\n]*\\?"?\\n)*\s*default:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
               - redactor: '(propagate:\s*\{(?:[^}\\]|\\")*?default:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?(?:[^}\\]|\\")*?\})'
 
         # specs/collection/data_sanitization/operation_bodies.md

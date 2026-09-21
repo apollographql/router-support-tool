@@ -78,7 +78,8 @@ spec:
         # CI runner. Poll :9090/metrics directly rather than assuming Available
         # implies it's already serving.
         - script:
-            timeout: 90s
+            # Probe pod startup (up to 60s) + up to 40 retries at 3s apiece
+            timeout: 210s
             content: |
               ../scripts/wait_for_metrics.sh "$NAMESPACE"
             env:
