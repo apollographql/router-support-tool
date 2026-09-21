@@ -1,27 +1,15 @@
 name: Official Chart Plugin Integration Test
 
 # Exercises `helm router-diagnostics collect` (mode: local) against a router deployed with
-# the official apollographql/router Helm chart.
-#
-# Coverage against specs/collection/base_spec.md's "What the base spec collects" tables
-# deliberately not checked here
-#   - Previous-container logs (-previous.log) - no restart scenario exists.
-#   - OOM kill occurrences/last state
+# the official apollographql/router Helm chart, via the Chainsaw test at
+# testing/chainsaw/official-chart. This workflow only orchestrates - cluster creation and
+# the test itself are both plain mise tasks, runnable identically from a laptop
+# (`mise run kind-up && mise run e2e-chainsaw`).
 on:
   pull_request:
   push:
     branches:
       - main
-
-env:
-  CHART_PATH: router-diagnostics
-  PLUGIN_PATH: router-diagnostics-helm-plugin
-  RELEASE_NAME: router-diagnostics
-  ROUTER_CHART: oci://ghcr.io/apollographql/helm-charts/router
-  ROUTER_CHART_VERSION: 2.17.0
-  ROUTER_RELEASE_NAME: router
-  TEST_NAMESPACE: router-support-tool-test
-  TEST_ROUTER_DATA: .github/testdata/official-apollo-helm-chart
 
 jobs:
   exercise_official_chart:
@@ -31,71 +19,25 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
+      - name: Install mise tools
+        uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
+
       - name: Create kind cluster
         uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
         with:
           config: testing/kind-config.yaml
 
-      - name: Install Helm
-        uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
-        with:
-          version: v3.17.3
-
-      - name: Deploy router via the official Helm chart
-        run: |
-          kubectl create namespace "$TEST_NAMESPACE"
-          helm install "$ROUTER_RELEASE_NAME" "$ROUTER_CHART" \
-            --version "$ROUTER_CHART_VERSION" \
-            -n "$TEST_NAMESPACE" \
-            --values "$TEST_ROUTER_DATA/values.yaml" \
-            --set-file supergraphFile=testing/fixtures/supergraph.graphql
-          kubectl rollout status deployment/"$ROUTER_RELEASE_NAME" -n "$TEST_NAMESPACE" --timeout=90s
-
-          # The router-diagnostics Helm plugin's collect.sh port-forwards to the router's
-          # Service (not the pod directly) to reach :9090/metrics under mode: local. This
-          # chart only adds that port to the Service when serviceMonitor.enabled is true,
-          # which also renders an actual ServiceMonitor CRD object - unavailable on a stock
-          # kind cluster. Patch the port on directly instead of enabling that flag, so we
-          # don't need the prometheus-operator CRDs installed just for this.
-          kubectl patch service "$ROUTER_RELEASE_NAME" -n "$TEST_NAMESPACE" --type=json \
-            -p='[{"op": "add", "path": "/spec/ports/-", "value": {"name": "metrics", "port": 9090, "targetPort": 9090, "protocol": "TCP"}}]'
-
-      - name: "Install router-diagnostics chart (mode: local)"
-        run: |
-          helm install "$RELEASE_NAME" "$CHART_PATH" -n "$TEST_NAMESPACE" \
-            --set namespace="$TEST_NAMESPACE" \
-            --set mode=local
-
-      - name: Install router-diagnostics Helm plugin
-        run: helm plugin install "$PLUGIN_PATH"
-
-      - name: Run collect
-        run: helm router-diagnostics collect "$RELEASE_NAME" -n "$TEST_NAMESPACE"
-
-      - name: Extract bundle
-        id: bundle
-        run: |
-          BUNDLE=$(ls support-bundle-*.tar.gz)
-          tar xzf "$BUNDLE"
-          DIR="${BUNDLE%.tar.gz}"
-          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
-
-      - name: Build bundle-verification
-        run: cargo build --release --manifest-path bundle-verification/Cargo.toml
-
-      - name: Verify the bundle against specs/collection/base_spec.md
-        run: |
-          DIR="${{ steps.bundle.outputs.dir }}"
-          ./bundle-verification/target/release/bundle-verification \
-            --bundle-dir "$DIR" \
-            --namespace "$TEST_NAMESPACE" \
-            --tier official-chart \
-            --expected-values "$TEST_ROUTER_DATA/expected-values.json"
+      - name: Run the official-chart Chainsaw test
+        run: mise run e2e-chainsaw
+        env:
+          CHAINSAW_TEST_DIRS: testing/chainsaw/official-chart
 
       - name: Upload bundle for inspection
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: official-chart-support-bundle
-          path: support-bundle-*.tar.gz
+          # Chainsaw's script steps run with the test's own directory as their working
+          # directory, not the repo root - this is where collect.sh actually leaves it.
+          path: testing/chainsaw/official-chart/support-bundle-*.tar.gz
           retention-days: 3

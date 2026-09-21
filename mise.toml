@@ -7,20 +7,3 @@ jq = "1.7.1"
 kubeconform = "0.8.0"
 lefthook = "2.1.14"
 "aqua:kyverno/chainsaw" = "0.2.15"
-
-# Tasks for checking support bundle testing CLI
-[tasks.check-verification]
-description = "Run the same checks as CI"
-depends = ["build", "clippy", "format-check", "test"]
-
-[tasks.build]
-run = "cargo build --manifest-path=bundle-verification/Cargo.toml"
-
-[tasks.clippy]
-run = "cargo clippy --manifest-path=bundle-verification/Cargo.toml"
-
-[tasks.test]
-run = "cargo test --manifest-path=bundle-verification/Cargo.toml"
-
-[tasks.format-check]
-run = "cargo +nightly fmt --all --manifest-path=bundle-verification/Cargo.toml -- --check"

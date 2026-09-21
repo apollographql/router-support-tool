@@ -4,6 +4,11 @@ metadata:
   name: router-support-tool
 spec:
   namespace:
+    # Deterministic per-test namespace (rather than Chainsaw's random default)
+    # so the CI operator's namespace-scoped watch config can list every test's
+    # namespace up front. Tests that must run against a fixed, shared
+    # namespace (disruptive tests, the argo-tests-scoped tests) override this
+    # with their own spec.namespace.
     template:
       metadata:
         name: (join('-', ['chainsaw', $test.metadata.name]))

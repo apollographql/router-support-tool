@@ -1,0 +1,59 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: official-chart
+spec:
+  # Coverage against specs/collection/base_spec.md's "What the base spec collects" tables
+  # deliberately not checked here:
+  #   - Previous-container logs (-previous.log) - no restart scenario exists.
+  #   - OOM kill occurrences/last state
+  #
+  # All paths here are relative to this test's own directory, because that's how
+  # Chainsaw resolves them - including inside script content.
+  steps:
+    - try:
+        - script:
+            timeout: 120s
+            content: |
+              helm install router oci://ghcr.io/apollographql/helm-charts/router \
+                --version 2.17.0 \
+                -n "$NAMESPACE" \
+                --values values.yaml \
+                --set-file supergraphFile=../../fixtures/supergraph.graphql
+
+              # The router-diagnostics Helm plugin's collect.sh port-forwards to the
+              # router's Service (not the pod directly) to reach :9090/metrics under
+              # mode: local. This chart only adds that port to the Service when
+              # serviceMonitor.enabled is true, which also renders an actual
+              # ServiceMonitor CRD object - unavailable on a stock kind cluster. Patch
+              # the port on directly instead, so we don't need the prometheus-operator
+              # CRDs installed just for this.
+              kubectl patch service router -n "$NAMESPACE" --type=json \
+                -p='[{"op": "add", "path": "/spec/ports/-", "value": {"name": "metrics", "port": 9090, "targetPort": 9090, "protocol": "TCP"}}]'
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - assert:
+            timeout: 90s
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: router
+              status:
+                (conditions[?type == 'Available']):
+                - status: "True"
+        # kubelet's per-container PSI/pageFault stats (nodeMetrics collector,
+        # KubeletPSI feature gate) need a stats-collection cycle to populate for a
+        # container this fresh - without this, collection can run before they exist.
+        - sleep:
+            duration: 15s
+        - script:
+            timeout: 120s
+            content: |
+              ../scripts/verify_official_chart_bundle.sh "$NAMESPACE" \
+                ../../../router-diagnostics ../../../router-diagnostics-helm-plugin \
+                "test-graph@test" ../../fixtures/supergraph.graphql
+            env:
+              - name: NAMESPACE
+                value: ($namespace)

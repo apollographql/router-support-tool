@@ -1,4 +1,0 @@
-{
-  "graph_ref": "test-graph@test",
-  "supergraph_schema_file": "testing/fixtures/supergraph.graphql"
-}
