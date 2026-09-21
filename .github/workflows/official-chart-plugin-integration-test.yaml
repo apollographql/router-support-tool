@@ -3,8 +3,7 @@ name: Official Chart Plugin Integration Test
 # Exercises `helm router-diagnostics collect` (mode: local) against a router deployed with
 # the official apollographql/router Helm chart, via the Chainsaw test at
 # testing/chainsaw/official-chart. This workflow only orchestrates - cluster creation and
-# the test itself are both plain mise tasks, runnable identically from a laptop
-# (`mise run kind-up && mise run e2e-chainsaw`).
+# the test itself are both plain mise tasks: `mise run kind-up && mise run e2e-chainsaw`.
 on:
   pull_request:
   push:

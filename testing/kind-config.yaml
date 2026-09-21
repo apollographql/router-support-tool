@@ -1,6 +1,5 @@
-# Enables the KubeletPSI feature gate (alpha, off by default) so nodeMetrics can report
-# cpu.psi/memory.psi - see specs/collection/base_spec.md footnote [2]. Shared by both
-# integration test workflows since neither exercises psi otherwise.
+# Enables the KubeletPSI feature gate (off by default) so nodeMetrics can report
+# cpu.psi/memory.psi - see specs/collection/base_spec.md footnote [2].
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:

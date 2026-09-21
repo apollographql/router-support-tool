@@ -49,6 +49,18 @@ spec:
               status:
                 (conditions[?type == 'Available']):
                 - status: "True"
+        # Available only guarantees the chart's own readinessProbe target
+        # (health_check, :8088) is responding, not the prometheus exporter
+        # (:9090) - those can start a beat apart, especially under a slow/cold
+        # CI runner. Poll :9090/metrics directly rather than assuming Available
+        # implies it's already serving.
+        - script:
+            timeout: 90s
+            content: |
+              ../scripts/wait_for_metrics.sh "$NAMESPACE"
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
         # kubelet's per-container PSI/pageFault stats (nodeMetrics collector,
         # KubeletPSI feature gate) need a stats-collection cycle to populate for a
         # container this fresh - without this, collection can run before they exist.
