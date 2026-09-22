@@ -1,6 +1,11 @@
 schema
   @link(url: "https://specs.apollo.dev/link/v1.0")
-  @link(url: "https://specs.apollo.dev/join/v0.3", for: EXECUTION) {
+  @link(url: "https://specs.apollo.dev/join/v0.3", for: EXECUTION)
+  @link(url: "https://specs.apollo.dev/connect/v0.1", for: EXECUTION)
+  @source(
+    name: "api"
+    http: { baseURL: "https://SENTINEL_CONNECTOR_BASE_URL.example.com/v1" }
+  ) {
   query: Query
   mutation: Mutation
 }
@@ -44,7 +49,19 @@ directive @link(
   import: [link__Import]
 ) repeatable on SCHEMA
 
+directive @source(name: String!, http: source__HTTP) repeatable on SCHEMA
+
+directive @connect(
+  source: String
+  http: connect__HTTP!
+  selection: connect__JSONSelection!
+  entity: Boolean = false
+) repeatable on FIELD_DEFINITION
+
 scalar join__FieldSet
+scalar source__HTTP
+scalar connect__HTTP
+scalar connect__JSONSelection
 
 enum join__Graph {
   ACCOUNTS
@@ -100,6 +117,9 @@ type Query
   me: User @join__field(graph: ACCOUNTS)
   recommendedProducts: [Product] @join__field(graph: ACCOUNTS)
   topProducts(first: Int = 5): [Product] @join__field(graph: PRODUCTS)
+  connectorStatus: String
+    @join__field(graph: ACCOUNTS)
+    @connect(source: "api", http: { GET: "/status" }, selection: "id")
 }
 
 type Review @join__type(graph: REVIEWS, key: "id") {

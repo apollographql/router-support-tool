@@ -108,7 +108,7 @@ A failed match here is silent: the field simply stays in the bundle unredacted. 
 
 Single-line `regex` scans with a `bufio.Scanner` capped at `SCANNER_MAX_SIZE = 10MB` per line. If a line exceeds it, redaction of that file fails and the redacted copy is discarded. In this case the collector's unredacted original is what gets packaged with an error reported along with the support bundle.
 
-The `configmaps` surfaces are bounded well under the cap by Kubernetes' ~1MiB ConfigMap limit, so this is unlikely to fire in practice — but if it ever does, read the reported error as [the bundle is not safe to share](#a-reported-error-means-the-bundle-is-not-safe-to-share).
+The `configmaps` surfaces are bounded well under the cap by Kubernetes' ~1MiB ConfigMap limit, so this is unlikely to fire in practice — but if it ever does, read the reported error as [the bundle is not safe to share](#a-reported-error-means-the-bundle-is-not-safe-to-share)..
 
 ### A reported error means the bundle is not safe to share
 

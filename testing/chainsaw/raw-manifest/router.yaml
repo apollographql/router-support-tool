@@ -8,3 +8,200 @@ telemetry:
         enabled: true
         listen: 0.0.0.0:9090
         path: /metrics
+  instrumentation:
+    events:
+      supergraph:
+        request: info
+        response: info
+
+# JWT and auth config redaction test, aws_sig_v4 only.
+# JWKS-fetch-headers (authentication.router.jwt) requires a GraphOS Enterprise
+# license so that's tested via RTF that has that license.
+# "all" carries the hardcoded (secret) variant. The inventory subgraph override carries
+# default_chain, which holds no literal credential and must survive untouched -
+# fake env-var credentials on the container (resource.yaml) mean this never needs to
+# reach the real cloud metadata endpoint at boot.
+authentication:
+  subgraph:
+    all:
+      aws_sig_v4:
+        hardcoded:
+          access_key_id: SENTINEL_AWS_ACCESS_KEY_ID
+          secret_access_key: SENTINEL_AWS_SECRET_ACCESS_KEY
+          region: us-east-1
+          service_name: vpc-lattice-svcs
+    subgraphs:
+      inventory:
+        aws_sig_v4:
+          default_chain:
+            region: us-east-1
+            service_name: vpc-lattice-svcs
+
+# Header values redaction tests - block style (name/value on
+# separate lines) and flow style (name/value inline), one pair per field.
+headers:
+  all:
+    request:
+      operations:
+        - insert:
+            name: x-sentinel-static
+            value: SENTINEL_HEADER_INSERT_VALUE
+        - insert:
+            name: x-sentinel-frombody
+            path: "$.doesNotExist"
+            default: SENTINEL_HEADER_INSERT_DEFAULT
+        - propagate:
+            named: x-sentinel-source-header
+            default: SENTINEL_HEADER_PROPAGATE_DEFAULT
+        - insert: { name: x-sentinel-flow-static, value: SENTINEL_FLOW_INSERT_VALUE }
+        - insert: { name: x-sentinel-flow-frombody, path: "$.doesNotExist", default: SENTINEL_FLOW_INSERT_DEFAULT }
+        - propagate: { named: x-sentinel-flow-source, default: SENTINEL_FLOW_PROPAGATE_DEFAULT }
+
+# Subgraph urls redaction tests - two subgraphs, one quoted, one not.
+override_subgraph_url:
+  accounts: "https://svc-user:SENTINEL_SUBGRAPH_URL_PASSWORD@accounts.internal.svc.cluster.local:4001/graphql"
+  inventory: https://svc-user2:SENTINEL_SUBGRAPH_URL_PASSWORD_2@inventory.internal.svc.cluster.local:4001/graphql
+
+include_subgraph_errors:
+  all: false
+
+# TLS private keys redaction tests - all three key locations, plus certificate_authorities 
+# (public CA material - left visible) on the two client-auth locations.
+# The connector key is a longer RSA key (vs the others' short EC keys) to
+# test that the lazy match across more line wraps.
+# Self-signed, CI-only test material generated for this file.
+# This not used to serve real traffic.
+tls:
+  supergraph:
+    certificate: |
+      -----BEGIN CERTIFICATE-----
+      MIIBgTCCASegAwIBAgIUekJsIs9C1ZtolJXebnaYJsfLtxgwCgYIKoZIzj0EAwIw
+      FjEUMBIGA1UEAwwLcm91dGVyLnRlc3QwHhcNMjYwOTE3MTgxNDI5WhcNMzYwOTE0
+      MTgxNDI5WjAWMRQwEgYDVQQDDAtyb3V0ZXIudGVzdDBZMBMGByqGSM49AgEGCCqG
+      SM49AwEHA0IABBGOhC/TFU3UGGlm/VD9eBRSMN9CXzoXPw49jBmPyEwzWep4Y4Yi
+      APuqRGQKeRF2YfQNuwSnIB6zUlxLSj7VgbSjUzBRMB0GA1UdDgQWBBQmCYkI7Aj2
+      64ItWhykR6AZCr5WJDAfBgNVHSMEGDAWgBQmCYkI7Aj264ItWhykR6AZCr5WJDAP
+      BgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0gAMEUCIQD5k6F3ABm5lxPTFulz
+      PaWHFMM0PXdLRcGdBtw/Zyba5QIgaayUclmeo408Yr/mCb7ZZfJS1vjj3Rtq4/Yg
+      TU/XGqo=
+      -----END CERTIFICATE-----
+    key: |
+      -----BEGIN EC PRIVATE KEY-----
+      MHcCAQEEIAVoZMBkcnizlfy10FJb+iXKFvKaWL2pHoVrb2PtxvGcoAoGCCqGSM49
+      AwEHoUQDQgAEEY6EL9MVTdQYaWb9UP14FFIw30JfOhc/Dj2MGY/ITDNZ6nhjhiIA
+      +6pEZAp5EXZh9A27BKcgHrNSXEtKPtWBtA==
+      -----END EC PRIVATE KEY-----
+    certificate_chain: |
+      -----BEGIN CERTIFICATE-----
+      MIIBgTCCASegAwIBAgIUekJsIs9C1ZtolJXebnaYJsfLtxgwCgYIKoZIzj0EAwIw
+      FjEUMBIGA1UEAwwLcm91dGVyLnRlc3QwHhcNMjYwOTE3MTgxNDI5WhcNMzYwOTE0
+      MTgxNDI5WjAWMRQwEgYDVQQDDAtyb3V0ZXIudGVzdDBZMBMGByqGSM49AgEGCCqG
+      SM49AwEHA0IABBGOhC/TFU3UGGlm/VD9eBRSMN9CXzoXPw49jBmPyEwzWep4Y4Yi
+      APuqRGQKeRF2YfQNuwSnIB6zUlxLSj7VgbSjUzBRMB0GA1UdDgQWBBQmCYkI7Aj2
+      64ItWhykR6AZCr5WJDAfBgNVHSMEGDAWgBQmCYkI7Aj264ItWhykR6AZCr5WJDAP
+      BgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0gAMEUCIQD5k6F3ABm5lxPTFulz
+      PaWHFMM0PXdLRcGdBtw/Zyba5QIgaayUclmeo408Yr/mCb7ZZfJS1vjj3Rtq4/Yg
+      TU/XGqo=
+      -----END CERTIFICATE-----
+  subgraph:
+    all:
+      certificate_authorities: |
+        -----BEGIN CERTIFICATE-----
+        MIIBejCCAR+gAwIBAgIUaHK2I0Xe6/vHPRQ+0dqdu7oyyOMwCgYIKoZIzj0EAwIw
+        EjEQMA4GA1UEAwwHdGVzdC1jYTAeFw0yNjA5MTcyMTE2MDlaFw0zNjA5MTQyMTE2
+        MDlaMBIxEDAOBgNVBAMMB3Rlc3QtY2EwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNC
+        AAQEow2uYI59sore7PhpCOzuabTetcnE2tB70F3k2fxNV0rJ4gg0DCWTwK4cvm8u
+        6Qi9dgjgS+UOZ29H5i+EVqizo1MwUTAdBgNVHQ4EFgQUxajYsVl2EVMg/fkdOuDq
+        qgJN1dUwHwYDVR0jBBgwFoAUxajYsVl2EVMg/fkdOuDqqgJN1dUwDwYDVR0TAQH/
+        BAUwAwEB/zAKBggqhkjOPQQDAgNJADBGAiEA8U1nJZN7AFTzIeqiAvmpLxs3xjJB
+        /X+qmx9q3+/mZFICIQDiqM8B2pkeJoGE8i00otHCvwM0FapznuvmrvTxsKeUaw==
+        -----END CERTIFICATE-----
+      client_authentication:
+        certificate_chain: |
+          -----BEGIN CERTIFICATE-----
+          MIIBkzCCATmgAwIBAgIUNLZFU9S8R9w1EPX2QjC3VMRp4JUwCgYIKoZIzj0EAwIw
+          HzEdMBsGA1UEAwwUc3ViZ3JhcGgtY2xpZW50LnRlc3QwHhcNMjYwOTE3MTgxNDI5
+          WhcNMzYwOTE0MTgxNDI5WjAfMR0wGwYDVQQDDBRzdWJncmFwaC1jbGllbnQudGVz
+          dDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJDXq0xDTcRSyY1zevSBtyilRLPF
+          p5bU+rBf/G2ERYemknU55Bl9K2Dkd24EqBzP7mwSXQYAMvbcf1dCRFMhi/mjUzBR
+          MB0GA1UdDgQWBBRnTYrhVOJnBe/4KeswivuFwDH77DAfBgNVHSMEGDAWgBRnTYrh
+          VOJnBe/4KeswivuFwDH77DAPBgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0gA
+          MEUCIQD2Oz1cs+qureSKoopOLq4tbMZM1UiI5M3vGXGuM7V84gIgP4YTIjYYmibz
+          zMTuNP5Zv2G0gSkMz2wvBA8RJJ29VEQ=
+          -----END CERTIFICATE-----
+        key: |
+          -----BEGIN EC PRIVATE KEY-----
+          MHcCAQEEIBNWKJI+2L6hGCXDV/TrRM6tScIOnXdTw34PdYkHDGvWoAoGCCqGSM49
+          AwEHoUQDQgAEkNerTENNxFLJjXN69IG3KKVEs8WnltT6sF/8bYRFh6aSdTnkGX0r
+          YOR3bgSoHM/ubBJdBgAy9tx/V0JEUyGL+Q==
+          -----END EC PRIVATE KEY-----
+  connector:
+    all:
+      certificate_authorities: |
+        -----BEGIN CERTIFICATE-----
+        MIIBejCCAR+gAwIBAgIUaHK2I0Xe6/vHPRQ+0dqdu7oyyOMwCgYIKoZIzj0EAwIw
+        EjEQMA4GA1UEAwwHdGVzdC1jYTAeFw0yNjA5MTcyMTE2MDlaFw0zNjA5MTQyMTE2
+        MDlaMBIxEDAOBgNVBAMMB3Rlc3QtY2EwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNC
+        AAQEow2uYI59sore7PhpCOzuabTetcnE2tB70F3k2fxNV0rJ4gg0DCWTwK4cvm8u
+        6Qi9dgjgS+UOZ29H5i+EVqizo1MwUTAdBgNVHQ4EFgQUxajYsVl2EVMg/fkdOuDq
+        qgJN1dUwHwYDVR0jBBgwFoAUxajYsVl2EVMg/fkdOuDqqgJN1dUwDwYDVR0TAQH/
+        BAUwAwEB/zAKBggqhkjOPQQDAgNJADBGAiEA8U1nJZN7AFTzIeqiAvmpLxs3xjJB
+        /X+qmx9q3+/mZFICIQDiqM8B2pkeJoGE8i00otHCvwM0FapznuvmrvTxsKeUaw==
+        -----END CERTIFICATE-----
+      client_authentication:
+        certificate_chain: |
+          -----BEGIN CERTIFICATE-----
+          MIIDKTCCAhGgAwIBAgIUWshZyYXH2HPpXst9rNOynm/5sHIwDQYJKoZIhvcNAQEL
+          BQAwJDEiMCAGA1UEAwwZY29ubmVjdG9yLWNsaWVudC1yc2EudGVzdDAeFw0yNjA5
+          MTcyMTE2MDlaFw0zNjA5MTQyMTE2MDlaMCQxIjAgBgNVBAMMGWNvbm5lY3Rvci1j
+          bGllbnQtcnNhLnRlc3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDS
+          Iz3iTkGerQY7bDUhQ+TyocvnDSrqRewHt/GkhHWCLMde5DEd38XWRlGt5sQdZ3pN
+          Ml8zf9DlipyPY0lYRalXrSz9XaQ1sl+DU/VFoMJStOXVr/qyl9F+3nnqwHC+MeLQ
+          ClGls2kutmFaysXyPbJ0JlP01rRg8dKPk5Up7ISqOvCN57c4kpaX8R5vaf0dLazY
+          amqURNLZCQQqMPBe8RsrsDpzBQTblZmXXfF5GHDS6y9j4qJfVa4YJU6MFQA7Rcqh
+          YlX31yDubH0gBhRhVn9f9S0LSpV6gaqi26xwttV9WkJ+/JxLxSFf2P80SpzTRqoZ
+          e3shdRRQJVUJJoihmxupAgMBAAGjUzBRMB0GA1UdDgQWBBS/hLJ5Eyt6+AF2YfoS
+          jVRHgoozGDAfBgNVHSMEGDAWgBS/hLJ5Eyt6+AF2YfoSjVRHgoozGDAPBgNVHRMB
+          Af8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQBv+obfD5+Dr2+A9imusPzdarAB
+          U3xLglXiC7/4P92pEOu3mYK4fSs81z20dGAAMpa+vpqbh0AQ85wKlj3nV0ZcXE93
+          EKgKahtkVxeszmrus1xHX3wZ4q7kRCDDIM8USN8Y7VlZ/4sJd6zSPnAAnj882L2W
+          AuoYhZocX6ELz3eeb0I63iuOH3UCLBjFrXhn4I+W9QrXD5JXcNwIzOzi8/5MlfV6
+          ppKzRqCUZWyHW6YeyyKJlzvtwQPjaOCqSU1ULLkEtiSTewOYzKHmwwStP/ukHepn
+          lcHlpAqPV67AwYIhrfrVN0AGcbY/o3NqqpMxQyroNWipS3jRSfmpdv/evolz
+          -----END CERTIFICATE-----
+        key: |
+          -----BEGIN PRIVATE KEY-----
+          MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSIz3iTkGerQY7
+          bDUhQ+TyocvnDSrqRewHt/GkhHWCLMde5DEd38XWRlGt5sQdZ3pNMl8zf9DlipyP
+          Y0lYRalXrSz9XaQ1sl+DU/VFoMJStOXVr/qyl9F+3nnqwHC+MeLQClGls2kutmFa
+          ysXyPbJ0JlP01rRg8dKPk5Up7ISqOvCN57c4kpaX8R5vaf0dLazYamqURNLZCQQq
+          MPBe8RsrsDpzBQTblZmXXfF5GHDS6y9j4qJfVa4YJU6MFQA7RcqhYlX31yDubH0g
+          BhRhVn9f9S0LSpV6gaqi26xwttV9WkJ+/JxLxSFf2P80SpzTRqoZe3shdRRQJVUJ
+          JoihmxupAgMBAAECggEAARch+Rzdn2JHq46MJ+2GDSy/3V0HM+/HILY5o5Hj0NYP
+          kAHUD+p6wiBMkNEHR9TP2UGLv0xWQvW3lxmUVEpAlA16hwq7Tie5FDO2bquMxC4D
+          kPzYIhzAVt/YiS+wW/CvzzExDGGnB/mtgboWvoDt1c/nEU3wiEicaJz2K59HFR1m
+          jaUwwW87airt+vtQATJKuz8Koft66OxngDzyKNsDaoazL7xRQMylhonNWjSKxyWX
+          Z+qNSj1aqIwT9JqwNh4tAHtePDcG05mxz5fsAIsfBfj0dH7ohOzYgj//FwOxNBaZ
+          jkCYiybWxHlB1zHcJkqAkiY4uzxTwU8NtbnvOVWN0QKBgQDuOvAFgBgTILHXbiRD
+          xFK6uFubSZKc8UKGChM64ikYWoTNlZpUZzRJ14u7sJ+YnveRj3dfI0qxNfWqwlLY
+          GFk5YZR5jpUK1Bl4QduUYUgBB2MwXMDeC8vF9E5ggjYTBR8ns+FZCTFhm5bzb+LQ
+          UtGc/QzdsgbDjj/Y5Te4/825eQKBgQDhz967SAe/eKtTfj6WvgrCfmFlf1h8zhZp
+          EKRQQH7CNwG49cE4kBviK4pMaX17EdDcEA+XLe6e7n4H1nKt7nmsY3qJcfm9wKYC
+          D2GqZ0Mb1soQN37r1ZiaJoCYIHpiidgdS3wgrStwVeIqJEaRApRViWUMy7m6pQtu
+          cRmwlVQXsQKBgDENJZqcU1is5LFM1l61r6sOhp4kufFio6XhsS/wnTGMgceqxAoY
+          7eU+YmEU7ueH48Wu2o9WPuzaBWlRdalU6hosg1u8Begi39OpC8MzfJXppXyxvGx7
+          1Us/EFxCs0ubRFzyZrXkdKx6Usxw/yyRwOMoH1wOaeIeCftoxt5qnTtRAoGBALCf
+          g+re+1hzjSaAX3pO6WGZsprOEauFExhY8PzohX1pwwomB10zsuuj/Mep14E0vTXz
+          xg4M2lEr4B5HSWnsVvVU1hq9sIcQMYj4+P5tSJt01JX8omTarEMejITxGmkKwqSf
+          T1bLvGdgdcdammuAJgAFuKlajEqGH7vh8SMimiTxAoGACmGHDjJYpo3T96tWKdnI
+          +siehYnmor/REYg9EltyOxArEAoI36IPPbEHPjoQ6Jsgdj23zJoS0uT0KiyIPhgT
+          6zgfz1Vku48KYz6SpWBM/h2Xz1vHJScMJ3ew5HxcI6Tv7ZDBWjcDl1gYP0zQg7P6
+          ic59xt48D7gxE4OX5/PdJ0A=
+          -----END PRIVATE KEY-----
+
+# Subgraph urls redaction tests - connector base URL, adjacent to
+# a distinct field (name) that must survive.
+connectors:
+  sources:
+    accounts.api:
+      $config: {}

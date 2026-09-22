@@ -66,7 +66,9 @@ That schema is collected whenever the customer sets `.Values.supergraphFile` —
 - The second pattern anchors on `baseURL` directly to reach Apollo Connectors' external API addresses (`@source(http: { baseURL: … })`, nested inside `@join__directive`) — a connector base URL is usually third-party, making it the disclosure most likely to name a business relationship.
 - Managed-federation customers are unaffected: their schema comes from Uplink at runtime and never lands in a ConfigMap.
 
-**Required before this is considered done:** collect with (a) `override_subgraph_url` set for two subgraphs, one quoted and one not, followed by a top-level key, (b) a `supergraphFile` schema carrying `@join__graph` URLs and a connector `baseURL`, and (c) a `@link` directive. Confirm every address is masked, the key after the block is intact rather than swallowed, and subgraph names and the `@link` URL survive.
+**Required before this is considered done:** collect with (a) `override_subgraph_url` set for two subgraphs, one quoted and one not, followed by a top-level key, (b) a `supergraphFile` schema carrying `@join__graph` URLs and a connector `baseURL`, and (c) a `@link` directive. Confirm every address is masked, and subgraph names and the `@link` URL survive.
+
+The key after the block is deliberately not asserted as surviving — see `overview.md` → [A built-in redactor can over-redact past a masked URL](overview.md#a-built-in-redactor-can-over-redact-past-a-masked-url).
 
 ## What's deliberately left visible
 

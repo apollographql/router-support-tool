@@ -143,11 +143,12 @@ jobs:
         run: |
           support-bundle lint --format json rendered-spec.local.yaml rendered-spec.job.yaml
 
-  # Catches a name-controlled collector's name changing, or a collector being added/removed,
-  # without specs/collection/collector_naming.md's name table (and the checked-in baseline)
-  # being updated in the same PR. See mise-tasks/check-collector-names.
-  collector_naming_check:
-    name: "Collector Naming Baseline"
+  # Catches a collector or redactor being renamed, added, or removed without the checked-in
+  # baseline being updated in the same PR. Not a naming-convention check - see
+  # mise-tasks/check-spec-inventory for why collectors and redactors are tracked together
+  # despite specs/collection/collector_naming.md only governing collector names.
+  spec_inventory_check:
+    name: "Spec Inventory Baseline"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -156,5 +157,5 @@ jobs:
       - name: Install mise tools
         uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
 
-      - name: Check collector/redactor names against the baseline
-        run: mise run check-collector-names
+      - name: Check collector/redactor inventory against the baseline
+        run: mise run check-spec-inventory

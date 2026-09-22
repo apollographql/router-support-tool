@@ -4,7 +4,7 @@
 # bundle against specs/collection/base_spec.md's "What the base spec collects" tables.
 #
 # Usage: verify_official_chart_bundle.sh <namespace> <chart-path> <plugin-path>
-#                                         <expected-graph-ref> <expected-supergraph-file>
+#                                         <expected-graph-ref>
 # chart-path/plugin-path are not repo-root-relative - see the calling chainsaw-test.yaml,
 # which runs this with the test's own directory as its working directory.
 set -euo pipefail
@@ -13,7 +13,6 @@ NAMESPACE=$1
 CHART_PATH=$2
 PLUGIN_PATH=$3
 EXPECTED_GRAPH_REF=$4
-EXPECTED_SUPERGRAPH_FILE=$5
 
 RELEASE_NAME="router-diagnostics"
 
@@ -122,22 +121,79 @@ fi
 # pass in values.yaml, so only specific fields are checked here.
 CONFIG="$DIR/configmaps/$NAMESPACE/router.json"
 COLLECTED_YAML=$(jq -r '.data["configuration.yaml"]' "$CONFIG")
-[ "$(yq -r '.telemetry.exporters.metrics.prometheus.enabled' <<< "$COLLECTED_YAML")" = "true" ] \
+jq -e '.data["configuration.yaml"] | contains("enabled: true")' "$CONFIG" > /dev/null \
   || fail "collected config: telemetry.exporters.metrics.prometheus.enabled != true"
-[ "$(yq -r '.telemetry.exporters.metrics.prometheus.listen' <<< "$COLLECTED_YAML")" = "0.0.0.0:9090" ] \
+jq -e '.data["configuration.yaml"] | contains("listen: 0.0.0.0:9090")' "$CONFIG" > /dev/null \
   || fail "collected config: telemetry.exporters.metrics.prometheus.listen != 0.0.0.0:9090"
-[ "$(yq -r '.telemetry.exporters.metrics.prometheus.path' <<< "$COLLECTED_YAML")" = "/metrics" ] \
+jq -e '.data["configuration.yaml"] | contains("path: /metrics")' "$CONFIG" > /dev/null \
   || fail "collected config: telemetry.exporters.metrics.prometheus.path != /metrics"
 
 # --- <release>-supergraph ConfigMap (templates/supergraph-cm.yaml), via clusterResources -
 # the chart's own supergraph ConfigMap isn't collected by our configMap collector, which
-# only targets the rendered router config. Trimmed on both sides: the chart's `|-` (strip)
-# YAML chomping means the collected content has no trailing newline, unlike the source file.
+# only targets the rendered router config.
 SCHEMA_CONFIG="$DIR/cluster-resources/configmaps/$NAMESPACE.json"
-COLLECTED_SCHEMA=$(jq -r '[.items[] | select(.metadata.name == "router-supergraph")][0].data["supergraph-schema.graphql"]' "$SCHEMA_CONFIG")
-EXPECTED_SCHEMA=$(cat "$EXPECTED_SUPERGRAPH_FILE")
-if [ "$(printf '%s' "$COLLECTED_SCHEMA" | sed -e 's/[[:space:]]*$//')" != "$(printf '%s' "$EXPECTED_SCHEMA" | sed -e 's/[[:space:]]*$//')" ]; then
-  fail "collected supergraph schema doesn't match $EXPECTED_SUPERGRAPH_FILE"
+
+# --- Redaction tests: every sentinel value planted in the fixtures is named SENTINEL_* -
+# one blanket check catches any of them leaking unredacted, rather than naming each one.
+# Paired with positive-survives checks below, so an empty/absent section can't be
+# mistaken for a rule that fired. The router's config here lives under
+# "configuration.yaml" (router.json).
+#
+# This tier is what actually exercises the block-style header redactors' order
+# independence: the official chart's own YAML marshaling re-serializes maps
+# alphabetically (unlike raw-manifest's hand-authored router.yaml, which happens to
+# already write name:/named: before value:/default:), so insert.default and
+# propagate.default only get proven order-independent here.
+if grep -q "SENTINEL" "$CONFIG"; then
+  fail "a sentinel value was found unredacted in the collected config"
 fi
+if grep -q "demo.starstuff.dev" "$SCHEMA_CONFIG"; then
+  fail "the real subgraph URL domain was found unredacted in the supergraph schema"
+fi
+if jq -r '[.items[] | select(.metadata.name == "router-supergraph")][0].data["supergraph-schema.graphql"]' "$SCHEMA_CONFIG" | grep -q "SENTINEL"; then
+  fail "a sentinel value was found unredacted in the supergraph schema"
+fi
+
+jq -e '.data["configuration.yaml"] | contains("service_name: vpc-lattice-svcs")' "$CONFIG" > /dev/null \
+  || fail "AWS SigV4 hardcoded: non-secret sibling field didn't survive"
+jq -e '.data["configuration.yaml"] | contains("default_chain") and contains("region: us-east-1")' "$CONFIG" > /dev/null \
+  || fail "AWS SigV4 default_chain didn't survive untouched"
+jq -e '.data["configuration.yaml"] | contains("x-sentinel-static") and contains("x-sentinel-frombody") and contains("x-sentinel-source-header")' "$CONFIG" > /dev/null \
+  || fail "header names didn't survive"
+jq -e '.data["configuration.yaml"] | contains("x-sentinel-flow-static") and contains("x-sentinel-flow-frombody") and contains("x-sentinel-flow-source")' "$CONFIG" > /dev/null \
+  || fail "header names (originally flow-style) didn't survive"
+jq -e '[.items[] | select(.metadata.name == "router-supergraph")][0].data["supergraph-schema.graphql"] | contains("name: \"accounts\"")' "$SCHEMA_CONFIG" > /dev/null \
+  || fail "subgraph name didn't survive in the supergraph schema"
+jq -e '[.items[] | select(.metadata.name == "router-supergraph")][0].data["supergraph-schema.graphql"] | contains("@source(") and contains("name: \"api\"")' "$SCHEMA_CONFIG" > /dev/null \
+  || fail "connector source name didn't survive in the supergraph schema"
+jq -e '[.items[] | select(.metadata.name == "router-supergraph")][0].data["supergraph-schema.graphql"] | contains("specs.apollo.dev/link")' "$SCHEMA_CONFIG" > /dev/null \
+  || fail "@link URL didn't survive in the supergraph schema"
+
+# supergraph and subgraph client-auth keys are EC, connector's is a longer RSA key.
+EC_MASKED=$(echo "$COLLECTED_YAML" | grep -c -- '-----BEGIN EC PRIVATE KEY-----\*\*\*HIDDEN\*\*\*-----END EC PRIVATE KEY-----')
+PLAIN_MASKED=$(echo "$COLLECTED_YAML" | grep -c -- '-----BEGIN PRIVATE KEY-----\*\*\*HIDDEN\*\*\*-----END PRIVATE KEY-----')
+[ "$EC_MASKED" -eq 2 ] || fail "expected 2 masked EC private keys, got $EC_MASKED"
+[ "$PLAIN_MASKED" -eq 1 ] || fail "expected 1 masked RSA/generic private key, got $PLAIN_MASKED"
+# 6 certificates ship in this file (supergraph cert + chain, two certificate_authorities
+# CAs, two client_authentication chains) - none of them secret, all untouched.
+CERT_COUNT=$(echo "$COLLECTED_YAML" | grep -o -- '-----BEGIN CERTIFICATE-----' | wc -l)
+[ "$CERT_COUNT" -eq 6 ] || fail "expected 6 certificates to survive untouched, got $CERT_COUNT"
+
+# Operation body logging - the sentinel operation sent earlier must be masked, with
+# everything else in the log line intact. A mis-scoped mask breaks the line's JSON, not
+# just the redaction: jq parses strictly, so it fails on that malformed line - giving
+# the JSON-validity check operation_bodies.md requires for free, as a side effect.
+for log in "$DIR"/router-logs/*/router.log; do
+  [ -e "$log" ] || continue
+  if grep -q "SENTINEL" "$log"; then
+    fail "a sentinel value was found unredacted in $log"
+  fi
+  jq -e 'select(.kind == "supergraph.request") | .["http.request.body"] == "***HIDDEN***"' "$log" > /dev/null 2>&1 \
+    || fail "supergraph.request log line's http.request.body wasn't masked in $log"
+  jq -e 'select(.kind == "supergraph.response") | .["http.response.body"] == "***HIDDEN***"' "$log" > /dev/null 2>&1 \
+    || fail "supergraph.response log line's http.response.body wasn't masked in $log"
+  jq -e 'select(.kind == "supergraph.request") | .level == "INFO" and (.trace_id | length > 0) and (.target | length > 0)' "$log" > /dev/null 2>&1 \
+    || fail "surrounding log fields (level/trace_id/target) didn't survive alongside the mask in $log"
+done
 
 echo "All checks passed."

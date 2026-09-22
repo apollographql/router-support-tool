@@ -1,0 +1,87 @@
+[
+  {
+    "kind": "collector",
+    "type": "clusterResources",
+    "name": "cluster-resources"
+  },
+  {
+    "kind": "collector",
+    "type": "configMap",
+    "name": "router-config-rendered"
+  },
+  {
+    "kind": "collector",
+    "type": "data",
+    "name": "meta.json"
+  },
+  {
+    "kind": "collector",
+    "type": "http",
+    "name": "router-metrics"
+  },
+  {
+    "kind": "collector",
+    "type": "logs",
+    "name": "router-logs"
+  },
+  {
+    "kind": "collector",
+    "type": "nodeMetrics",
+    "name": "router-resource-usage"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
+    "name": "router-headers-insert-literal-values"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
+    "name": "router-headers-propagate-default"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
+    "name": "router-jwt-jwks-fetch-headers"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
+    "name": "router-log-request-body"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
+    "name": "router-log-response-body"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
+    "name": "router-redis-url-embedded-credentials"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
+    "name": "router-redis-username-password"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
+    "name": "router-subgraph-aws-sigv4-hardcoded"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
+    "name": "router-subgraph-url"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
+    "name": "router-subgraph-url-schema"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
+    "name": "router-tls-private-keys"
+  }
+]
