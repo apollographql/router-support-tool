@@ -1,5 +1,9 @@
 set -eu
-support-bundle --load-cluster-specs --namespace {{ .Values.namespace }}
+# --auto-update=false: support-bundle's root command self-updates by default (checks
+# GitHub's latest release and replaces its own binary), which would silently override
+# the version this image pins - see specs/deployment/v1/v1.md -> troubleshoot.sh
+# support-bundle version.
+support-bundle --load-cluster-specs --namespace {{ .Values.namespace }} --auto-update=false
 PROVIDER="${1:-}"
 if [ -n "$PROVIDER" ]; then
   BUNDLE=$(ls -t support-bundle-*.tar.gz | head -n1)

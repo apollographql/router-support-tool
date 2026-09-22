@@ -33,12 +33,12 @@ logs:
 # -- mode: job only
 job:
   image:
-    # -- Required for mode: job. The image bundling the support-bundle binary Apollo
-    # publishes and pins the troubleshoot.sh version by tag — see
-    # specs/deployment/v1/v1.md -> troubleshoot.sh support-bundle version. Not yet
-    # published; set this to a real image before installing with mode: job.
-    repository: ""
-    tag: ""
+    # -- The image bundling the support-bundle binary Apollo publishes and pins the
+    # troubleshoot.sh version by tag — see specs/deployment/v1/v1.md -> Prerequisite: the
+    # collection binary for mode: job. Defaults to Apollo's published image; override only to
+    # pin an older version or point at a private mirror.
+    repository: "apollograph/router-diagnostics"
+    tag: "v0.134.1"
     pullPolicy: IfNotPresent
   # -- Optional. Set false to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding
   # that grants the nodeMetrics collector its nodes/nodes-proxy/nodes-stats access and to

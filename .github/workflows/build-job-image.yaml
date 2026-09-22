@@ -1,0 +1,24 @@
+name: Build Job Image
+
+# Builds the router-diagnostics Job image and pushes it to Apollo's private registry.
+# Runs on every PR/push unconditionally (no path filter)
+on:
+  pull_request: {}
+  push:
+    branches:
+      - main
+
+jobs:
+  build_job_image:
+    name: "Build router-diagnostics Job image"
+    permissions:
+      contents: read
+      id-token: write
+    uses: apollographql/release-tooling/.github/workflows/build_and_publish.yml@6ab89bdcf9cd1a86ecaa85925b75e003405e5edc
+    with:
+      image_name: router-diagnostics
+      image_description: "Collection binary and object-storage upload tooling for router-diagnostics's mode: job"
+      platforms: '[{"platform":"linux/amd64","runner":"ubuntu-latest"},{"platform":"linux/arm64","runner":"ubuntu-24.04-arm"}]'
+      context: router-diagnostics-job-image
+      dockerfile_location: router-diagnostics-job-image/Dockerfile
+    secrets: inherit

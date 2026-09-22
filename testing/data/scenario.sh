@@ -26,8 +26,8 @@ helm install router-diagnostics "$CHART_DIR" \
   --set namespace="$NAMESPACE" \
   --set mode=job \
   --set selector=app=router \
-  --set job.image.repository=us-central1-docker.pkg.dev/platform-cross-environment/apollo-private-docker/router-support-tool/router-diagnostics-test \
-  --set job.image.tag=v0.134.0 \
+  --set job.image.repository=us-central1-docker.pkg.dev/platform-cross-environment/apollo-private-docker/router-diagnostics \
+  --set job.image.tag=edge \
   --set job.image.pullPolicy=IfNotPresent \
   --set job.collectNodeMetrics=false \
   --set job.storage.provider=url \

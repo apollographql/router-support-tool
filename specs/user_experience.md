@@ -104,7 +104,7 @@ Since none of the official chart's conventions apply to your deployment, supply 
 ./collect.sh --namespace production
 ```
 
-`collect.sh` takes the same values you passed to `helm install` directly rather than reading them back from the release, so it has no dependency on Helm at all. **If you're on a raw-manifest or custom deployment**, pass the same `selector` (and `metricsPort`, if you set one) here too:
+`collect.sh` takes the same values you passed to `helm install`. **If you're on a raw-manifest or custom deployment**, pass the same `selector` (and `metricsPort`, if you set one) here too:
 
 ```bash
 ./collect.sh --namespace production --selector "app=my-router"
