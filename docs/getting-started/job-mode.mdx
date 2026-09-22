@@ -52,11 +52,11 @@ The Job runs immediately on install and uploads the bundle as soon as collection
 
 ## Choosing a storage destination
 
-The example above uploads to S3 using IRSA with no credentials to store or rotate. `job.storage` also supports GCS (Workload Identity), an S3-compatible store (MinIO, Ceph RGW, and similar, via `job.storage.s3.endpoint`), or a bare HTTP(S) endpoint (`provider: url`) for a receiver that isn't S3 or GCS at all. See [job-mode-details](../job-mode-details) for the full set of `job.storage` values and credential options.
+The example above uploads to S3 using IRSA with no credentials to store or rotate. `job.storage` also supports GCS (Workload Identity), an S3-compatible store (MinIO, Ceph RGW, and similar, via `job.storage.s3.endpoint`), or a bare HTTP(S) endpoint (`provider: url`) for a receiver that isn't S3 or GCS at all. See [Support bundle storage and retrieval](../bundle-storage) for the full set of `job.storage` values, credential options, and worked examples per provider.
 
 ## Retrieving the bundle
 
-Once the Job completes, the configured destination has the bundle. Retrieve it the way you'd retrieve anything else from that bucket or endpoint (e.g. `aws s3 cp` for S3). This tool doesn't manage retention on the destination.
+Once the Job completes, the configured destination has the bundle. Retrieve it the way you'd retrieve anything else from that bucket or endpoint (e.g. `aws s3 cp` for S3) — see [Support bundle storage and retrieval → Retrieval](../bundle-storage#retrieval) for specifics per provider. This tool doesn't manage retention on the destination.
 
 ## Service mesh environments
 
