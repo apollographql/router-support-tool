@@ -155,7 +155,7 @@ Sensitive data is redacted automatically before the output bundle is created —
 The metrics collector targets port `9090` by default. You can override this default via the chart's `metricsPort` value, see below. Two settings in your `router.yaml` need to be in place for it to collect anything:
 
 - `telemetry.exporters.metrics.prometheus.enabled: true` — turns the exporter on.
-- `telemetry.exporters.metrics.prometheus.listen` — the `host:port` the exporter binds to. The host must be reachable from outside the router container — binding to loopback won't work even with the exporter enabled. On the official chart, the port must also stay `9090`, as the collector targets that port specifically and has no way to discover a different one there. Changing it (for example to avoid a conflict with another workload) makes this section empty the same way an unreachable host would.
+- `telemetry.exporters.metrics.prometheus.listen` — the `host:port` the exporter binds to. The host must be reachable from outside the router container — binding to loopback won't work even with the exporter enabled. If you change the port, set the chart's `metricsPort` to match. Leaving `metricsPort` unset while the exporter binds to a non-default port makes this section empty the same way an unreachable host would.
 
 Note that the **router chart's** `serviceMonitor.enabled` value (not `router-diagnostics`) is a *different* switch. It exposes the metrics port on the Service and renders a ServiceMonitor for your own Prometheus, but it does not enable the exporter — the two settings above are what do that. You can have one without the other.
 
