@@ -1,0 +1,53 @@
+---
+title: Collecting Metrics
+subtitle: Prometheus prerequisites, per-mode mechanics, and service mesh caveats
+description: What has to be true for the Router Support Tool to collect a Prometheus metrics snapshot, how mode local and mode job each reach the metrics port, and what a service mesh changes.
+---
+
+import NodeMetricsRBAC from './resources/nodemetrics-rbac.mdx';
+
+A full Prometheus metrics snapshot is one of the signals the base spec collects, via the [`http` collector](https://troubleshoot.sh/docs/collect/http). This page covers everything specific to getting that collector to return metrics: what has to be true on the router's side, how each mode reaches the port, and what changes if you're running a service mesh.
+See [Data Collected](./data-collected) for how this fits alongside everything else the tool gathers. 
+
+## Prerequisites on the router's side
+
+Three settings need to be in place:
+
+- **`telemetry.exporters.metrics.prometheus.enabled: true`** in `router.yaml` — turns the exporter on.
+- **`telemetry.exporters.metrics.prometheus.listen`** in `router.yaml` — the bind address. Binding to loopback means an external scrape can't reach it no matter what port the collector targets.
+- **`serviceMonitor.enabled: true`** on the **router's** Helm chart — adds a `metrics` port to the Service. Without it, the Service has no `metrics` port at all, regardless of whether the exporter itself is on and reachable.
+
+If any of the three is off or misconfigured, this section of the bundle comes back empty and the rest of the bundle is unaffected.
+
+## Raw-manifest or custom deployments
+
+If you're on a raw-manifest or custom deployment, this collector also needs `selector` set. The mechanics differ by mode:
+
+### `mode: job`
+
+`selector` is what the collector resolves its target host from directly. Left unset, it falls back to the official chart's `app.kubernetes.io/name=router` label, which may find nothing for a raw manifest. You can also override the `metricsPort` from its default of `9090`.
+
+### `mode: local`
+
+The collector always targets `localhost:<metricsPort>`, on the assumption that something is already port-forwarding there. `helm router-diagnostics collect` sets that up for you:
+
+1. It resolves the router's Service from the values you installed the chart with — your `selector`, falling back to the official chart's `app.kubernetes.io/name=router` label if you didn't set one.
+2. It starts `kubectl port-forward svc/<resolved-service> <metricsPort>:<metricsPort>` (default `9090:9090`) in the background and waits for it to accept connections.
+3. It tears the port-forward down on exit — success, failure, or interrupt — once collection finishes.
+
+This needs `create` on the `pods/portforward` subresource in the router's namespace. Declining that doesn't fail collection, but we will be unable to collect metrics.
+
+This bridging step is **not** needed under `mode: job`. The Job's pod runs inside the cluster so the Service DNS name resolves normally there. If you run `support-bundle` directly, bypassing the plugin, you'd need to set up that port-forward yourself.
+
+## If Prometheus isn't set up yet
+
+The `nodeMetrics` collector (via the kubelet Summary API) gets you container-level memory and CPU usage over time without touching the router at all — but it costs three cluster-scoped RBAC grants that enabling Prometheus doesn't. It exists for the case where you haven't configured the exporter yet and is not recommended long term. See [Data Collected → Memory and CPU information collected](./data-collected#memory-and-cpu-information-collected) for the full signal breakdown.
+
+<NodeMetricsRBAC />
+
+## Running a service mesh?
+
+Neither `mode: local` (your own machine) nor an un-injected `mode: job` Job pod is inside the mesh. `logs`, `clusterResources`, `nodeMetrics`, and `configMap` all reach their data through the Kubernetes API server or the kubelet, which the mesh doesn't sit in front of, so running outside it doesn't affect them. The Prometheus scrape is the one collector that talks directly to a router port and a mesh enforcing strict mTLS will reject it from a pod outside the mesh.
+To remedy this, exempt the metrics port from mTLS. For Istio, `PeerAuthentication: PERMISSIVE` scoped to that port, or the `traffic.sidecar.istio.io/excludeInboundPorts` annotation. For Linkerd, `config.linkerd.io/skip-inbound-ports`. This is guidance you apply once to the router deployment, not a setting on this tool's chart.
+
+If you're running `mode: job` in a mesh, also see [Job Mode → Service mesh environments](./getting-started/job-mode#service-mesh-environments), the mesh sidecar itself can keep the Job's pod from ever reaching `Completed`, which is a separate problem from whether the scrape succeeds.

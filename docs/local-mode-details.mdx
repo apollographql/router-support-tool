@@ -4,6 +4,8 @@ subtitle: Full chart values, plugin mechanics, and permissions for mode: local
 description: Complete reference for running the Router Support Tool as mode local — every chart value, what the router-diagnostics plugin does, and exactly what RBAC it needs.
 ---
 
+import ChartValuesCommon from './resources/chart-values-common.mdx';
+
 This page is the complete reference for `mode: local`. For the shortest path to a first bundle, see [Local Mode](./getting-started/local-mode) in the Getting Started guide instead — this page fills in everything that guide left out.
 
 ## The `router-diagnostics` plugin
@@ -18,35 +20,19 @@ This adds the `helm router-diagnostics collect` subcommand, which does two thing
 
 **1. Installs a pinned `support-bundle` binary, private to the plugin.** `helm plugin install` downloads a specific troubleshoot.sh release into the plugin's own directory for `collect` to use. Apollo controls this version — the same reproducibility guarantee `mode: job`'s image tag gives on that path. See [Data Collected](./data-collected) for the version this documentation assumes.
 
-**2. Bridges your machine to the router's metrics port, if reachable.** The router's metrics port is only reachable through its in-cluster Service DNS name (`<service>.<namespace>.svc.cluster.local`), which doesn't resolve from the invoking user's own machine — so without this, the `router-metrics` collector (which targets `localhost:<metricsPort>` under `mode: local`) fails with a connection error. `collect` does this by:
-
-- Reading the installed `router-diagnostics` release's `namespace` and `selector` values to resolve the router's Service — falling back to the official chart's `app.kubernetes.io/name=router` label when `selector` is unset, so this covers raw-manifest / custom deployments too.
-- Starting `kubectl port-forward svc/<resolved-service> <metricsPort>:<metricsPort>` (default `9090:9090`) in the background and waiting for it to accept connections.
-- Tearing it down on exit — success, failure, or interrupt — once collection finishes.
-
-If this bridging step fails, the result is a connection error for that one collector; `nodeMetrics` remains available as a fallback for container-level memory/CPU signal regardless. See [Data Collected](./data-collected#prometheus-metrics-prerequisites) for what has to be true on the router's side for there to be a metrics endpoint to reach at all.
-
-This bridging step is **not** needed under `mode: job` — the Job's pod runs inside the cluster, so the Service DNS name resolves normally there.
+**2. Bridges your machine to the router's metrics port, if reachable.** The router's metrics port is only reachable through its in-cluster Service DNS name, which doesn't resolve from the invoking user's own machine — so without this, the metrics collector fails with a connection error. See [Collecting Metrics](./collecting-metrics#mode-local) for exactly what this bridging step does and the permission it needs.
 
 ## Chart values common to both modes
 
-Every value below applies to `mode: local` — they're shared with `mode: job` (see [job-mode-details](./job-mode-details) if you're also running that mode elsewhere), since both modes render the same spec from the same values. `mode: local` has no values of its own beyond these; `job.*` values exist in the chart but only render anything under `mode: job`.
+`mode: local` has no values of its own beyond these — `job.*` values exist in the chart but only render anything under `mode: job` (see [job-mode-details](./job-mode-details) if you're also running that mode elsewhere).
 
-| Value | Required | Default | Applies to | Purpose |
-| --- | --- | --- | --- | --- |
-| `namespace` | Yes | — | Official chart, raw manifest / custom | The router's namespace. Rendered into every collector that accepts it, including `clusterResources.namespaces` as a single-element list. Never rely on the kubectl context's default namespace — it isn't used. |
-| `mode` | Yes | — | Official chart, raw manifest / custom | Set to `local` |
-| `selector` | Raw-manifest tier only | The official chart's `app.kubernetes.io/name=router` label | Raw manifests / custom | Pod label selector, e.g. `app=my-router`. Also what `helm router-diagnostics collect` resolves the metrics Service from when set. |
-| `configMapName` | Raw-manifest tier only | Label-based targeting, no name needed | Raw manifests / custom | Name of the ConfigMap holding the router's rendered config |
-| `metricsPort` | No | `9090` | Official chart, raw manifest / custom | Port the router's metrics endpoint is reachable on, if not `9090`. Under `mode: local`, either deployment tier can override it. |
-| `logs.maxAge` | No | Unset — no age cap | Official chart, raw manifest / custom | Maps to the `logs` collector's `limits.maxAge`. How far back to reach, e.g. `2h` |
-| `logs.maxLines` | No | `10000` (troubleshoot.sh default) | Official chart, raw manifest / custom | Maps to `limits.maxLines`. Lines kept, newest per container |
+<ChartValuesCommon />
 
 ## Permissions
 
 Installing the chart requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself.
 
-Running `helm router-diagnostics collect` uses **your own existing kubectl credentials**; no additional ServiceAccount is created for this step. Reaching `router-metrics` additionally needs `create` on the `pods/portforward` subresource in the router's namespace — port-forwarding to a Service resolves to one of its pods under the hood. Declining this doesn't fail collection; it only means `router-metrics` comes back empty.
+Running `helm router-diagnostics collect` uses **your own existing kubectl credentials**; no additional ServiceAccount is created for this step. Reaching the metrics collector additionally needs `create` on the `pods/portforward` subresource in the router's namespace — see [Collecting Metrics](./collecting-metrics#mode-local) for why. Declining this doesn't fail collection; it only means that section comes back empty.
 
 **`pods/exec` is not required** — nothing this tool does runs inside your router container.
 

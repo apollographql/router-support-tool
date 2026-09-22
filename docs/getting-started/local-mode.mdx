@@ -4,13 +4,11 @@ subtitle: Running the tool locally (mode: local)
 description: Install the router-diagnostics plugin and chart, then collect a support bundle using your own kubectl access.
 ---
 
-Use `mode: local` when you have kubectl access to production yourself. Collection runs on your own machine, using your own credentials — nothing runs in-cluster except the spec ConfigMap the chart installs.
-
-Getting started takes three steps: install the plugin, install the chart, and run the collection.
+Use `mode: local` when you have kubectl access to production yourself. Collection runs on your own machine, using your own credentials.
 
 ## Step 1: Install the `router-diagnostics` Helm plugin
 
-Install this once, on the machine you'll collect from:
+Install this once on the machine you'll collect from:
 
 ```bash
 helm plugin install https://github.com/apollographql/router-diagnostics-helm-plugin
@@ -18,20 +16,8 @@ helm plugin install https://github.com/apollographql/router-diagnostics-helm-plu
 
 This gives you a single `helm router-diagnostics collect` command. It also does two things for you automatically:
 
-- Installs a pinned `support-bundle` binary, private to the plugin — Apollo controls this version, so results are reproducible across machines.
-- Bridges your machine to the router's metrics port, if enabled.
-
-### Why metrics need bridging under `mode: local`
-
-The router's metrics port is only reachable through its in-cluster Service DNS name, which doesn't resolve from your own machine — so without help, the metrics collector fails with a connection error. `helm router-diagnostics collect` bridges this for you:
-
-1. It resolves the router's Service from the values you installed the chart with — your `selector`, falling back to the official chart's `app.kubernetes.io/name=router` label if you didn't set one.
-2. It starts `kubectl port-forward svc/<resolved-service> <metricsPort>:<metricsPort>` (default `9090:9090`) in the background and waits for it to accept connections.
-3. It tears the port-forward down on exit, whether collection succeeded, failed, or was interrupted.
-
-This needs `create` on the `pods/portforward` subresource in the router's namespace. Declining that doesn't fail the collection — the metrics section just comes back empty.
-
-If the port-forward fails for another reason (the exporter isn't enabled, or it's bound to loopback instead of a reachable host — see [Data Collected](../data-collected#prometheus-metrics-prerequisites) for the full prerequisites), the result is the same empty section, and `nodeMetrics` remains available as a fallback for container-level memory/CPU signal regardless.
+- Installs a pinned version of [troubleshoot's `support-bundle` binary](https://troubleshoot.sh/docs/support-bundle/introduction), private to the plugin.
+- Bridges your machine to the router's metrics port, if enabled — see [Collecting Metrics](../collecting-metrics#mode-local) for exactly what this does, the permission it needs, and the full list of prerequisites for metrics to be collected at all.
 
 ## Step 2: Install the Helm chart
 
@@ -44,7 +30,7 @@ helm install router-diagnostics apollo/router-diagnostics \
   --set mode=local
 ```
 
-`namespace` is the only value you need to supply — the chart's collectors target your router by its standard `app.kubernetes.io/name=router` label.
+`namespace` is the only value you need to supply, the chart's collectors target your router by its standard `app.kubernetes.io/name=router` label.
 
 **If you're on a raw-manifest or custom deployment:**
 
@@ -58,6 +44,7 @@ helm install router-diagnostics apollo/router-diagnostics \
 ```
 
 Since none of the official chart's conventions apply to your deployment, supply your pod selector and ConfigMap name in addition to the namespace, so the chart's collectors know where to find your router and its configuration.
+Optionally, supply `metricsPort`if your metrics are not exposed via the default `9090`.
 
 ## Step 3: Collect a support bundle
 
@@ -69,11 +56,11 @@ Run it again any time you want another bundle.
 
 [TODO: screenshot of terminal output during collection]
 
-The bundle lands in your current directory as `support-bundle-<timestamp>.tar.gz`. From here it's yours — inspect it, keep it, or attach it to a support ticket.
+The bundle lands in your current directory as `support-bundle-<timestamp>.tar.gz`. Inspect it, keep it, or attach it to a support ticket.
 
 ## Cleaning up
 
-Installing the chart leaves a small footprint: the spec ConfigMap, plus Helm release metadata. If you'd rather leave nothing behind:
+Installing the chart leaves the spec ConfigMag plus Helm release metadata. If you'd rather leave nothing behind:
 
 ```bash
 helm uninstall router-diagnostics --namespace production

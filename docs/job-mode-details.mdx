@@ -4,27 +4,19 @@ subtitle: Full chart values, storage configuration, and RBAC for mode: job
 description: Complete reference for running the Router Support Tool as mode job — every chart value including storage, and exactly what RBAC the Job needs and why.
 ---
 
-This page is the complete reference for `mode: job`. For the shortest path to a first bundle, see [Job Mode](./getting-started/job-mode) in the Getting Started guide instead — this page fills in everything that guide left out.
+import ChartValuesCommon from './resources/chart-values-common.mdx';
+
+This page is the complete reference for `mode: job`.
 
 ## The Job image
 
-The `support-bundle` binary ships in the Job's container image, which Apollo owns and publishes (`job.image.repository`/`job.image.tag`). Apollo controls the troubleshoot.sh version this way, pinned by the image tag — the same reproducibility guarantee `mode: local`'s Helm plugin gives via its own pin. See [Data Collected](./data-collected) for the version this documentation assumes.
-
-The image also bundles `aws-cli` and `gcloud` alongside the `support-bundle` binary, since object storage uploads invoke those CLIs directly rather than a bespoke uploader — see [Storage](#storage-jobstorage) below.
+The image bundles a pinned version of troubleshoot's `support-bundle` binary as well as `aws-cli` and `gcloud` for bundle upload. See [Storage](#storage-jobstorage) below.
 
 ## Chart values
 
 ### Chart values common to both modes
 
-| Value | Required | Default | Applies to | Purpose |
-| --- | --- | --- | --- | --- |
-| `namespace` | Yes | — | Official chart, raw manifest / custom | The router's namespace. Rendered into every collector that accepts it, including `clusterResources.namespaces` as a single-element list. Never rely on the kubectl context's default namespace — it isn't used. |
-| `mode` | Yes | — | Official chart, raw manifest / custom | Set to `job` |
-| `selector` | Raw-manifest tier only | The official chart's `app.kubernetes.io/name=router` label | Raw manifests / custom | Pod label selector, e.g. `app=my-router`. Under `mode: job`, setting this also switches metrics host resolution to `selector` — this tier has no fixed label to resolve one from otherwise. See [Data Collected](./data-collected#prometheus-metrics-prerequisites). |
-| `configMapName` | Raw-manifest tier only | Label-based targeting, no name needed | Raw manifests / custom | Name of the ConfigMap holding the router's rendered config |
-| `metricsPort` | No | `9090` | Official chart, raw manifest / custom | Port the router's metrics endpoint is reachable on, if not `9090`. Under `mode: job`, only the raw-manifest tier can override it — the official chart's port stays fixed at `9090` regardless. |
-| `logs.maxAge` | No | Unset — no age cap | Official chart, raw manifest / custom | Maps to the `logs` collector's `limits.maxAge`. How far back to reach, e.g. `2h` |
-| `logs.maxLines` | No | `10000` (troubleshoot.sh default) | Official chart, raw manifest / custom | Maps to `limits.maxLines`. Lines kept, newest per container |
+<ChartValuesCommon />
 
 ### Chart values specific to `mode: job`
 
@@ -33,7 +25,7 @@ The image also bundles `aws-cli` and `gcloud` alongside the `support-bundle` bin
 | `job.image.repository` | Yes | — | The Job's container image, published by Apollo |
 | `job.image.tag` | Yes | — | Pins the troubleshoot.sh `support-bundle` version this Job runs — see [The Job image](#the-job-image) above |
 | `job.image.pullPolicy` | No | `IfNotPresent` | Standard Kubernetes image pull policy |
-| `job.collectNodeMetrics` | No | `true` | Set `false` to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding entirely and decline `nodeMetrics` data up front — see [`nodeMetrics` RBAC](#nodemetrics-rbac) below |
+| `job.collectNodeMetrics` | No | `true` | Set `false` to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding entirely and decline `nodeMetrics` data up front — see [Collecting Metrics → If Prometheus isn't set up yet](./collecting-metrics#if-prometheus-isnt-set-up-yet) |
 | `job.podAnnotations` | No | `{sidecar.istio.io/inject: "false", linkerd.io/inject: disabled}` | Annotations merged onto the Job's pod template — customer values win over these defaults. See [Job Mode → Service mesh environments](./getting-started/job-mode#service-mesh-environments) |
 | `job.podLabels` | No | `{}` | Arbitrary labels merged onto the Job's pod template |
 | `job.ttlSecondsAfterFinished` | No | `3600` | Maps to the Job's `ttlSecondsAfterFinished` — how long after completion Kubernetes automatically deletes the Job and its pod |
@@ -63,18 +55,18 @@ Storage only applies to `mode: job` — `mode: local` has no equivalent, since t
 
 #### Credentials
 
-Because uploads go through the provider's own CLI (`aws s3 cp` / `gcloud storage cp`), any credential source that CLI already knows how to resolve works:
+Bundle bundle uploads go through the provider's own CLI (`aws s3 cp` / `gcloud storage cp`), any credential source that CLI already knows how to resolve works:
 
-- **IRSA (AWS) / Workload Identity (GCP) — recommended.** No secrets to store or rotate. Requires setting `job.serviceAccount.annotations` with `eks.amazonaws.com/role-arn` or `iam.gke.io/gcp-service-account`. This is an annotation on the ServiceAccount, not a Kubernetes RBAC grant — the upload calls a cloud storage API, not the Kubernetes API server.
-- **Static credentials via a Secret** — for clusters without IRSA/Workload Identity (on-prem, or an S3-compatible store like MinIO/Ceph with no equivalent federation). Set `job.storage.existingSecret` to a Secret you create yourself, with `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` keys for `provider: s3` or a GCP service-account JSON key for `provider: gcs`. The chart mounts it into the Job's container; we never see or template the values themselves.
+- **IRSA (AWS) / Workload Identity (GCP) — recommended.** No secrets to store or rotate. Requires setting `job.serviceAccount.annotations` with `eks.amazonaws.com/role-arn` or `iam.gke.io/gcp-service-account`. This is an annotation on the ServiceAccount, not a Kubernetes RBAC grant.
+- **Static credentials via a Secret** — for clusters without IRSA/Workload Identity (on-prem, or an S3-compatible store like MinIO/Ceph with no equivalent federation). Set `job.storage.existingSecret` to a Secret you create yourself, with `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` keys for `provider: s3` or a GCP service-account JSON key for `provider: gcs`. The chart mounts it into the Job's container, we never see or template the values themselves.
 - **Static credentials via values — not recommended.** `job.storage.s3.accessKeyId`/`secretAccessKey` or `job.storage.gcs.credentialsJson` set directly. **The credential will be exposed** in shell history, `helm get values`, and git history if committed. Prefer the two paths above whenever you have any way to manage a Secret directly.
 
-`provider: url` doesn't fit any of the above — there's no cloud IAM identity for a bare endpoint. Whatever the endpoint needs (a bearer token, a signed-URL header) is supplied as an HTTP header, two ways, combinable:
+For `provider: url`, whatever the endpoint needs (a bearer token, a signed-URL header) is supplied as an HTTP header, two ways, combinable:
 
-- **Via `job.storage.existingSecret`** — a Secret you create with zero or more arbitrary keys; each key becomes a header name, its value the header's value. Mounted as a volume, not env vars, since header names aren't fixed.
+- **Via `job.storage.existingSecret`** — a Secret you create with zero or more arbitrary keys. Each key becomes a header name, its value the header's value. Mounted as a volume.
 - **Directly via `job.storage.url.headers`** — templated straight into the request, with the same exposure caveat as other static-values paths.
 
-Headers from both sources are sent together when both are set (`existingSecret` first, then `url.headers`); a header name appearing in both is sent twice.
+Headers from both sources are sent together when both are set (`existingSecret` first, then `url.headers`). A header name appearing in both is sent twice.
 
 #### Cloud IAM for storage
 
@@ -83,33 +75,19 @@ Whichever credential path you use, the minimum cloud permissions are the same:
 - **S3** — `s3:PutObject` scoped to `arn:aws:s3:::<bucket>/<prefix>*` (or the equivalent bucket policy for an S3-compatible store without IAM ARNs)
 - **GCS** — `storage.objects.create` on the bucket (the predefined `roles/storage.objectCreator` role covers this)
 
-Neither needs read, list, or delete on the bucket — the Job only ever writes one object per run. This section doesn't apply to `provider: url` — auth there is whatever the receiving endpoint enforces via headers.
-
-Retention on the destination is the bucket's problem; this tool doesn't build or operate one.
+Retention on the destination is governed by the bucket.
 
 ## Kubernetes RBAC
 
 Installing `mode: job` requires creating a Job, a namespace-scoped ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
 
-Collection itself runs using **a namespace-scoped ServiceAccount the chart creates**, not the installer's own credentials. It needs read access in the router's namespace to pods, pod logs, ConfigMaps, and deployments — standard permissions for anyone managing a k8s workload — plus three separate cluster-scoped grants for `nodeMetrics`, deliberately kept independent so you can decline the more sensitive ones without losing the others.
+Collection itself runs using **a namespace-scoped ServiceAccount the chart creates**, not the installer's own credentials. It needs read access in the router's namespace to pods, pod logs, ConfigMaps, and deployments — standard permissions for anyone managing a k8s workload — plus three separate cluster-scoped grants for `nodeMetrics`, deliberately kept independent so you can decline the more sensitive ones without losing the others. See [Collecting Metrics → If Prometheus isn't set up yet](./collecting-metrics#if-prometheus-isnt-set-up-yet) for exactly what those three grants are and what each authorizes.
 
 **`pods/exec` is not required** — nothing this tool does runs inside your router container.
 
-### `nodeMetrics` RBAC
-
-`nodeMetrics` needs three separate grants to reach `/api/v1/nodes/<node>/proxy/stats/summary`:
-
-- **`nodes` (list)** — to resolve node names when neither `nodeNames` nor `selector` is set. An ordinary, low-risk read of node objects — this is what surfaces node pressure conditions (`MemoryPressure`, `DiskPressure`).
-- **`nodes/proxy` (get)** — required unconditionally by the API server for any request matching the `/nodes/{name}/proxy/{path}` URL pattern. This is a broad grant: Kubernetes' own RBAC good-practices documentation states it "provides access to privileged kubelet APIs that can retrieve container logs or execute and attach to pod processes... bypasses audit logging and admission control," and is explicitly "not a read-only permission." What this tool does with it is read-only, but the grant itself authorizes more than that one use, and it cannot be scoped to just the router's nodes.
-- **`nodes/stats` (get)** — required separately by the kubelet's own authorization check, layered on top of `nodes/proxy`, not a substitute for it.
-
-Declining `nodes/proxy`/`nodes/stats` still leaves `nodes` access (node pressure conditions) and everything `clusterResources` provides — OOM kill occurrences and last state, restart counts, configured limits. What's lost is container memory/CPU trajectory over time — but `nodeMetrics` is a fallback for that signal, not the preferred path: enabling the Prometheus exporter gets the same container-level usage-over-time signal without any of these grants. See [Data Collected](./data-collected#memory-and-cpu-information-collected) for the full breakdown of what each grant buys you.
-
-`nodes/proxy` and `nodes/stats` are only useful together — declining either one loses the same capability, so there's no reason to grant one without the other. The chart currently only supports declining all three together, via `job.collectNodeMetrics: false` at install time. This skips creating the ClusterRole/ClusterRoleBinding entirely, and the `nodeMetrics` collector itself then comes back empty rather than the install failing.
-
 ## Cluster footprint
 
-Spec ConfigMap, Helm release metadata, and the ServiceAccount/Role/RoleBinding — that's what stays behind after installing. The Job itself is transient: `ttlSecondsAfterFinished` (default `3600`) means Kubernetes automatically deletes the Job and its pod an hour after it completes, so there's nothing to clean up by hand there. To remove everything else, including the RBAC:
+Spec ConfigMap, Helm release metadata, and the ServiceAccount/Role/RoleBinding stays behind after installing. The Job itself is transient: `ttlSecondsAfterFinished` (default `3600`) means Kubernetes automatically deletes the Job and its pod an hour after it completes. To remove everything else, including the RBAC:
 
 ```bash
 helm uninstall router-diagnostics --namespace <namespace>
