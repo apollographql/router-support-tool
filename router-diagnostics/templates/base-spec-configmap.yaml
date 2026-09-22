@@ -38,19 +38,17 @@ data:
             name: router-metrics
             get:
               {{- if eq .Values.mode "local" }}
-              # support-bundle runs on the invoking user's own machine, which can't
-              # resolve the router's in-cluster Service DNS name so it targets a `localhost`
-              # port-forward instead.
+              # Local mode runs the support-bundle on the invoking user's own machine,
+              # which can't resolve the router's in-cluster Service DNS name so it
+              # targets a `localhost`port-forward instead.
               url: http://localhost:{{ .Values.metricsPort | default 9090 }}/metrics
               {{- else if .Values.selector }}
-              # selector set (raw-manifest tier). No fixed label to resolve a host
-              # from so find the Service that matched `selector` instead. metricsPort
-              # only overrides which port on that Service to target - it still
-              # defaults to 9090 like every other tier.
+              # Selector set (raw-manifest tier). No fixed label to resolve a host
+              # from so find the Service that matched `selector` instead.
               url: http://{{ include "router-diagnostics.metricsTargetHost" . | default "<router-metrics-host-not-found>" }}:{{ .Values.metricsPort | default 9090 }}/metrics
               {{- else }}
-              # selector unset (official chart tier). Resolve the Service by its
-              # fixed label.
+              # Selector unset (official chart tier)
+              # Resolve the Service by its fixed label.
               url: http://{{ include "router-diagnostics.routerServiceName" . | default "<router-metrics-host-not-found>" }}.{{ .Values.namespace }}.svc.cluster.local:9090/metrics
               {{- end }}
 
