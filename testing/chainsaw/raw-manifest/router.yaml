@@ -6,7 +6,9 @@ telemetry:
     metrics:
       prometheus:
         enabled: true
-        listen: 0.0.0.0:9090
+        # Deliberately not the default 9090 so we can test the metricsPort override path
+        # to actually run rather than working off the default.
+        listen: 0.0.0.0:9091
         path: /metrics
   instrumentation:
     events:

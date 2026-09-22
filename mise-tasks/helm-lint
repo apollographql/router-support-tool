@@ -6,12 +6,16 @@ CHART_PATH="router-diagnostics"
 WORKDIR=$(mktemp -d)
 trap 'rm -rf "$WORKDIR"' EXIT
 
-for tier in official-chart raw-manifest; do
+for tier in official-chart raw-manifest raw-manifest-metrics; do
   for mode in local job; do
     FLAGS="--set namespace=ci-test"
 
     if [ "$tier" = "raw-manifest" ]; then
       FLAGS="$FLAGS --set selector=app=hello-world --set configMapName=hello-world-config"
+    fi
+
+    if [ "$tier" = "raw-manifest-metrics" ]; then
+      FLAGS="$FLAGS --set selector=app=hello-world --set configMapName=hello-world-config --set metricsPort=9091"
     fi
 
     if [ "$mode" = "local" ]; then

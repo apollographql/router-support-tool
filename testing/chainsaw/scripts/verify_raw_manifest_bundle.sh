@@ -22,7 +22,8 @@ RELEASE_NAME="router-diagnostics"
 
 helm install "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
   --set namespace="$NAMESPACE" \
-  --set mode=local
+  --set mode=local \
+  --set metricsPort=9091
 
 helm plugin list | grep -q router-diagnostics || helm plugin install "$PLUGIN_PATH"
 
@@ -45,7 +46,7 @@ META="$DIR/meta.json"
 # Check router-metrics/result.json (collected via the http collector): make sure we got a real Prometheus scrape
 RESULT="$DIR/router-metrics/result.json"
 [ "$(jq -r '.response.status' "$RESULT")" = "200" ] || fail "router-metrics: response.status != 200"
-jq -r '.response.body' "$RESULT" | grep -q "apollo_router_" || fail "router-metrics: body doesn't contain real router metrics"
+grep -q "apollo_router_" <<< "$(jq -r '.response.body' "$RESULT")" || fail "router-metrics: body doesn't contain real router metrics"
 
 # Check clusterResources collector: pod is Running, zero restarts, expected image + resources are in the support bundle
 PODS="$DIR/cluster-resources/pods/$NAMESPACE.json"

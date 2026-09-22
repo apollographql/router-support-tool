@@ -13,6 +13,28 @@
 {{- end -}}
 
 {{/*
+Finds the internal Kubernetes DNS host for the router-metrics collector by doing the following:
+
+1. Searches the current namespace for a Service matching '.Values.selector'.
+2. If found, returns its full internal FQDN (e.g., service.namespace.svc.cluster.local).
+3. If not found, returns an empty string ("") to gracefully disable the metrics target.
+*/}}
+{{- define "router-diagnostics.metricsTargetHost" -}}
+{{- $selector := .Values.selector | default "app.kubernetes.io/name=router" }}
+{{- $parts := splitList "=" $selector }}
+{{- $key := index $parts 0 }}
+{{- $value := index $parts 1 }}
+{{- $host := "" }}
+{{- $services := (lookup "v1" "Service" .Values.namespace "").items }}
+{{- range $services }}
+  {{- if and .spec.selector (eq (index .spec.selector $key) $value) }}
+    {{- $host = printf "%s.%s.svc.cluster.local" .metadata.name $.Values.namespace }}
+  {{- end }}
+{{- end }}
+{{- $host }}
+{{- end -}}
+
+{{/*
 mode: job's default pod annotations (disable Istio/Linkerd sidecar injection) — the
 single source of truth for both templates below, so the disabling values only ever
 need to be written in one place.

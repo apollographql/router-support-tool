@@ -51,11 +51,11 @@ spec:
               value: "us-east-1"
           ports:
             - containerPort: 4000
-            - containerPort: 9090
+            - containerPort: 9091
           readinessProbe:
             httpGet:
               path: /metrics
-              port: 9090
+              port: 9091
             initialDelaySeconds: 1
             periodSeconds: 2
           volumeMounts:
@@ -77,8 +77,8 @@ spec:
     app.kubernetes.io/name: router
   ports:
     - name: metrics
-      port: 9090
-      targetPort: 9090
+      port: 9091
+      targetPort: 9091
     - name: graphql
       port: 4000
       targetPort: 4000
