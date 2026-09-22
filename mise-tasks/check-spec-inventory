@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
-#MISE description="Diff the rendered spec's collector/redactor names+types against the checked-in baseline"
+#MISE description="Diff the rendered spec's collector+redactor inventory (names/types/count) against the checked-in baseline"
+#
+# Not a naming-convention check - specs/collection/collector_naming.md governs collector
+# names specifically, and has nothing to say about redactors. This catches a broader class
+# of silent drift: any collector or redactor renamed, added, or removed without the baseline
+# being updated (and, for a collector's name, without collector_naming.md's table being
+# checked - that's still the reader's job, this only flags that something changed).
+# A disappeared redactor is the sharper risk here: unlike a collector rename, it's a
+# potential data leak, not just a broken bundle path.
 set -euo pipefail
 
 CHART_PATH="router-diagnostics"
-BASELINE="testing/collector-naming-baseline.json"
+BASELINE="testing/spec-inventory-baseline.json"
 
-# Names are governed by specs/collection/collector_naming.md
 RENDERED=$(helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
   --show-only templates/base-spec-configmap.yaml)
 
@@ -42,10 +49,10 @@ fi
 EXPECTED=$(jq -c 'sort_by(.kind, .type, .name)' "$BASELINE")
 
 if [ "$ACTUAL" != "$EXPECTED" ]; then
-  echo "Collector/redactor names in the rendered spec don't match $BASELINE." >&2
-  echo "A name changed, or one was added/removed. If intentional, update the baseline:" >&2
-  echo "  UPDATE_BASELINE=1 mise run check-collector-names" >&2
-  echo "and check the rename/add/remove against specs/collection/collector_naming.md in the same PR." >&2
+  echo "Collector/redactor inventory in the rendered spec doesn't match $BASELINE." >&2
+  echo "Something was renamed, added, or removed. If intentional, update the baseline:" >&2
+  echo "  UPDATE_BASELINE=1 mise run check-spec-inventory" >&2
+  echo "and, for a collector rename, check it against specs/collection/collector_naming.md in the same PR." >&2
   echo >&2
   echo "--- expected ($BASELINE) ---" >&2
   jq '.' <<<"$EXPECTED" >&2
@@ -54,4 +61,4 @@ if [ "$ACTUAL" != "$EXPECTED" ]; then
   exit 1
 fi
 
-echo "Collector/redactor names match $BASELINE"
+echo "Collector/redactor inventory matches $BASELINE"
