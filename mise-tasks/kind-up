@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#MISE description="Create the local KinD cluster used by the plugin integration tests and Chainsaw"
+set -euo pipefail
+
+CLUSTER_NAME="${KIND_CLUSTER_NAME:-router-support-tool-test}"
+
+if kind get clusters 2>/dev/null | grep -qx "$CLUSTER_NAME"; then
+  echo "KinD cluster '$CLUSTER_NAME' already exists - reusing it. Run 'mise run kind-down' first for a clean one."
+  exit 0
+fi
+
+kind create cluster --name "$CLUSTER_NAME" --config testing/kind-config.yaml

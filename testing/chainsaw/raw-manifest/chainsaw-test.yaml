@@ -1,0 +1,56 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: raw-manifest
+spec:
+  # Coverage against specs/collection/base_spec.md's "What the base spec collects" tables
+  # deliberately not checked here:
+  #   - APOLLO_GRAPH_REF/APOLLO_ROUTER_OFFICIAL_HELM_CHART env vars - resource.yaml doesn't
+  #     set them (this isn't the official router Helm chart).
+  #   - Previous-container logs (-previous.log) - no restart scenario exists.
+  #   - OOM kill occurrences/last state
+  #
+  # All paths here are relative to this test's own directory
+  # because that's how Chainsaw resolves them.
+  #
+  # Not concurrency-safe with the official-chart test: router-diagnostics-helm-plugin's
+  # collect.sh port-forwards to a hardcoded local port (9090) to reach the router's
+  # metrics endpoint, and a local TCP port is a single-machine resource regardless of
+  # which cluster/namespace either test targets.
+  concurrent: false
+  steps:
+    - try:
+        - script:
+            content: |
+              kubectl create configmap router-config -n "$NAMESPACE" \
+                --from-file=router.yaml=router.yaml \
+                --from-file=supergraph.graphql=../../fixtures/supergraph.graphql
+              kubectl label configmap router-config -n "$NAMESPACE" app.kubernetes.io/name=router
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - apply:
+            file: resource.yaml
+        - assert:
+            timeout: 90s
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: router
+              status:
+                (conditions[?type == 'Available']):
+                - status: "True"
+        # kubelet's per-container PSI/pageFault stats (nodeMetrics collector,
+        # KubeletPSI feature gate) need a stats-collection cycle to populate for a
+        # container this fresh - without this, collection can run before they exist.
+        - sleep:
+            duration: 15s
+        - script:
+            timeout: 120s
+            content: |
+              ../scripts/verify_raw_manifest_bundle.sh "$NAMESPACE" resource.yaml router.yaml \
+                ../../../router-diagnostics ../../../router-diagnostics-helm-plugin
+            env:
+              - name: NAMESPACE
+                value: ($namespace)

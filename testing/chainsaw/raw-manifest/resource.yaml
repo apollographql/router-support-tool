@@ -19,6 +19,15 @@ spec:
         - name: router
           # renovate: datasource=github-releases depName=apollographql/router
           image: ghcr.io/apollographql/router:v2.16.3
+          # Set purely so the integration test has a real value to assert clusterResources
+          # actually captured.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
           args:
             - "--config"
             - "/etc/router/router.yaml"
