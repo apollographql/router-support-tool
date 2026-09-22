@@ -49,7 +49,7 @@ data:
               {{- else }}
               # Selector unset (official chart tier)
               # Resolve the Service by its fixed label.
-              url: http://{{ include "router-diagnostics.routerServiceName" . | default "<router-metrics-host-not-found>" }}.{{ .Values.namespace }}.svc.cluster.local:9090/metrics
+              url: http://{{ include "router-diagnostics.routerServiceName" . | default "<router-metrics-host-not-found>" }}.{{ .Values.namespace }}.svc.cluster.local:{{ .Values.metricsPort | default 9090 }}/metrics
               {{- end }}
 
         - configMap:

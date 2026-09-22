@@ -6,9 +6,13 @@ CHART_PATH="router-diagnostics"
 WORKDIR=$(mktemp -d)
 trap 'rm -rf "$WORKDIR"' EXIT
 
-for tier in official-chart raw-manifest raw-manifest-metrics; do
+for tier in official-chart official-chart-metrics raw-manifest raw-manifest-metrics; do
   for mode in local job; do
     FLAGS="--set namespace=ci-test"
+
+    if [ "$tier" = "official-chart-metrics" ]; then
+      FLAGS="$FLAGS --set metricsPort=9091"
+    fi
 
     if [ "$tier" = "raw-manifest" ]; then
       FLAGS="$FLAGS --set selector=app=hello-world --set configMapName=hello-world-config"
@@ -31,6 +35,15 @@ for tier in official-chart raw-manifest raw-manifest-metrics; do
     # shellcheck disable=SC2086
     helm template ci-test "$CHART_PATH" $FLAGS > "$WORKDIR/rendered.yaml"
     kubeconform -strict -summary "$WORKDIR/rendered.yaml"
+
+    # Whenever metricsPort is set it must reach the metrics collector's URL
+    if [[ "$FLAGS" == *"--set metricsPort="* ]]; then
+      port=$(grep -oE -- '--set metricsPort=[0-9]+' <<< "$FLAGS" | grep -oE '[0-9]+$')
+      if ! grep -q ":${port}/metrics" "$WORKDIR/rendered.yaml"; then
+        echo "FAIL: expected metricsPort=${port} to appear in the router-metrics URL for $tier / mode: $mode" >&2
+        exit 1
+      fi
+    fi
     echo
   done
 done
