@@ -77,7 +77,7 @@ This gives you a single `./collect.sh` command for collecting a support bundle, 
 **If you deployed with the official Apollo Helm chart:**
 
 ```bash
-helm install router-diagnostics apollo/router-diagnostics \
+helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
   --namespace production \
   --set namespace=production \
   --set mode=local
@@ -88,7 +88,7 @@ helm install router-diagnostics apollo/router-diagnostics \
 **If you use a raw-manifest or custom deployment:**
 
 ```bash
-helm install router-diagnostics apollo/router-diagnostics \
+helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
   --namespace production \
   --set namespace=production \
   --set selector="app=my-router" \
@@ -115,7 +115,7 @@ Since none of the official chart's conventions apply to your deployment, supply 
 If you don't have kubectl access to production, use the same chart with `mode: job`. A platform team member with cluster access installs it:
 
 ```bash
-helm install router-diagnostics apollo/router-diagnostics \
+helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
   --namespace production \
   --set namespace=production \
   --set mode=job

@@ -43,6 +43,8 @@ When adding new content, file it by which of these it changes. A change that tou
 specs/
 ├── architecture.md          # Layer model. Required reading.
 ├── user_experience.md       # The customer-facing flow, as a spec — not the literal public docs (those are drafted from this file separately)
+├── artifact-distribution.md # How the chart/image/plugin are built and published
+├── release-process.md       # Versioning across those artifacts, and how to cut a release
 ├── versions/                # What each version ships, and what it deliberately does not
 ├── collection/              # What is collected and how it is sanitized
 ├── trigger/                 # What causes collection to happen
