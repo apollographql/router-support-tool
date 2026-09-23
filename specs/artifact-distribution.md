@@ -1,8 +1,8 @@
 # Artifact Distribution
 
 This repository produces three publishable artifacts: the `router-diagnostics-chart` Helm chart, the
-`router-diagnostics-job-image` container image, and the `router-diagnostics-helm-plugin` Helm
-plugin. This spec covers how each one is built and published. For versioning and how to actually
+`router-diagnostics-job-image` container image, and the `router-diagnostics-collect` script.
+This spec covers how each one is built and published. For versioning and how to actually
 cut a release, see `specs/release-process.md`.
 
 ## The Job image
@@ -18,15 +18,18 @@ image by digest. Tagged with the release version (see `specs/release-process.md`
 
 ---
 
-## The Helm plugin
+## The router-diagnostics-collect script
 
-**Source:** `router-diagnostics-helm-plugin/` (`plugin.yaml`, `scripts/install-binary.sh`,
-`scripts/collect.sh`).
+**Source:** `router-diagnostics-collect/` (`collect.sh`)
 
-**External publish:** to a public GCS bucket, as a tarball. Packaged fresh from the release
-tag's source at publish time, authenticated the same WIF way as the Job image's publish step. 
-Published as both a versioned object (`router-diagnostics-helm-plugin-v1.0.0.tar.gz`) and a
-floating `router-diagnostics-helm-plugin-latest.tar.gz` that customers install against.
+**External publish:** attached directly to the GitHub Release as a release asset. This is the
+underlying artifact location, not what we point customers at directly.
+
+**Customers install through Orbiter:**
+
+```bash
+curl -sSLo collect.sh https://rover.apollo.dev/<path-TODO>/router-diagnostics-collect/latest
+```
 
 ---
 
@@ -35,4 +38,4 @@ floating `router-diagnostics-helm-plugin-latest.tar.gz` that customers install a
 **Source:** `router-diagnostics-chart/`
 
 **External publish:** to `oci://registry-1.docker.io/apollograph/router-diagnostics-chart`.
-Packaged fresh from the release tag'source.
+Packaged fresh from the release tag's source.
