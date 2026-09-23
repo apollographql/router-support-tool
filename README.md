@@ -51,7 +51,7 @@ mise exec -- lefthook install
 
 ## Helm chart documentation
 
-`router-diagnostics/README.md` is generated from `values.yaml`'s `# --` comments via [helm-docs](https://github.com/norwoodj/helm-docs). CI enforces it stays in sync (`fail-on-diff: true`) — after changing `router-diagnostics/values.yaml`, regenerate it locally and commit the result:
+`router-diagnostics-chart/README.md` is generated from `values.yaml`'s `# --` comments via [helm-docs](https://github.com/norwoodj/helm-docs). CI enforces it stays in sync (`fail-on-diff: true`) — after changing `router-diagnostics-chart/values.yaml`, regenerate it locally and commit the result:
 
 ```bash
 mise run generate-helm-docs

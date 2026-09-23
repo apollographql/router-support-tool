@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-#MISE description="Render router-diagnostics across every tier/mode combo, helm lint + kubeconform each"
+#MISE description="Render router-diagnostics-chart across every tier/mode combo, helm lint + kubeconform each"
 set -euo pipefail
 
-CHART_PATH="router-diagnostics"
+CHART_PATH="router-diagnostics-chart"
 WORKDIR=$(mktemp -d)
 trap 'rm -rf "$WORKDIR"' EXIT
 

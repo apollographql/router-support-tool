@@ -2,7 +2,7 @@
 #MISE description="Run support-bundle lint against the rendered spec, for the pinned troubleshoot.sh version"
 set -euo pipefail
 
-CHART_PATH="router-diagnostics"
+CHART_PATH="router-diagnostics-chart"
 WORKDIR=$(mktemp -d)
 trap 'rm -rf "$WORKDIR"' EXIT
 

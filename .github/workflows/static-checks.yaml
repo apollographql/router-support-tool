@@ -9,7 +9,7 @@ on:
 # For simplicity, since only one chart exists it's hardcoded for now.
 # We can add a discovery step later when we add more charts.
 env:
-  CHART_PATH: router-diagnostics
+  CHART_PATH: router-diagnostics-chart
 
 jobs:
   ensure_helm_docs_consistency:
@@ -22,7 +22,7 @@ jobs:
       - name: Run helm-docs
         uses: losisin/helm-docs-github-action@3a4528e97c49a5e83de6b78c50c61c8ee5c9f944 # v2.0.0
         with:
-          chart-search-root: 'router-diagnostics'
+          chart-search-root: 'router-diagnostics-chart'
           fail-on-diff: true
 
   format_github_actions_workflows:

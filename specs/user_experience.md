@@ -48,7 +48,7 @@ If you deployed the router with a hand-authored manifest or a custom chart that 
 
 ## Collection Modes
 
-Getting a spec into the cluster is done through a single Helm chart, `router-diagnostics`, with a `mode` value controlling how collection actually runs. Both modes collect the same spec, but the shape of what runs, where, and what it needs is genuinely different:
+Getting a spec into the cluster is done through a single Helm chart, `router-diagnostics-chart`, with a `mode` value controlling how collection actually runs. Both modes collect the same spec, but the shape of what runs, where, and what it needs is genuinely different:
 
 | | `mode: local` | `mode: job` |
 | --- | --- | --- |
@@ -157,7 +157,7 @@ The metrics collector targets port `9090` by default. You can override this defa
 - `telemetry.exporters.metrics.prometheus.enabled: true` — turns the exporter on.
 - `telemetry.exporters.metrics.prometheus.listen` — the `host:port` the exporter binds to. The host must be reachable from outside the router container — binding to loopback won't work even with the exporter enabled. If you change the port, set the chart's `metricsPort` to match. Leaving `metricsPort` unset while the exporter binds to a non-default port makes this section empty the same way an unreachable host would.
 
-Note that the **router chart's** `serviceMonitor.enabled` value (not `router-diagnostics`) is a *different* switch. It exposes the metrics port on the Service and renders a ServiceMonitor for your own Prometheus, but it does not enable the exporter — the two settings above are what do that. You can have one without the other.
+Note that the **router chart's** `serviceMonitor.enabled` value (not `router-diagnostics-chart`) is a *different* switch. It exposes the metrics port on the Service and renders a ServiceMonitor for your own Prometheus, but it does not enable the exporter — the two settings above are what do that. You can have one without the other.
 
 If the exporter is off, or bound somewhere the collector can't reach, that section of the bundle will simply be empty — the rest of the bundle is unaffected.
 

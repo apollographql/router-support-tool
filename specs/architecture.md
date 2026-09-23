@@ -174,7 +174,7 @@ Deployment concerns include:
 - **Cluster footprint** — ranges from a persistent ConfigMap (on-demand, chart-based invocation) to standing workloads (scheduled/threshold collection), depending on execution location
 - **Deployment tier** — how the customer deployed the router, which determines how much the tool can infer versus what the customer must supply
 
-Which tiers are supported, what each requires from the customer, and how execution location and deployment tier are actually implemented (the `router-diagnostics` chart and its values) is specified per version rather than here — see `specs/deployment/v1/v1.md` for v1's answer to all of the above.
+Which tiers are supported, what each requires from the customer, and how execution location and deployment tier are actually implemented (the `router-diagnostics-chart` chart and its values) is specified per version rather than here — see `specs/deployment/v1/v1.md` for v1's answer to all of the above.
 
 Future delivery mechanisms belong here too. Ground Control's ClusterManager, for instance, is a way of delivering and managing these components in-cluster. This is another deployment mechanism, not a new layer.
 
