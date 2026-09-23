@@ -1,46 +1,78 @@
 #!/bin/sh
 # Collects a router-diagnostics support bundle for mode: local. Caches a pinned
-# support-bundle binary locally, reads the target router-diagnostics release's
-# namespace/selector/metricsPort values, resolves the router's Service, bridges its
-# metrics port with a temporary kubectl port-forward, then runs support-bundle against
-# the cluster's discoverable specs.
+# support-bundle binary locally, resolves the router's Service, bridges its metrics port
+# with a temporary kubectl port-forward, then runs support-bundle against the cluster's
+# discoverable specs.
 #
-# Usage: collect.sh [-n|--namespace <release-namespace>] [release-name]
-# Requires helm, kubectl, jq, and curl on PATH, and the router-diagnostics chart already
-# installed (mode: local) - this reads that release's values, it doesn't install it.
+# Usage: collect.sh --namespace <namespace> [--selector <selector>] [--metrics-port <port>]
+# Takes the same values you passed to `helm install` directly - it doesn't read them back
+# from the chart release, so it has no dependency on Helm at all.
 set -eu
 
 # renovate: datasource=github-releases depName=replicatedhq/troubleshoot
 SUPPORT_BUNDLE_VERSION="0.134.1"
 
-RELEASE_NAMESPACE="default"
-RELEASE_NAME="router-diagnostics"
+NAMESPACE=""
+# Matches the official chart's own label; raw-manifest/custom deployments should pass
+# --selector explicitly, the same value given to `helm install --set selector=...`.
+SELECTOR="app.kubernetes.io/name=router"
+# Matches the chart's own default; pass --metrics-port to match a non-default
+# `--set metricsPort=...` given at install time.
+METRICS_PORT="9090"
+
+usage() {
+  echo "usage: collect.sh --namespace <namespace> [--selector <selector>] [--metrics-port <port>]" >&2
+}
 
 while [ $# -gt 0 ]; do
   case "$1" in
     -n|--namespace)
-      RELEASE_NAMESPACE="$2"
+      NAMESPACE="$2"
       shift 2
       ;;
     --namespace=*)
-      RELEASE_NAMESPACE="${1#*=}"
+      NAMESPACE="${1#*=}"
+      shift
+      ;;
+    --selector)
+      SELECTOR="$2"
+      shift 2
+      ;;
+    --selector=*)
+      SELECTOR="${1#*=}"
+      shift
+      ;;
+    --metrics-port)
+      METRICS_PORT="$2"
+      shift 2
+      ;;
+    --metrics-port=*)
+      METRICS_PORT="${1#*=}"
       shift
       ;;
     -h|--help)
-      echo "usage: collect.sh [-n|--namespace <release-namespace>] [release-name]" >&2
+      usage
       exit 0
       ;;
     *)
-      RELEASE_NAME="$1"
-      shift
+      echo "error: unrecognized argument '$1'" >&2
+      usage
+      exit 1
       ;;
   esac
 done
 
+if [ -z "$NAMESPACE" ]; then
+  echo "error: --namespace is required" >&2
+  usage
+  exit 1
+fi
+
 # --- Fail fast if a required tool is missing, rather than mid-run on whichever one
-# happens to be invoked first. ---
+# happens to be invoked first. Note: no helm/jq dependency - this script doesn't read
+# anything back from a Helm release. ---
 MISSING=""
-for tool in helm kubectl jq curl; do
+for tool in kubectl curl; do
   command -v "$tool" >/dev/null 2>&1 || MISSING="$MISSING $tool"
 done
 if [ -n "$MISSING" ]; then
@@ -77,22 +109,6 @@ if [ ! -x "$BIN" ]; then
   echo "router-diagnostics: cached support-bundle v${SUPPORT_BUNDLE_VERSION}" >&2
 fi
 
-# --- Resolve the router-diagnostics release's values ---
-RELEASE_VALUES=$(helm get values "$RELEASE_NAME" -n "$RELEASE_NAMESPACE" -o json)
-# Where the router itself runs, per the chart's own `namespace` value.
-ROUTER_NAMESPACE=$(echo "$RELEASE_VALUES" | jq -r '.namespace // empty')
-if [ -z "$ROUTER_NAMESPACE" ]; then
-  echo "error: could not read .namespace from release '$RELEASE_NAME' in namespace '$RELEASE_NAMESPACE', is router-diagnostics installed there?" >&2
-  exit 1
-fi
-
-# Raw-manifest/custom tier sets `selector` to its own pod label and falls back to
-# the official Apollo Helm chart's own label.
-SELECTOR=$(echo "$RELEASE_VALUES" | jq -r '.selector // "app.kubernetes.io/name=router"')
-# Raw-manifest/custom tier sets `metricsPort` when its exporter isn't on the official
-# chart's default port and defaults to 9090.
-METRICS_PORT=$(echo "$RELEASE_VALUES" | jq -r '.metricsPort // 9090')
-
 SVC_ERR=$(mktemp)
 PF_LOG=$(mktemp)
 PF_PID=""
@@ -105,15 +121,15 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-if ! SERVICE=$(kubectl get svc -n "$ROUTER_NAMESPACE" -l "$SELECTOR" -o jsonpath='{.items[0].metadata.name}' 2>"$SVC_ERR"); then
+if ! SERVICE=$(kubectl get svc -n "$NAMESPACE" -l "$SELECTOR" -o jsonpath='{.items[0].metadata.name}' 2>"$SVC_ERR"); then
   echo "error: kubectl get svc failed: $(cat "$SVC_ERR")" >&2
   exit 1
 fi
 
 if [ -z "$SERVICE" ]; then
-  echo "warning: no Service labeled $SELECTOR found in namespace $ROUTER_NAMESPACE, router-metrics will fail with a connection error." >&2
+  echo "warning: no Service labeled $SELECTOR found in namespace $NAMESPACE, router-metrics will fail with a connection error." >&2
 else
-  kubectl port-forward -n "$ROUTER_NAMESPACE" "svc/$SERVICE" "$METRICS_PORT:$METRICS_PORT" >"$PF_LOG" 2>&1 &
+  kubectl port-forward -n "$NAMESPACE" "svc/$SERVICE" "$METRICS_PORT:$METRICS_PORT" >"$PF_LOG" 2>&1 &
   PF_PID=$!
 
   READY=0
@@ -126,7 +142,7 @@ else
   done
 
   if [ "$READY" -ne 1 ]; then
-    echo "warning: port-forward to $SERVICE:9090 never became ready, router-metrics collector will fail with a connection error" >&2
+    echo "warning: port-forward to $SERVICE:$METRICS_PORT never became ready, router-metrics collector will fail with a connection error" >&2
     echo "--- kubectl port-forward output ---" >&2
     cat "$PF_LOG" >&2
   fi
@@ -136,4 +152,4 @@ fi
 # GitHub's latest release and replaces its own binary), which would silently override
 # the version this script pins - see specs/deployment/v1/v1.md -> troubleshoot.sh
 # support-bundle version.
-"$BIN" --load-cluster-specs --namespace "$RELEASE_NAMESPACE" --auto-update=false
+"$BIN" --load-cluster-specs --namespace "$NAMESPACE" --auto-update=false

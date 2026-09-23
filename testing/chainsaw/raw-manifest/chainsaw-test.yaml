@@ -75,7 +75,7 @@ spec:
             timeout: 120s
             content: |
               ../scripts/verify_raw_manifest_bundle.sh "$NAMESPACE" resource.yaml \
-                ../../../router-diagnostics-chart ../../../router-diagnostics-helm-plugin
+                ../../../router-diagnostics-chart ../../../router-diagnostics-collect/collect.sh
             env:
               - name: NAMESPACE
                 value: ($namespace)
