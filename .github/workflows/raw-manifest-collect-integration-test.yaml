@@ -1,9 +1,8 @@
-name: Official Chart Plugin Integration Test
+name: Raw-Manifest Collect Script Integration Test
 
-# Exercises `helm router-diagnostics collect` (mode: local) against a router deployed with
-# the official apollographql/router Helm chart, via the Chainsaw test at
-# testing/chainsaw/official-chart. This workflow only orchestrates - cluster creation and
-# the test itself are both plain mise tasks: `mise run kind-up && mise run e2e-chainsaw`.
+# Exercises router-diagnostics-collect/collect.sh (mode: local) against a kind cluster, via
+# the Chainsaw test at testing/chainsaw/raw-manifest. This workflow only orchestrates -
+# cluster creation and the test itself are both plain mise tasks: `mise run kind-up && mise run e2e-chainsaw`.
 on:
   pull_request:
   push:
@@ -11,8 +10,8 @@ on:
       - main
 
 jobs:
-  exercise_official_chart:
-    name: "Exercise collect.sh (mode: local) against the official router chart"
+  exercise_local_collect:
+    name: "Exercise collect.sh (mode: local) against a kind cluster"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -26,17 +25,17 @@ jobs:
         with:
           config: testing/kind-config.yaml
 
-      - name: Run the official-chart Chainsaw test
+      - name: Run the raw-manifest Chainsaw test
         run: mise run e2e-chainsaw
         env:
-          CHAINSAW_TEST_DIRS: testing/chainsaw/official-chart
+          CHAINSAW_TEST_DIRS: testing/chainsaw/raw-manifest
 
       - name: Upload bundle for inspection
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: official-chart-support-bundle
+          name: support-bundle
           # Chainsaw's script steps run with the test's own directory as their working
           # directory, not the repo root - this is where collect.sh actually leaves it.
-          path: testing/chainsaw/official-chart/support-bundle-*.tar.gz
+          path: testing/chainsaw/raw-manifest/support-bundle-*.tar.gz
           retention-days: 3

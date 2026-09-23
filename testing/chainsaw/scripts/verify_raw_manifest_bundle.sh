@@ -3,7 +3,7 @@
 # resource.yaml, runs a collection, and checks the resulting bundle against
 # specs/collection/base_spec.md's "What the base spec collects" tables.
 #
-# Usage: verify_raw_manifest_bundle.sh <namespace> <resource-file> <chart-path> <plugin-path>
+# Usage: verify_raw_manifest_bundle.sh <namespace> <resource-file> <chart-path> <collect-script-path>
 # The last two are paths (not repo-root-relative - see the calling chainsaw-test.yaml)
 # to the router-diagnostics-chart chart directory and the router-diagnostics-helm-plugin
 # directory, since Chainsaw runs this script with the test's own directory as its working
@@ -13,7 +13,7 @@ set -euo pipefail
 NAMESPACE=$1
 RESOURCE_FILE=$2
 CHART_PATH=$3
-PLUGIN_PATH=$4
+COLLECT_SCRIPT=$4
 
 # Extracted from the same manifest the router was actually deployed from
 # so it can't drift from Renovate bumping the pinned version.
@@ -26,9 +26,7 @@ helm install "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
   --set mode=local \
   --set metricsPort=9091
 
-helm plugin list | grep -q router-diagnostics || helm plugin install "$PLUGIN_PATH"
-
-helm router-diagnostics collect "$RELEASE_NAME" -n "$NAMESPACE"
+"$COLLECT_SCRIPT" --namespace "$NAMESPACE" "$RELEASE_NAME"
 
 BUNDLE=$(ls -t support-bundle-*.tar.gz | head -1)
 DIR="${BUNDLE%.tar.gz}"

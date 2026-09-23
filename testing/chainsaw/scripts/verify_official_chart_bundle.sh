@@ -3,15 +3,15 @@
 # official apollographql/router Helm chart, runs a collection, and checks the resulting
 # bundle against specs/collection/base_spec.md's "What the base spec collects" tables.
 #
-# Usage: verify_official_chart_bundle.sh <namespace> <chart-path> <plugin-path>
+# Usage: verify_official_chart_bundle.sh <namespace> <chart-path> <collect-script-path>
 #                                         <expected-graph-ref>
-# chart-path/plugin-path are not repo-root-relative - see the calling chainsaw-test.yaml,
-# which runs this with the test's own directory as its working directory.
+# chart-path/collect-script-path are not repo-root-relative - see the calling
+# chainsaw-test.yaml, which runs this with the test's own directory as its working directory.
 set -euo pipefail
 
 NAMESPACE=$1
 CHART_PATH=$2
-PLUGIN_PATH=$3
+COLLECT_SCRIPT=$3
 EXPECTED_GRAPH_REF=$4
 
 RELEASE_NAME="router-diagnostics"
@@ -20,9 +20,7 @@ helm install "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
   --set namespace="$NAMESPACE" \
   --set mode=local
 
-helm plugin list | grep -q router-diagnostics || helm plugin install "$PLUGIN_PATH"
-
-helm router-diagnostics collect "$RELEASE_NAME" -n "$NAMESPACE"
+"$COLLECT_SCRIPT" --namespace "$NAMESPACE" "$RELEASE_NAME"
 
 BUNDLE=$(ls -t support-bundle-*.tar.gz | head -1)
 DIR="${BUNDLE%.tar.gz}"
