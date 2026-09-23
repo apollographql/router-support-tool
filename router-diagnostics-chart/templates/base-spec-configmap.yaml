@@ -45,11 +45,11 @@ data:
               {{- else if .Values.selector }}
               # Selector set (raw-manifest tier). No fixed label to resolve a host
               # from so find the Service that matched `selector` instead.
-              url: http://{{ include "router-diagnostics.metricsTargetHost" . | default "<router-metrics-host-not-found>" }}:{{ .Values.metricsPort | default 9090 }}/metrics
+              url: http://{{ include "router-diagnostics-chart.metricsTargetHost" . | default "<router-metrics-host-not-found>" }}:{{ .Values.metricsPort | default 9090 }}/metrics
               {{- else }}
               # Selector unset (official chart tier)
               # Resolve the Service by its fixed label.
-              url: http://{{ include "router-diagnostics.routerServiceName" . | default "<router-metrics-host-not-found>" }}.{{ .Values.namespace }}.svc.cluster.local:{{ .Values.metricsPort | default 9090 }}/metrics
+              url: http://{{ include "router-diagnostics-chart.routerServiceName" . | default "<router-metrics-host-not-found>" }}.{{ .Values.namespace }}.svc.cluster.local:{{ .Values.metricsPort | default 9090 }}/metrics
               {{- end }}
 
         - configMap:
@@ -74,7 +74,7 @@ data:
                 "mode": "{{ .Values.mode }}",
                 "namespace": "{{ .Values.namespace }}",
                 {{- if eq .Values.mode "job" }}
-                "sidecar_injection_disabled": {{ include "router-diagnostics.sidecarInjectionDisabled" . }},
+                "sidecar_injection_disabled": {{ include "router-diagnostics-chart.sidecarInjectionDisabled" . }},
                 {{- end }}
                 "troubleshoot_version": "0.134.1"
               }

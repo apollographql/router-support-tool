@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-#MISE description="Regenerate the router-diagnostics chart's README via helm-docs"
+#MISE description="Regenerate the router-diagnostics-chart README via helm-docs"
 set -euo pipefail
 
 REPO_ROOT=$(pwd)
 
 # renovate: datasource=docker depName=jnorwood/helm-docs
 HELM_DOCS_VERSION=v1.14.2
-docker run --rm -v "$REPO_ROOT":/repo --workdir /repo "jnorwood/helm-docs:$HELM_DOCS_VERSION" --chart-search-root router-diagnostics
+docker run --rm -v "$REPO_ROOT":/repo --workdir /repo "jnorwood/helm-docs:$HELM_DOCS_VERSION" --chart-search-root router-diagnostics-chart

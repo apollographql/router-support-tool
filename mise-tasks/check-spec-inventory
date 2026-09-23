@@ -10,7 +10,7 @@
 # potential data leak, not just a broken bundle path.
 set -euo pipefail
 
-CHART_PATH="router-diagnostics"
+CHART_PATH="router-diagnostics-chart"
 BASELINE="testing/spec-inventory-baseline.json"
 
 RENDERED=$(helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \

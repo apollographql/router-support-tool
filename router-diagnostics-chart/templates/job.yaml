@@ -1,7 +1,7 @@
 # Only rendered for mode: job. Runs collection in-cluster using the namespace-scoped
 # ServiceAccount from job-rbac.yaml.
 {{- if eq .Values.mode "job" }}
-{{- $secretName := include "router-diagnostics.storageSecretName" . }}
+{{- $secretName := include "router-diagnostics-chart.storageSecretName" . }}
 {{- $useS3Secret := and $secretName (eq .Values.job.storage.provider "s3") }}
 {{- $useGCSSecret := and $secretName (eq .Values.job.storage.provider "gcs") }}
 {{- $useURLSecret := and $secretName (eq .Values.job.storage.provider "url") }}
@@ -17,7 +17,7 @@ spec:
   template:
     metadata:
       annotations:
-        {{- include "router-diagnostics.jobPodAnnotations" . | nindent 8 }}
+        {{- include "router-diagnostics-chart.jobPodAnnotations" . | nindent 8 }}
       {{- with .Values.job.podLabels }}
       labels:
         {{- toYaml . | nindent 8 }}

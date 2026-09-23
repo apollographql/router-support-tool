@@ -1,7 +1,7 @@
 name: Router support tool verification
 description: >
   Verification plan from specs/verification_plan.md: deploys a router, runs
-  router-diagnostics chart in job mode against it, and retrieves the resulting bundle for checks.
+  router-diagnostics-chart in job mode against it, and retrieves the resulting bundle for checks.
 
 matrix:
   variant_names: "${condition}_${router_version}"
@@ -96,10 +96,10 @@ scenario:
         kind: relative_path
         path: data/expected-redacted-router-config.yaml
 
-      - name: router-diagnostics
+      - name: router-diagnostics-chart
         env_var: CHART_DIR
         kind: relative_dir
-        path: ../router-diagnostics
+        path: ../router-diagnostics-chart
         files:
           - "Chart.yaml"
           - "values.yaml"

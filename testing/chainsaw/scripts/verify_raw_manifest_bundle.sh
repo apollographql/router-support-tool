@@ -5,8 +5,9 @@
 #
 # Usage: verify_raw_manifest_bundle.sh <namespace> <resource-file> <chart-path> <plugin-path>
 # The last two are paths (not repo-root-relative - see the calling chainsaw-test.yaml)
-# to the router-diagnostics chart and Helm plugin, since Chainsaw runs this script with
-# the test's own directory as its working directory.
+# to the router-diagnostics-chart chart directory and the router-diagnostics-helm-plugin
+# directory, since Chainsaw runs this script with the test's own directory as its working
+# directory.
 set -euo pipefail
 
 NAMESPACE=$1

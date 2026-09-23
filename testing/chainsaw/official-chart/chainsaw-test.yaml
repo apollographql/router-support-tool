@@ -94,7 +94,7 @@ spec:
             timeout: 120s
             content: |
               ../scripts/verify_official_chart_bundle.sh "$NAMESPACE" \
-                ../../../router-diagnostics ../../../router-diagnostics-helm-plugin \
+                ../../../router-diagnostics-chart ../../../router-diagnostics-helm-plugin \
                 "test-graph@test"
             env:
               - name: NAMESPACE
