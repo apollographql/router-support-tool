@@ -33,10 +33,9 @@ logs:
 # -- mode: job only
 job:
   image:
-    # -- The image bundling the support-bundle binary Apollo publishes and pins the
-    # troubleshoot.sh version by tag — see specs/deployment/v1/v1.md -> Prerequisite: the
-    # collection binary for mode: job. Defaults to Apollo's published image; override only to
-    # pin an older version or point at a private mirror.
+    # -- The image bundling the support-bundle binary Apollo publishes, pinned to a
+    # troubleshoot.sh version. Override only to pin an older version or point at a
+    # private mirror.
     repository: "apollograph/router-diagnostics"
     tag: "v0.134.1"
     pullPolicy: IfNotPresent
@@ -47,8 +46,7 @@ job:
   collectNodeMetrics: true
   # -- Annotations merged onto the Job's pod template. Customer-supplied keys win over
   # the defaults below (sidecar.istio.io/inject: "false", linkerd.io/inject: disabled)
-  # rather than replacing them wholesale — see specs/deployment/v1/v1.md -> Service mesh
-  # environments.
+  # rather than replacing them wholesale.
   podAnnotations: {}
   # -- Arbitrary labels merged onto the Job's pod template.
   podLabels: {}

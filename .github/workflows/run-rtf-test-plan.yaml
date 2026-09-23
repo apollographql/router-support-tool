@@ -1,23 +1,28 @@
 name: Test with RTF
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
-  workflow_dispatch: {}
+  workflow_run:
+    types: [completed]
+    workflows: ["Build Job Image"]
 
 jobs:
   run_rtf_test_plan:
     name: Run RTF Test Plan
+    # workflow_run fires for every conclusion (success, failure, cancelled) of the upstream
+    # run, not just success - only proceed once it actually succeeded.
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # On a workflow_run trigger, github.sha is the tip of the default branch right now,
+          # not the commit "Build Job Image" actually built. head_sha is that exact commit.
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - uses: apollographql/release-tooling/rtf-orchestrator-run-known@2a86a497f7ba8a809b4903c63d0ccbb2d539ebc7
         with:
-          git_ref: ${{ github.head_ref || github.ref_name }}
+          git_ref: ${{ github.event.workflow_run.head_sha }}
           test_plan_id: d92be985-ca2a-457c-9fc8-d692256782ae
