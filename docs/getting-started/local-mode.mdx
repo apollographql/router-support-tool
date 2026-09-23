@@ -44,7 +44,7 @@ helm install router-diagnostics apollo/router-diagnostics \
 ```
 
 Since none of the official chart's conventions apply to your deployment, supply your pod selector and ConfigMap name in addition to the namespace, so the chart's collectors know where to find your router and its configuration.
-Optionally, supply `metricsPort`if your metrics are not exposed via the default `9090`.
+Optionally, supply `metricsPort` if your metrics are not exposed via the default `9090`.
 
 ## Step 3: Collect a support bundle
 
@@ -60,7 +60,7 @@ The bundle lands in your current directory as `support-bundle-<timestamp>.tar.gz
 
 ## Cleaning up
 
-Installing the chart leaves the spec ConfigMag plus Helm release metadata. If you'd rather leave nothing behind:
+Installing the chart leaves the spec ConfigMap plus Helm release metadata. If you'd rather leave nothing behind:
 
 ```bash
 helm uninstall router-diagnostics --namespace production

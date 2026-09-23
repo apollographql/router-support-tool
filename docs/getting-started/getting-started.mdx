@@ -31,10 +31,12 @@ Whichever mode you picked, the chart needs to know how to find your router. That
 
 | Deployment | What you supply | Why |
 | --- | --- | --- |
-| **[Official Apollo router Helm chart](https://github.com/apolloconfig/apollo-helm-chart)** | `namespace` only | The chart's collectors target your router by its standard `app.kubernetes.io/name=router` label and know the ConfigMap name and ports it uses |
+| **[Official Apollo router Helm chart](TODO: add link)** | `namespace` only | The chart's collectors target your router by its standard `app.kubernetes.io/name=router` label and know the ConfigMap name and ports it uses |
 | **Raw manifests / custom deployment** | `namespace`, `selector`, `configMapName`, `metricsPort` (if not `9090`) | None of the official chart's conventions apply, so nothing about your router's location or config can be assumed |
 
 Both the [local mode](./local-mode) and [job mode](./job-mode) pages show the install command for each case.
+
+**Deploying the router via the Apollo Operator?** That path isn't supported yet — use the `router-diagnostics` chart directly, with whichever row above matches how the router itself was deployed underneath the Operator.
 
 ## Full reference
 
@@ -43,3 +45,5 @@ The pages above cover the values you need to get a first bundle collected. For t
 - [`mode: local` reference](../local-mode-details)
 - [`mode: job` reference](../job-mode-details)
 - [Data Collected](../data-collected) — what's gathered, what each signal requires, and what's lost if you decline a permission
+- [Collecting Metrics](../collecting-metrics) — Prometheus prerequisites, per-mode targeting, and service mesh caveats
+- [Support bundle storage and retrieval](../bundle-storage) — `job.storage` reference and how to get the bundle back out

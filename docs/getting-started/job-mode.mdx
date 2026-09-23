@@ -6,7 +6,7 @@ description: Install the router-diagnostics chart with mode job so a platform te
 
 Use `mode: job` when your own kubectl access to production is restricted and a platform team runs collection on your behalf. A Kubernetes Job runs collection in-cluster, using a namespace-scoped ServiceAccount the chart creates for it.
 
-**Configure `job.storage` before you install.** Setting up storage as a required part of installing this mode. Without this, the bundle is produced but cannot be retrieved.
+Configure bundle storage before you install. Without this, the bundle is produced but cannot be retrieved. See [Support bundle storage and retrieval → Retrieval](../bundle-storage#retrieval).
 
 ## Install the chart
 
@@ -62,7 +62,7 @@ Once the Job completes, the configured destination has the bundle. Retrieve it t
 
 **Injecting a sidecar into the Job's pod risks the Job never completing.** Kubernetes only marks a Job `Complete` once every container in its pod has exited, but a mesh proxy (e.g. `istio-proxy`) is a long-running sidecar that keeps waiting for traffic after the collection container is done, so the pod sits in `Running` indefinitely instead of reaching `Completed`, leaving a stuck workload behind with no clean signal that collection succeeded.
 
-To avoid that, the chart sets `job.podAnnotations` to disable sidecar injection by default, for Istio and Linkered:
+To avoid that, the chart sets `job.podAnnotations` to disable sidecar injection by default, for Istio and Linkerd:
 
 ```yaml
 sidecar.istio.io/inject: "false"
@@ -75,7 +75,7 @@ The bundle's `meta.json` records whether the chart disabled injection (`sidecar_
 
 ## Cleaning up
 
-Installing this mode leaves the spec ConfigMap, Helm release metadata, and the ServiceAccount/RBAC in your cluster. The Job itself is transient, it's deleted automatically, be default, an hour after completing (`job.ttlSecondsAfterFinished`). To remove everything else:
+Installing this mode leaves the spec ConfigMap, Helm release metadata, and the ServiceAccount/RBAC in your cluster. The Job itself is transient, it's deleted automatically, by default, an hour after completing (`job.ttlSecondsAfterFinished`). To remove everything else:
 
 ```bash
 helm uninstall router-diagnostics --namespace production

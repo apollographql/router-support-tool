@@ -3,7 +3,8 @@ title: "Support bundle storage and retrieval"
 subtitle: "Configuring job.storage, and getting the bundle back out"
 description: Full reference for mode job's job.storage — every provider and credential path, the cloud IAM each needs, and worked examples for S3, GCS, and a bare HTTP(S) endpoint.
 ---
-Storage only applies to `mode: job`,`mode: local` has no equivalent since the bundle already lands as a plain file the customer holds. Leave `job.storage.provider` unset to render the Job exactly as it would without this section: no upload step, the bundle stays in the completed pod until it's garbage-collected.
+
+Storage only applies to `mode: job` — `mode: local` has no equivalent, since the bundle already lands as a plain file the customer holds. Leave `job.storage.provider` unset to render the Job exactly as it would without this section: no upload step, the bundle stays in the completed pod until it's garbage-collected.
 
 **Configuring storage is required for `mode: job`.** Without it, there is no supported way to retrieve the bundle once the Job's container exits.
 
@@ -166,7 +167,7 @@ helm install router-diagnostics apollo/router-diagnostics \
 
 ## Credentials
 
-Bundle bundle uploads go through the provider's own CLI (`aws s3 cp` / `gcloud storage cp`), any credential source that CLI already knows how to resolve works:
+Bundle uploads go through the provider's own CLI (`aws s3 cp` / `gcloud storage cp`), any credential source that CLI already knows how to resolve works:
 
 - **IRSA (AWS) / Workload Identity (GCP) — recommended.** No secrets to store or rotate. Requires setting `job.serviceAccount.annotations` with `eks.amazonaws.com/role-arn` or `iam.gke.io/gcp-service-account`. This is an annotation on the ServiceAccount, not a Kubernetes RBAC grant.
 - **Static credentials via a Secret** — for clusters without IRSA/Workload Identity (on-prem, or an S3-compatible store like MinIO/Ceph with no equivalent federation). Set `job.storage.existingSecret` to a Secret you create yourself, with `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` keys for `provider: s3` or a GCP service-account JSON key for `provider: gcs`. The chart mounts it into the Job's container, we never see or template the values themselves.

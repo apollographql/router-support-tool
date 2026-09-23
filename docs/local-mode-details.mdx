@@ -10,25 +10,23 @@ This page is the complete reference for `mode: local`. For the shortest path to 
 
 ## The `router-diagnostics` plugin
 
-Collection for `mode: local` runs through a Helm plugin, not the `support-bundle` binary directly:
+Collection for `mode: local` runs through a Helm plugin:
 
 ```bash
 helm plugin install https://github.com/apollographql/router-diagnostics-helm-plugin
 ```
 
-This adds the `helm router-diagnostics collect` subcommand, which does two things beyond just invoking `support-bundle`:
+This adds the `helm router-diagnostics collect` subcommand which does two things:
 
-**1. Installs a pinned `support-bundle` binary, private to the plugin.** `helm plugin install` downloads a specific troubleshoot.sh release into the plugin's own directory for `collect` to use. Apollo controls this version — the same reproducibility guarantee `mode: job`'s image tag gives on that path. See [Data Collected](./data-collected) for the version this documentation assumes.
+1. Installs a pinned `support-bundle` binary, private to the plugin. `helm plugin install` downloads a specific troubleshoot.sh release into the plugin's own directory for `collect` to use.
 
-**2. Bridges your machine to the router's metrics port, if reachable.** The router's metrics port is only reachable through its in-cluster Service DNS name, which doesn't resolve from the invoking user's own machine — so without this, the metrics collector fails with a connection error. See [Collecting Metrics](./collecting-metrics#mode-local) for exactly what this bridging step does and the permission it needs.
+2. Bridges your machine to the router's metrics port, if reachable. The router's metrics port is only reachable through its in-cluster Service DNS name which doesn't resolve from the invoking user's own machine. Without this, the metrics collector fails with a connection error. See [Collecting Metrics](./collecting-metrics#mode-local) for exactly what this bridging step does and the permission it needs.
 
-## Chart values common to both modes
-
-`mode: local` has no values of its own beyond these — `job.*` values exist in the chart but only render anything under `mode: job` (see [job-mode-details](./job-mode-details) if you're also running that mode elsewhere).
+## Chart values
 
 <ChartValuesCommon />
 
-## Permissions
+## Kubernetes RBAC
 
 Installing the chart requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself.
 
@@ -38,7 +36,7 @@ Running `helm router-diagnostics collect` uses **your own existing kubectl crede
 
 ## Cluster footprint
 
-Spec ConfigMap plus Helm release metadata — that's all `mode: local` leaves behind. Once installed, subsequent collections are just `helm router-diagnostics collect --namespace <namespace>`, with no reinstall needed. If you'd rather leave nothing behind:
+Spec ConfigMap plus Helm release metadata is left behind after install. Once installed, subsequent collections are just `helm router-diagnostics collect --namespace <namespace>`, with no reinstall needed. If you'd rather leave nothing behind:
 
 ```bash
 helm uninstall router-diagnostics --namespace <namespace>

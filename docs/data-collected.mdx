@@ -23,6 +23,7 @@ The tables below outline everything we attempt to collect with the GraphOS Route
 A couple of notes that apply across the table:
 
 - **Router deployment env vars, image tag, and pod status all come from the same pod collection**, so declining or losing one doesn't affect the others.
+- **If `APOLLO_GRAPH_REF` is routed through a Secret** via the router chart's `extraEnvVars`, only the environment variable *reference* is captured, not the value — the graph ref itself doesn't land in the bundle.
 - **Config is captured as written, not effective config** — environment-variable overrides applied on top of `router.yaml` aren't reflected in what's collected.
 - **Previous-container logs are always collected**, written to `<name>-previous.log`, so a router that already restarted still has its crash output captured. Logs are collected per pod and capture every container in the pod, including proxy/mesh sidecars. How far back logs reach and how many lines are kept are configurable, see the chart's `logs.maxAge`/`logs.maxLines` values in [job-mode-details](./job-mode-details) or [local-mode-details](./local-mode-details).
 

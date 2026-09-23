@@ -35,7 +35,7 @@ The collector always targets `localhost:<metricsPort>`, on the assumption that s
 2. It starts `kubectl port-forward svc/<resolved-service> <metricsPort>:<metricsPort>` (default `9090:9090`) in the background and waits for it to accept connections.
 3. It tears the port-forward down on exit — success, failure, or interrupt — once collection finishes.
 
-This needs `create` on the `pods/portforward` subresource in the router's namespace. Declining that doesn't fail collection, but we will be unable to collect metrics.
+This needs `create` on the `pods/portforward` subresource in the router's namespace. Declining that doesn't fail collection, but you won't be able to collect metrics.
 
 This bridging step is **not** needed under `mode: job`. The Job's pod runs inside the cluster so the Service DNS name resolves normally there. If you run `support-bundle` directly, bypassing the plugin, you'd need to set up that port-forward yourself.
 
