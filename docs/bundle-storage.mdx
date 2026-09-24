@@ -33,8 +33,6 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --namespace production \
   --set namespace=production \
   --set mode=job \
-  --set job.image.repository=<image-repository> \
-  --set job.image.tag=<image-tag> \
   --set job.storage.provider=s3 \
   --set job.storage.bucket=my-router-diagnostics \
   --set job.storage.prefix=router-bundles/ \
@@ -54,8 +52,6 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --namespace production \
   --set namespace=production \
   --set mode=job \
-  --set job.image.repository=<image-repository> \
-  --set job.image.tag=<image-tag> \
   --set job.storage.provider=s3 \
   --set job.storage.bucket=my-router-diagnostics \
   --set job.storage.prefix=router-bundles/ \
@@ -76,8 +72,6 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --namespace production \
   --set namespace=production \
   --set mode=job \
-  --set job.image.repository=<image-repository> \
-  --set job.image.tag=<image-tag> \
   --set job.storage.provider=s3 \
   --set job.storage.bucket=my-router-diagnostics \
   --set job.storage.s3.endpoint=https://minio.internal:9000 \
@@ -92,8 +86,6 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --namespace production \
   --set namespace=production \
   --set mode=job \
-  --set job.image.repository=<image-repository> \
-  --set job.image.tag=<image-tag> \
   --set job.storage.provider=gcs \
   --set job.storage.bucket=my-router-diagnostics \
   --set job.storage.prefix=router-bundles/ \
@@ -125,8 +117,6 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --namespace production \
   --set namespace=production \
   --set mode=job \
-  --set job.image.repository=<image-repository> \
-  --set job.image.tag=<image-tag> \
   -f storage-values.yaml
 ```
 
@@ -143,8 +133,6 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --namespace production \
   --set namespace=production \
   --set mode=job \
-  --set job.image.repository=<image-repository> \
-  --set job.image.tag=<image-tag> \
   --set job.storage.provider=url \
   --set job.storage.url.endpoint=https://example.com/upload/support-bundle \
   --set job.storage.url.method=PUT \
@@ -158,8 +146,6 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --namespace production \
   --set namespace=production \
   --set mode=job \
-  --set job.image.repository=<image-repository> \
-  --set job.image.tag=<image-tag> \
   --set job.storage.provider=url \
   --set job.storage.url.endpoint=https://example.com/upload/support-bundle \
   --set job.storage.url.headers.X-Upload-Source=router-diagnostics

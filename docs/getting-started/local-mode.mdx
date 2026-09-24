@@ -20,7 +20,7 @@ This gives you a single `./collect.sh` command. It also does two things for you 
 - Caches a pinned version of [troubleshoot's `support-bundle` binary](https://troubleshoot.sh/docs/support-bundle/introduction) locally, keyed by version.
 - Bridges your machine to the router's metrics port, if enabled — see [Collecting Metrics](../collecting-metrics#mode-local) for exactly what this does, the permission it needs, and the full list of prerequisites for metrics to be collected at all.
 
-`collect.sh` has no dependency on Helm — it takes `--namespace`/`--selector`/`--metricsPort` directly as flags rather than reading them back from an installed release, so whatever you pass to `helm install` below, pass again here.
+`collect.sh` takes `--namespace`/`--selector`/`--metrics-port` flags. Whatever you pass to `helm install` below, pass again here (`--metrics-port` maps to the chart's `metricsPort` value).
 
 ## Step 2: Install the Helm chart
 
@@ -57,7 +57,7 @@ Optionally, supply `metricsPort` if your metrics are not exposed via the default
 ./collect.sh --namespace production
 ```
 
-**Raw-manifest or custom deployment** — pass the same `selector` (and `metricsPort`, if you set one) you gave `helm install` above:
+**Raw-manifest or custom deployment** — pass the same `selector` (and `--metrics-port`, if you set a non-default `metricsPort`) you gave `helm install` above:
 
 ```bash
 ./collect.sh --namespace production --selector "app=my-router"

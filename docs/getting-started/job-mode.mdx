@@ -17,8 +17,6 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --namespace production \
   --set namespace=production \
   --set mode=job \
-  --set job.image.repository=<image-repository, TODO> \
-  --set job.image.tag=<image-tag> \
   --set job.storage.provider=s3 \
   --set job.storage.bucket=my-router-diagnostics \
   --set job.storage.prefix=router-bundles/ \
@@ -26,7 +24,7 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --set job.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=arn:aws:iam::123456789012:role/router-diagnostics-s3-writer
 ```
 
-TODO: job.image.repository`/`job.image.tag` point at Apollo's published Job image.
+The Job image defaults to Apollo's published `router-diagnostics` image — override `job.image.repository`/`job.image.tag` only to pin a different version or point at a private mirror.
 
 **If you're on a raw-manifest or custom deployment**, also supply `selector` and `configMapName`, since none of the official chart's conventions apply to your deployment:
 
@@ -37,8 +35,6 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --set selector="app=my-router" \
   --set configMapName=my-config \
   --set mode=job \
-  --set job.image.repository=<image-repository> \
-  --set job.image.tag=<image-tag> \
   --set job.storage.provider=s3 \
   --set job.storage.bucket=my-router-diagnostics \
   --set job.storage.prefix=router-bundles/ \

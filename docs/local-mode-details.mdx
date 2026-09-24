@@ -23,7 +23,7 @@ This gives you a `./collect.sh` command, which does two things:
 
 2. Bridges your machine to the router's metrics port, if reachable. The router's metrics port is only reachable through its in-cluster Service DNS name, which doesn't resolve from the invoking user's own machine. Without this, the metrics collector fails with a connection error. See [Collecting Metrics](./collecting-metrics#mode-local) for exactly what this bridging step does and the permission it needs.
 
-`collect.sh` takes `--namespace`, `--selector`, and `--metricsPort` directly as flags rather than reading them back from the installed Helm release — pass whatever values you gave `helm install` again here.
+`collect.sh` takes `--namespace`, `--selector`, and `--metrics-port` directly as flags rather than reading them back from the installed Helm release — pass whatever values you gave `helm install` again here (`--metrics-port` maps to the chart's `metricsPort` value).
 
 ## Chart values
 
