@@ -1,5 +1,6 @@
 set -eu
-support-bundle --load-cluster-specs --namespace {{ .Values.namespace }}
+
+support-bundle --load-cluster-specs --namespace {{ .Values.namespace }} --auto-update=false
 PROVIDER="${1:-}"
 if [ -n "$PROVIDER" ]; then
   BUNDLE=$(ls -t support-bundle-*.tar.gz | head -n1)

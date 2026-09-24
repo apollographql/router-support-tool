@@ -5,8 +5,7 @@
 # discoverable specs.
 #
 # Usage: collect.sh --namespace <namespace> [--selector <selector>] [--metrics-port <port>]
-# Takes the same values you passed to `helm install` directly - it doesn't read them back
-# from the chart release, so it has no dependency on Helm at all.
+# Takes the same values you passed to `helm install`.
 set -eu
 
 # renovate: datasource=github-releases depName=replicatedhq/troubleshoot
@@ -68,9 +67,7 @@ if [ -z "$NAMESPACE" ]; then
   exit 1
 fi
 
-# --- Fail fast if a required tool is missing, rather than mid-run on whichever one
-# happens to be invoked first. Note: no helm/jq dependency - this script doesn't read
-# anything back from a Helm release. ---
+# Fail early if a required tool is missing
 MISSING=""
 for tool in kubectl curl; do
   command -v "$tool" >/dev/null 2>&1 || MISSING="$MISSING $tool"
@@ -148,8 +145,4 @@ else
   fi
 fi
 
-# --auto-update=false: support-bundle's root command self-updates by default (checks
-# GitHub's latest release and replaces its own binary), which would silently override
-# the version this script pins - see specs/deployment/v1/v1.md -> troubleshoot.sh
-# support-bundle version.
 "$BIN" --load-cluster-specs --namespace "$NAMESPACE" --auto-update=false

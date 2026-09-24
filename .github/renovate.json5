@@ -6,10 +6,11 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Keep the plugin's pinned support-bundle binary and the chart's declared troubleshoot_version in lock-step — both match strings share a depName, so Renovate bumps them in the same PR.",
+      "description": "Keep the collect script's pinned support-bundle binary, the Job image's pinned binary, and the chart's declared troubleshoot_version in lock-step — all three match strings share a depName, so Renovate bumps them together in one PR.",
       "fileMatch": [
-        "^router-diagnostics-helm-plugin/scripts/install-binary\\.sh$",
-        "^support-bundle/base_spec\\.yaml$",
+        "^router-diagnostics-collect/collect\\.sh$",
+        "^router-diagnostics-job-image/Dockerfile$",
+        "^router-diagnostics/templates/base-spec-configmap\\.yaml$",
       ],
       "matchStrings": [
         "SUPPORT_BUNDLE_VERSION=\"(?<currentValue>.*?)\"",
