@@ -63,6 +63,8 @@ Optionally, supply `metricsPort` if your metrics are not exposed via the default
 ./collect.sh --namespace production --selector "app=my-router"
 ```
 
+`--namespace` here must match the value you gave both `helm install --namespace` and `--set namespace=` in Step 2 — `collect.sh` uses it to find the spec ConfigMap the chart rendered there. See [local-mode-details](../local-mode-details) for why.
+
 Run it again any time you want another bundle.
 
 [TODO: screenshot of terminal output during collection]

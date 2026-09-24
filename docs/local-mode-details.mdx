@@ -25,6 +25,8 @@ This gives you a `./collect.sh` command, which does two things:
 
 `collect.sh` takes `--namespace`, `--selector`, and `--metrics-port` directly as flags rather than reading them back from the installed Helm release — pass whatever values you gave `helm install` again here (`--metrics-port` maps to the chart's `metricsPort` value).
 
+**`--namespace` is a plain, required flag**. It must match wherever you actually installed the chart: both the `helm install --namespace` value and the chart's own `--set namespace=<router_namespace>` value (typically the same namespace in practice). `collect.sh` uses it directly for its `kubectl` calls and for `support-bundle --load-cluster-specs --namespace`, which is what discovers the rendered spec ConfigMap.
+
 ## Chart values
 
 <ChartValuesCommon />
