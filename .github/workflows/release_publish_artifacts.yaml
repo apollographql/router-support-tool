@@ -11,10 +11,43 @@ on:
         description: "Release version / tag name (e.g. v1.2.3)"
         type: string
         required: true
+  # Manual entry point: run this directly to retry publishing an already-tagged release,
+  #  e.g. after a partial failure.
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: "Commit SHA to publish the image from. Leave blank to resolve it from the vX.Y.Z tag."
+        type: string
+        required: false
+      version:
+        description: "Release version / tag name (e.g. v1.2.3) — must already be tagged"
+        type: string
+        required: true
 
 jobs:
+  resolve_sha:
+    name: "Resolve commit SHA"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      commit_sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - name: "Resolve commit SHA"
+        id: resolve
+        run: |
+          if [[ -n "${{ inputs.commit_sha }}" ]]; then
+            echo "sha=${{ inputs.commit_sha }}" >> "$GITHUB_OUTPUT"
+          else
+            SHA=$(gh api "repos/${{ github.repository }}/git/ref/tags/${{ inputs.version }}" --jq .object.sha)
+            echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   release_dockerhub:
     name: "Release Job image to DockerHub"
+    needs: [resolve_sha]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,7 +55,7 @@ jobs:
     steps:
       - uses: apollographql/release-tooling/release-dockerhub@6ab89bdcf9cd1a86ecaa85925b75e003405e5edc
         with:
-          commit_sha: ${{ inputs.commit_sha }}
+          commit_sha: ${{ needs.resolve_sha.outputs.commit_sha }}
           image_name: router-diagnostics
           version_number: ${{ inputs.version }}
 
