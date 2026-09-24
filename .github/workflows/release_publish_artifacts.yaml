@@ -47,6 +47,27 @@ jobs:
           chart_path: router-diagnostics-chart
           version: ${{ inputs.version }}
 
+  set_release_notes:
+    name: "Set GitHub Release notes from .changeset/notes"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: "Checkout code at release tag"
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.version }}
+
+      # .changeset/notes/<version>.md was generated and committed by
+      # scripts/prepare_release_notes.sh as part of the version-bump PR (see
+      # specs/release-process.md, step 4). Overwrites whatever notes were present when the
+      # release was published — this file is the source of truth once this automation is
+      # in place.
+      - name: "Set release notes"
+        run: gh release edit "${{ inputs.version }}" --notes-file ".changeset/notes/${{ inputs.version }}.md"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   attach_collect_script:
     name: "Attach collect.sh to GitHub Release"
     runs-on: ubuntu-latest
