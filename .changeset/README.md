@@ -40,13 +40,13 @@ breaking: <true|false>
 
 **Categories (required):**
 
-| Category | Use for               | In release notes? |
-| -------- | ---------------------- | ------------------ |
-| `feat`   | New features          | Yes                |
-| `fix`    | Bug fixes              | Yes                |
-| `docs`   | Documentation changes  | No                  |
-| `ci`     | CI/build changes       | No                  |
-| `test`   | Test-only changes      | No                  |
+| Category | Use for               | Release notes category     |
+| -------- | ---------------------- | --------------------------|
+| `feat`   | New features           | Features                  |
+| `fix`    | Bug fixes              | Fixes                     |
+| `docs`   | Documentation changes  | Maintenance               |
+| `ci`     | CI/build changes       | Maintenance               |
+| `test`   | Test-only changes      | Maintenance               |
 
 There's no per-package bump-type field here (unlike `apollographql/operator`'s changesets) — this
 repo's release version is chosen manually (see `specs/release-process.md`), not computed from

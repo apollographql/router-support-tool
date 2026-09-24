@@ -9,16 +9,15 @@ that identifies "what a customer gets" across the image, the chart, and the coll
 `support-bundle` version the image and the script bundle is a deliberate choice made as part of
 cutting that release.
 
-**Release notes come from per-PR changesets, not a hand-maintained changelog file.** Following
-`apollographql/operator`'s `.changeset/` convention: a PR that changes customer-visible behavior
-adds a `.changeset/<name>.md` file (`category: feat|fix|docs|ci|test` plus `breaking: true|false`
-frontmatter, enforced by CI — see `.changeset/README.md`). Unlike operator's changesets, ours carry
-no per-package bump-type field, since the release version here is chosen manually (below), not
-computed from changesets. At release-cut time, `scripts/prepare_release_notes.sh` consumes every
+**Release notes come from per-PR changesets** A PR that changes behavior adds a 
+`.changeset/<name>.md` file (`category: feat|fix|docs|ci|test` plus `breaking: true|false`
+frontmatter, enforced by CI — see `.changeset/README.md`).
+At release-cut time, `scripts/prepare_release_notes.sh` consumes every
 pending `.changeset/*.md` file into `.changeset/notes/vX.Y.Z.md` (breaking changes first,
-regardless of category, then `feat`/`fix`; `docs`/`ci`/`test` are consumed but excluded) and
+regardless of category, then `feat` as Features, `fix` as Fixes, and `docs`/`ci`/`test` together
+under a Maintenance heading — this repo is public, so every category is customer-visible) and
 deletes the consumed files. The release workflow then reads that generated file from the tagged
-commit and overwrites the GitHub Release's notes with it, unconditionally, every time.
+commit and overwrites the GitHub Release's notes with it.
 
 ## How to cut a release
 

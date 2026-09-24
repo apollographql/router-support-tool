@@ -29,6 +29,7 @@ fi
 BREAKING=""
 FEATURES=""
 FIXES=""
+MAINTENANCE=""
 
 for file in "${CHANGESET_FILES[@]}"; do
   CATEGORY=$(yq --front-matter=extract '.category' "$file" 2>/dev/null || true)
@@ -53,7 +54,7 @@ for file in "${CHANGESET_FILES[@]}"; do
     case "$CATEGORY" in
       feat) FEATURES+="${FORMATTED}"$'\n\n' ;;
       fix) FIXES+="${FORMATTED}"$'\n\n' ;;
-      # docs/ci/test are consumed but excluded from public release notes.
+      docs | ci | test) MAINTENANCE+="${FORMATTED}"$'\n\n' ;;
     esac
   fi
 done
@@ -72,10 +73,14 @@ if [[ -n "$FIXES" ]]; then
   RELEASE_NOTES+="## 🐛 Fixes"$'\n\n'"${FIXES}"$'\n'
 fi
 
+if [[ -n "$MAINTENANCE" ]]; then
+  RELEASE_NOTES+="## 🛠 Maintenance"$'\n\n'"${MAINTENANCE}"$'\n'
+fi
+
 RELEASE_NOTES=$(printf '%s' "$RELEASE_NOTES" | sed -e 's/[[:space:]]*$//')
 
 if [[ -z "$RELEASE_NOTES" ]]; then
-  echo "Error: every changeset was category docs/ci/test — nothing to publish as release notes." >&2
+  echo "Error: no changeset had a non-empty description — nothing to publish as release notes." >&2
   exit 1
 fi
 
