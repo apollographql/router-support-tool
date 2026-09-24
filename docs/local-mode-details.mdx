@@ -1,26 +1,29 @@
 ---
 title: mode: local Reference
-subtitle: Full chart values, plugin mechanics, and permissions for mode: local
-description: Complete reference for running the Router Support Tool as mode local — every chart value, what the router-diagnostics plugin does, and exactly what RBAC it needs.
+subtitle: Full chart values, script mechanics, and permissions for mode: local
+description: Complete reference for running the Router Support Tool as mode local — every chart value, what the router-diagnostics collect script does, and exactly what RBAC it needs.
 ---
 
 import ChartValuesCommon from './resources/chart-values-common.mdx';
 
 This page is the complete reference for `mode: local`. For the shortest path to a first bundle, see [Local Mode](./getting-started/local-mode) in the Getting Started guide instead — this page fills in everything that guide left out.
 
-## The `router-diagnostics` plugin
+## The `router-diagnostics` collect script
 
-Collection for `mode: local` runs through a Helm plugin:
+Collection for `mode: local` runs through a standalone script, not a Helm plugin — it has no dependency on Helm at all:
 
 ```bash
-helm plugin install https://github.com/apollographql/router-diagnostics-helm-plugin
+curl -sSLo collect.sh https://storage.googleapis.com/<bucket>/router-diagnostics-collect.sh
+chmod +x collect.sh
 ```
 
-This adds the `helm router-diagnostics collect` subcommand which does two things:
+This gives you a `./collect.sh` command, which does two things:
 
-1. Installs a pinned `support-bundle` binary, private to the plugin. `helm plugin install` downloads a specific troubleshoot.sh release into the plugin's own directory for `collect` to use.
+1. Caches a pinned `support-bundle` binary locally, keyed by version — a pin bump downloads a fresh binary rather than reusing a stale one. Apollo controls this version, the same way `mode: job`'s image tag does.
 
-2. Bridges your machine to the router's metrics port, if reachable. The router's metrics port is only reachable through its in-cluster Service DNS name which doesn't resolve from the invoking user's own machine. Without this, the metrics collector fails with a connection error. See [Collecting Metrics](./collecting-metrics#mode-local) for exactly what this bridging step does and the permission it needs.
+2. Bridges your machine to the router's metrics port, if reachable. The router's metrics port is only reachable through its in-cluster Service DNS name, which doesn't resolve from the invoking user's own machine. Without this, the metrics collector fails with a connection error. See [Collecting Metrics](./collecting-metrics#mode-local) for exactly what this bridging step does and the permission it needs.
+
+`collect.sh` takes `--namespace`, `--selector`, and `--metricsPort` directly as flags rather than reading them back from the installed Helm release — pass whatever values you gave `helm install` again here.
 
 ## Chart values
 
@@ -30,13 +33,13 @@ This adds the `helm router-diagnostics collect` subcommand which does two things
 
 Installing the chart requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself.
 
-Running `helm router-diagnostics collect` uses **your own existing kubectl credentials**; no additional ServiceAccount is created for this step. Reaching the metrics collector additionally needs `create` on the `pods/portforward` subresource in the router's namespace — see [Collecting Metrics](./collecting-metrics#mode-local) for why. Declining this doesn't fail collection; it only means that section comes back empty.
+Running `./collect.sh` uses **your own existing kubectl credentials**; no additional ServiceAccount is created for this step. Reaching the metrics collector additionally needs `create` on the `pods/portforward` subresource in the router's namespace — see [Collecting Metrics](./collecting-metrics#mode-local) for why. Declining this doesn't fail collection; it only means that section comes back empty.
 
 **`pods/exec` is not required** — nothing this tool does runs inside your router container.
 
 ## Cluster footprint
 
-Spec ConfigMap plus Helm release metadata is left behind after install. Once installed, subsequent collections are just `helm router-diagnostics collect --namespace <namespace>`, with no reinstall needed. If you'd rather leave nothing behind:
+Spec ConfigMap plus Helm release metadata is left behind after install. Once installed, subsequent collections are just `./collect.sh --namespace <namespace>` again, with no reinstall needed. If you'd rather leave nothing behind:
 
 ```bash
 helm uninstall router-diagnostics --namespace <namespace>

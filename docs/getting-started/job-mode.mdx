@@ -13,7 +13,7 @@ Configure bundle storage before you install. Without this, the bundle is produce
 **If you deployed the router with the official Apollo Helm chart**, the example below shows how to configure support bundle upload to AWS S3 via IRSA:
 
 ```bash
-helm install router-diagnostics apollo/router-diagnostics \
+helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
   --namespace production \
   --set namespace=production \
   --set mode=job \
@@ -31,7 +31,7 @@ TODO: job.image.repository`/`job.image.tag` point at Apollo's published Job imag
 **If you're on a raw-manifest or custom deployment**, also supply `selector` and `configMapName`, since none of the official chart's conventions apply to your deployment:
 
 ```bash
-helm install router-diagnostics apollo/router-diagnostics \
+helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
   --namespace production \
   --set namespace=production \
   --set selector="app=my-router" \

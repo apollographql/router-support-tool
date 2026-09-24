@@ -29,7 +29,7 @@ Storage only applies to `mode: job` — `mode: local` has no equivalent, since t
 ### S3, via IRSA (recommended — no Secret to manage)
 
 ```bash
-helm install router-diagnostics apollo/router-diagnostics \
+helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
   --namespace production \
   --set namespace=production \
   --set mode=job \
@@ -50,7 +50,7 @@ kubectl create secret generic router-diagnostics-storage \
   --from-literal=AWS_ACCESS_KEY_ID=<access-key-id> \
   --from-literal=AWS_SECRET_ACCESS_KEY=<secret-access-key>
 
-helm install router-diagnostics apollo/router-diagnostics \
+helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
   --namespace production \
   --set namespace=production \
   --set mode=job \
@@ -72,7 +72,7 @@ kubectl create secret generic router-diagnostics-storage \
   --from-literal=AWS_ACCESS_KEY_ID=<access-key-id> \
   --from-literal=AWS_SECRET_ACCESS_KEY=<secret-access-key>
 
-helm install router-diagnostics apollo/router-diagnostics \
+helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
   --namespace production \
   --set namespace=production \
   --set mode=job \
@@ -88,7 +88,7 @@ helm install router-diagnostics apollo/router-diagnostics \
 ### GCS, via Workload Identity (recommended)
 
 ```bash
-helm install router-diagnostics apollo/router-diagnostics \
+helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
   --namespace production \
   --set namespace=production \
   --set mode=job \
@@ -121,7 +121,7 @@ job:
     existingSecret: router-diagnostics-storage
 EOF
 
-helm install router-diagnostics apollo/router-diagnostics \
+helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
   --namespace production \
   --set namespace=production \
   --set mode=job \
@@ -139,7 +139,7 @@ kubectl create secret generic router-diagnostics-storage \
   --namespace production \
   --from-literal=Authorization="Bearer <token>"
 
-helm install router-diagnostics apollo/router-diagnostics \
+helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
   --namespace production \
   --set namespace=production \
   --set mode=job \
@@ -154,7 +154,7 @@ helm install router-diagnostics apollo/router-diagnostics \
 Or the same endpoint with a static header set directly as a value. Only use this option for a header that isn't sensitive since this is visible in `helm get values` and git history.
 
 ```bash
-helm install router-diagnostics apollo/router-diagnostics \
+helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
   --namespace production \
   --set namespace=production \
   --set mode=job \
