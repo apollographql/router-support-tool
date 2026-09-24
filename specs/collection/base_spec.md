@@ -52,7 +52,7 @@ The rest of this section describes the settings that are load-bearing for the co
 
 If any of the three is off or misconfigured, the collector returns empty and the rest of the bundle is unaffected.
 
-**Support bundle collection has to be able to reach the router's Service over the network.** This is a property of where collection runs. `mode: job` satisfies it automatically, since the Job's pod is itself inside the cluster network. `mode: local` does not: the `support-bundle` binary runs on the invoking user's own machine, which cannot resolve the router's in-cluster Service DNS name on its own. See `specs/deployment/v1/v1.md` → `mode: local` for the bridging step `helm router-diagnostics collect` automates for this.
+**Support bundle collection has to be able to reach the router's Service over the network.** This is a property of where collection runs. `mode: job` satisfies it automatically, since the Job's pod is itself inside the cluster network. `mode: local` does not: the `support-bundle` binary runs on the invoking user's own machine, which cannot resolve the router's in-cluster Service DNS name on its own. See `specs/deployment/v1/v1.md` → `mode: local` for the bridging step `collect.sh` automates for this.
 
 ### Raw-manifest metrics targeting
 
@@ -60,7 +60,7 @@ Raw-manifest / custom deployments already set `selector` (see `specs/deployment/
 
 `selector` is unset by default. Left unset under `mode: job`, `router-metrics` falls back to the official chart's fixed-label Service lookup, which may find nothing for a raw manifest and leaves the section empty. Setting it switches `router-metrics` to resolve its target from `selector` instead, matching a Service whose `spec.selector` matches. `metricsPort` only overrides which port on that Service to target, defaulting to `9090`.
 
-`mode: local` never resolves a host at all, it always targets `localhost`, on the assumption that something is already port-forwarding there. `metricsPort` only changes which local port it targets (defaulting to `9090`). `helm router-diagnostics collect` (see `specs/deployment/v1/v1.md` → `mode: local`) automates that port-forward for both the official chart and raw-manifest / custom deployments: it resolves the router's Service via `selector` (falling back to the official chart's `app.kubernetes.io/name=router` label when unset) and forwards `metricsPort` (default `9090`) to the same local port. A customer who runs `support-bundle` directly, bypassing the plugin, still needs to set up that port-forward themselves.
+`mode: local` never resolves a host at all, it always targets `localhost`, on the assumption that something is already port-forwarding there. `metricsPort` only changes which local port it targets (defaulting to `9090`). `collect.sh` (see `specs/deployment/v1/v1.md` → `mode: local`) automates that port-forward for both the official chart and raw-manifest / custom deployments: it resolves the router's Service via `selector` (falling back to the official chart's `app.kubernetes.io/name=router` label when unset) and forwards `metricsPort` (default `9090`) to the same local port. A customer who runs `support-bundle` directly, bypassing the script, still needs to set up that port-forward themselves.
 
 ### Namespace scoping is mandatory
 

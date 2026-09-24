@@ -54,24 +54,23 @@ Getting a spec into the cluster is done through a single Helm chart, `router-dia
 | --- | --- | --- |
 | Who runs collection | You, from your own machine with your own kubectl access | A Kubernetes Job, in-cluster, using its own ServiceAccount |
 | What gets installed | Spec ConfigMap only | Spec ConfigMap + Job + ServiceAccount/RBAC (namespace-scoped and cluster-scoped) |
-| `support-bundle` binary | Pinned by the `router-diagnostics` Helm plugin | Pinned by Apollo's published Job image |
+| `support-bundle` binary | Pinned by the router-diagnostics collect script | Pinned by Apollo's published Job image |
 | Where the bundle lands | Your current directory | In-cluster; your platform team retrieves it (`specs/storage/`) |
 | Use when | You have kubectl access to production | Your kubectl access is restricted and a platform team runs it on your behalf |
 
 See [Permissions for on-demand collection](#permissions-for-on-demand-collection) below for exactly what each mode needs.
 
-**If you use the Apollo Operator**, you don't need this chart at all — the Operator installs the same spec for you, with the values already filled in. You do still need the plugin from step one. Skip to [Apollo Operator customers](#apollo-operator-customers) below.
-
 ## Local mode
 
-### Step 1: Install the Apollo router-diagnostics plugin
-Install the `router-diagnostics` Helm plugin on the machine you'll collect from.
+### Step 1: Download the router-diagnostics collect script
+Download the collect script onto the machine you'll collect from, and make it executable.
 
 ```bash
-helm plugin install https://github.com/apollographql/router-diagnostics-helm-plugin
+curl -sSLo collect.sh https://storage.googleapis.com/<bucket>/router-diagnostics-collect.sh
+chmod +x collect.sh
 ```
 
-This gives you a single `helm router-diagnostics collect` command for collecting a support bundle, see [Step two](#step-two-install-the-helm-chart) below. The plugin also comes with its own pinned copy of the troubleshoot.sh `support-bundle` binary, and, if your router's metrics are enabled, it sets up and tears down the port-forward `router-metrics` needs to reach them. See [Metrics require the Prometheus endpoint to be enabled](#metrics-require-the-prometheus-endpoint-to-be-enabled) below.
+This gives you a single `./collect.sh` command for collecting a support bundle, see [Step two](#step-two-install-the-helm-chart) below. The script also caches its own pinned copy of the troubleshoot.sh `support-bundle` binary locally, and, if your router's metrics are enabled, it sets up and tears down the port-forward `router-metrics` needs to reach them. See [Metrics require the Prometheus endpoint to be enabled](#metrics-require-the-prometheus-endpoint-to-be-enabled) below.
 
 ### Step two: install the Helm chart
 
@@ -102,7 +101,13 @@ Since none of the official chart's conventions apply to your deployment, supply 
 ### Step three: collect a support bundle
 
 ```bash
-helm router-diagnostics collect
+./collect.sh --namespace production
+```
+
+`collect.sh` takes the same values you passed to `helm install` directly rather than reading them back from the release, so it has no dependency on Helm at all. **If you're on a raw-manifest or custom deployment**, pass the same `selector` (and `metricsPort`, if you set one) here too:
+
+```bash
+./collect.sh --namespace production --selector "app=my-router"
 ```
 
 ## Job mode
@@ -161,9 +166,9 @@ Note that the **router chart's** `serviceMonitor.enabled` value (not `router-dia
 
 If the exporter is off, or bound somewhere the collector can't reach, that section of the bundle will simply be empty — the rest of the bundle is unaffected.
 
-**Under `mode: local`, reaching this port also requires bridging your machine to the cluster network**, since the router's Service DNS name doesn't resolve outside it. `helm router-diagnostics collect` handles this for you — for the official chart and for raw-manifest / custom deployments alike, as long as `selector`/`metricsPort` are set correctly for your deployment.
+**Under `mode: local`, reaching this port also requires bridging your machine to the cluster network**, since the router's Service DNS name doesn't resolve outside it. `collect.sh` handles this for you — for the official chart and for raw-manifest / custom deployments alike, as long as `selector`/`metricsPort` are set correctly for your deployment.
 
-**If you're on a raw-manifest or custom deployment**, the `selector` you already set to locate your router is also what enables metrics collection under `mode: job` — this tier has no fixed label to resolve a host from otherwise, so leaving `selector` unset means no host to try, and this section stays empty. If your exporter listens on a port other than `9090`, also set `metricsPort`. Under `mode: local`, the collector always targets `localhost:<metricsPort>` (default `9090`) and `helm router-diagnostics collect` bridges that for you the same way it does for the official chart. Only if you run `support-bundle` directly, bypassing the plugin, do you need to set up that port-forward yourself.
+**If you're on a raw-manifest or custom deployment**, the `selector` you already set to locate your router is also what enables metrics collection under `mode: job` — this tier has no fixed label to resolve a host from otherwise, so leaving `selector` unset means no host to try, and this section stays empty. If your exporter listens on a port other than `9090`, also set `metricsPort`. Under `mode: local`, the collector always targets `localhost:<metricsPort>` (default `9090`) and `collect.sh` bridges that for you the same way it does for the official chart. Only if you run `support-bundle` directly, bypassing the script, do you need to set up that port-forward yourself.
 
 **If you're on the Apollo Operator**, see the Operator's own documentation for whether metrics are collected — the port is set by the Operator rather than by you, so it isn't something you configure.
 
@@ -181,11 +186,11 @@ Installing the chart creates a persistent object in your cluster — the spec Co
 helm uninstall router-diagnostics --namespace production
 ```
 
-If you expect to run diagnostics more than once, you may prefer to leave it installed. On `mode: local`, subsequent collections then only need `helm router-diagnostics collect`.
+If you expect to run diagnostics more than once, you may prefer to leave it installed. On `mode: local`, subsequent collections then only need `./collect.sh --namespace production` again.
 
 ### Permissions for on-demand collection
 
-Installing with `mode: local` requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself. `helm router-diagnostics collect` then runs using your existing kubectl credentials; no additional ServiceAccount is created for that step. Reaching `router-metrics` also needs `create` on the `pods/portforward` subresource in the router's namespace — port-forwarding to a Service resolves to one of its pods under the hood, and `helm router-diagnostics collect` does this on your behalf. Declining it doesn't fail collection, it only means `router-metrics` throws an error.
+Installing with `mode: local` requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself. `collect.sh` then runs using your existing kubectl credentials; no additional ServiceAccount is created for that step. Reaching `router-metrics` also needs `create` on the `pods/portforward` subresource in the router's namespace — port-forwarding to a Service resolves to one of its pods under the hood, and `collect.sh` does this on your behalf. Declining it doesn't fail collection, it only means `router-metrics` throws an error.
 
 Installing with `mode: job` requires more: creating a Job, a ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
 

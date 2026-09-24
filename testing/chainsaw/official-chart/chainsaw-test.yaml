@@ -11,8 +11,8 @@ spec:
   # All paths here are relative to this test's own directory, because that's how
   # Chainsaw resolves them.
   #
-  # Not concurrency-safe with the raw-manifest test: router-diagnostics-helm-plugin's
-  # collect.sh port-forwards to a hardcoded local port (9090) to reach the router's
+  # Not concurrency-safe with the raw-manifest test: the router-diagnostics collect
+  # script port-forwards to a hardcoded local port (9090) to reach the router's
   # metrics endpoint, and a local TCP port is a single-machine resource regardless of
   # which cluster/namespace either test targets.
   concurrent: false
@@ -27,7 +27,7 @@ spec:
                 --values values.yaml \
                 --set-file supergraphFile=../../fixtures/supergraph.graphql
 
-              # The router-diagnostics Helm plugin's collect.sh port-forwards to the
+              # The router-diagnostics collect script port-forwards to the
               # router's Service (not the pod directly) to reach :9090/metrics under
               # mode: local. This chart only adds that port to the Service when
               # serviceMonitor.enabled is true, which also renders an actual
@@ -94,7 +94,7 @@ spec:
             timeout: 120s
             content: |
               ../scripts/verify_official_chart_bundle.sh "$NAMESPACE" \
-                ../../../router-diagnostics-chart ../../../router-diagnostics-helm-plugin \
+                ../../../router-diagnostics-chart ../../../router-diagnostics-collect/collect.sh \
                 "test-graph@test"
             env:
               - name: NAMESPACE
