@@ -1,0 +1,64 @@
+name: "Release: Publish Artifacts"
+
+on:
+  workflow_call:
+    inputs:
+      commit_sha:
+        description: "Commit SHA the internal image was built from"
+        type: string
+        required: true
+      version:
+        description: "Release version / tag name (e.g. v1.2.3)"
+        type: string
+        required: true
+
+jobs:
+  release_dockerhub:
+    name: "Release Job image to DockerHub"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: apollographql/release-tooling/release-dockerhub@6ab89bdcf9cd1a86ecaa85925b75e003405e5edc
+        with:
+          commit_sha: ${{ inputs.commit_sha }}
+          image_name: router-diagnostics
+          version_number: ${{ inputs.version }}
+
+  publish_helm_chart:
+    name: "Publish Helm chart to DockerHub"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: "Checkout code at release tag"
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.version }}
+
+      # Packages from the checked-out release tag and publishes to
+      # oci://registry-1.docker.io/apollograph/router-diagnostics-chart. Chart.yaml's own
+      # `name` already matches, so no chart_name override is needed.
+      - name: "Publish Helm chart"
+        uses: apollographql/release-tooling/release-helm-dockerhub@6ab89bdcf9cd1a86ecaa85925b75e003405e5edc
+        with:
+          chart_path: router-diagnostics-chart
+          version: ${{ inputs.version }}
+
+  attach_collect_script:
+    name: "Attach collect.sh to GitHub Release"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: "Checkout code at release tag"
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.version }}
+
+      - name: "Upload collect.sh as a release asset"
+        run: gh release upload "${{ inputs.version }}" router-diagnostics-collect/collect.sh --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

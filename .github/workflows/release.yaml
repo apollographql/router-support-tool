@@ -1,0 +1,41 @@
+name: "Release"
+
+# Fires on publishing a GitHub Release.
+# One version is published for each artifact: the Job image, the Helm chart, and the collect script.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version / tag name (e.g. v1.2.3)"
+        type: string
+        required: true
+
+jobs:
+  resolve_sha:
+    name: "Resolve release SHA"
+    runs-on: ubuntu-latest
+    outputs:
+      commit_sha: ${{ steps.resolve.outputs.sha }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: "Resolve tag to commit SHA"
+        id: resolve
+        run: |
+          VERSION="${{ inputs.version || github.event.release.tag_name }}"
+          SHA=$(gh api repos/${{ github.repository }}/git/ref/tags/"$VERSION" --jq .object.sha)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag $VERSION to SHA $SHA"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  publish_artifacts:
+    name: "Publish artifacts"
+    needs: [resolve_sha]
+    uses: ./.github/workflows/release_publish_artifacts.yaml
+    with:
+      version: ${{ needs.resolve_sha.outputs.version }}
+      commit_sha: ${{ needs.resolve_sha.outputs.commit_sha }}
+    secrets: inherit
