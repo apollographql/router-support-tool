@@ -1,6 +1,6 @@
 ---
 title: Getting Started
-subtitle: Choose how you'll run the Router Support Tool
+subtitle: Choose how you'll run the GraphOS Router Support Tool
 description: Pick between mode local and mode job, and confirm what your Helm values need to supply based on how you deployed the router.
 ---
 
@@ -17,7 +17,7 @@ There are two independent things to figure out before you install anything:
 | --- | --- | --- |
 | Who runs collection | You, from your own machine, with your own kubectl access | A Kubernetes Job, in-cluster, using its own ServiceAccount |
 | What gets installed | Spec ConfigMap only | Spec ConfigMap + Job + ServiceAccount/RBAC (namespace-scoped and cluster-scoped) |
-| Where the bundle lands | Your current directory | AWS S3, S3-compatible store, or GCS — see [Job mode](./job-mode) |
+| Where the bundle lands | Your current directory | S3 (or S3-compatible), GCS, or a bare HTTP(S) endpoint you configure — or, if you skip that config, it stays in the completed pod until Kubernetes garbage-collects it. See [Job mode](./job-mode) |
 | Use when | You have kubectl access to production | Your kubectl access is restricted and a platform team runs collection on your behalf |
 
 Not sure which applies? If you can run `kubectl get pods` against production yourself right now, you want `mode: local`. If someone else on a platform team has to do that for you, you want `mode: job`.

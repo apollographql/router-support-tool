@@ -1,7 +1,7 @@
 ---
 title: mode: local Reference
 subtitle: Full chart values, script mechanics, and permissions for mode: local
-description: Complete reference for running the Router Support Tool as mode local — every chart value, what the router-diagnostics collect script does, and exactly what RBAC it needs.
+description: Complete reference for running the GraphOS Router Support Tool as mode local — every chart value, what the router-diagnostics collect script does, and exactly what RBAC it needs.
 ---
 
 import ChartValuesCommon from './resources/chart-values-common.mdx';
@@ -13,7 +13,7 @@ This page is the complete reference for `mode: local`. For the shortest path to 
 Collection for `mode: local` runs through a standalone script, not a Helm plugin — it has no dependency on Helm at all:
 
 ```bash
-curl -sSLo collect.sh https://rover.apollo.dev/<path-TODO>/router-diagnostics-collect/latest
+curl -sSL collect.sh https://rover.apollo.dev/<path-TODO>/router-diagnostics-collect/latest
 chmod +x collect.sh
 ```
 

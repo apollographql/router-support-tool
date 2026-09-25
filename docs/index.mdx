@@ -27,7 +27,7 @@ A few things we built in deliberately:
 
 - Generic secrets are stripped automatically, on every file, with no configuration. Environment-variable-named secrets (password, token, *_SECRET_ACCESS_KEY, and similar), credentials embedded in URLs, database connection strings, and a handful of Kubernetes-specific patterns (like last-applied-configuration annotations) are all redacted unconditionally, before the bundle is written.
 
-- Router-specific sensitive fields get their own redaction rules, because generic pattern-matching doesn't know your router.yaml's shape. This covers JWT verification and subgraph auth configuration, literal header values in your headers config, GraphQL operation bodies that reach router logs, subgraph routing URLs, and Redis credentials, whether embedded in a cache connection string or set as separate username/password fields.
+- Router-specific sensitive fields get their own redaction rules, because generic pattern-matching doesn't know your router.yaml's shape. This covers JWT verification and subgraph auth configuration, literal header values in your headers config, GraphQL operation bodies that reach router logs, subgraph routing URLs, TLS private keys (supergraph, subgraph, and connector TLS config), and Redis credentials, whether embedded in a cache connection string or set as separate username/password fields.
 
 - It's safe to run against a router that's already degraded. Every collector gathers its signal externally, from the Kubernetes API, kubelet metrics, or an HTTP endpoint, rather than executing inside your router's container, so running the tool doesn't compete with your router process for CPU or memory.
 
@@ -49,6 +49,8 @@ The tool produces a single artifact:
 support-bundle-2026-09-11T14_32_00.tar.gz
 
 [TODO: screenshot of bundle contents / meta.json excerpt]
+
+Every bundle also includes a `meta.json`, generated at chart-install time: `spec_version`, `mode` (`local` or `job`), `namespace`, and the pinned `troubleshoot_version` this run used, plus `sidecar_injection_disabled` for `mode: job`. It's a fixed snapshot of what the chart was configured to do and is useful for confirming which pin or mode produced a given bundle, but it can't tell you why a section came back empty.
 
 From there, it's yours. Inspect it, keep it, or attach it to a support ticket.
 
