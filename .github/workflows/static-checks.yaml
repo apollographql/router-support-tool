@@ -2,6 +2,13 @@ name: Static Checks
 
 on:
   pull_request:
+    # Explicit types are required here because listing any `types:` overrides GitHub's
+    # default set (opened, synchronize, reopened) rather than adding to it. `labeled` is
+    # added so that applying the `skip-changeset` label to an already-open PR re-runs
+    # check_changeset against the PR's current labels — otherwise that job's `if:` only
+    # ever sees whatever labels existed at the moment of the triggering event, and a label
+    # added afterward has no run left to apply to.
+    types: [labeled, opened, reopened, synchronize]
   push:
     branches:
       - main
