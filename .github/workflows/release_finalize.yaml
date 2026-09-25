@@ -9,7 +9,6 @@ on:
     # it does not wait for all of them. The "every required check succeeded" gate is done
     # explicitly in the finalize job below instead.
     workflows: [
-        "Official Chart Collect Script Integration Test",
         "Raw-Manifest Collect Script Integration Test"
       ]
 
@@ -22,6 +21,7 @@ jobs:
       github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
     outputs:
       commit_sha: ${{ github.event.workflow_run.head_sha }}
