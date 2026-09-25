@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+#MISE description="Verify the current branch includes a valid changeset. Usage: mise run check-changeset [base-branch]"
+set -euo pipefail
+
+BASE_BRANCH="${1:-main}"
+VALID_CATEGORIES="feat|fix|docs|ci|test"
+
+CHANGESET_FILES=$(git diff --name-only --diff-filter=A "origin/$BASE_BRANCH"...HEAD -- '.changeset/*.md' | grep -v 'README.md' || true)
+
+if [[ -z "$CHANGESET_FILES" ]]; then
+  echo "Error: No changeset file found."
+  echo ""
+  echo "Every PR must include a changeset. Create one with:"
+  echo "  mise run changeset"
+  echo ""
+  echo "Or manually create a file in .changeset/ — see .changeset/README.md for the format."
+  echo ""
+  echo "If this PR genuinely doesn't need a changeset, add the 'skip-changeset' label."
+  exit 1
+fi
+
+ERRORS=0
+while IFS= read -r file; do
+  [[ -z "$file" ]] && continue
+  [[ ! -f "$file" ]] && continue
+
+  echo "Checking $file..."
+  FILE_OK=true
+
+  CATEGORY=$(yq --front-matter=extract '.category' "$file" 2>/dev/null || true)
+  if [[ -z "$CATEGORY" ]]; then
+    echo "  Error: Missing 'category' field in frontmatter."
+    ERRORS=$((ERRORS + 1))
+    FILE_OK=false
+  elif ! echo "$CATEGORY" | grep -qE "^($VALID_CATEGORIES)$"; then
+    echo "  Error: Invalid category '$CATEGORY'. Must be one of: feat, fix, docs, ci, test"
+    ERRORS=$((ERRORS + 1))
+    FILE_OK=false
+  fi
+
+  BREAKING=$(yq --front-matter=extract '.breaking' "$file" 2>/dev/null || true)
+  if [[ -z "$BREAKING" || "$BREAKING" == "null" ]]; then
+    echo "  Error: Missing 'breaking' field in frontmatter."
+    ERRORS=$((ERRORS + 1))
+    FILE_OK=false
+  elif [[ "$BREAKING" != "true" && "$BREAKING" != "false" ]]; then
+    echo "  Error: Invalid breaking value '$BREAKING'. Must be 'true' or 'false'."
+    ERRORS=$((ERRORS + 1))
+    FILE_OK=false
+  fi
+
+  BODY=$(awk 'BEGIN{n=0} /^---$/{n++; next} n>=2' "$file" | grep -v '^[[:space:]]*$' || true)
+  if [[ -z "$BODY" ]]; then
+    echo "  Error: Changeset has no content. Please describe what changed."
+    ERRORS=$((ERRORS + 1))
+    FILE_OK=false
+  fi
+
+  $FILE_OK && echo "  OK"
+done <<< "$CHANGESET_FILES"
+
+if [[ "$ERRORS" -gt 0 ]]; then
+  echo ""
+  echo "Found $ERRORS error(s) in changeset files."
+  exit 1
+fi
+
+echo ""
+echo "All changeset files are valid."

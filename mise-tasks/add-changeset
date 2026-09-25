@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+#MISE description="Add a new changeset describing a customer-visible change."
+set -euo pipefail
+
+prompt() {
+  local label="$1" pattern="${2:-}"
+  read -rp "$label: " VALUE
+  if [[ -z "$VALUE" ]]; then
+    echo "Error: ${label%% *} cannot be empty." >&2
+    exit 1
+  fi
+  if [[ -n "$pattern" ]] && ! echo "$VALUE" | grep -qE "^($pattern)$"; then
+    echo "Error: Invalid value '$VALUE'." >&2
+    exit 1
+  fi
+}
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+CHANGESET_DIR="$REPO_ROOT/.changeset"
+
+prompt "Changeset name (kebab-case, e.g. fix-metrics-host-resolution)"; NAME="$VALUE"
+if [[ -f "$CHANGESET_DIR/$NAME.md" ]]; then
+  echo "Error: $CHANGESET_DIR/$NAME.md already exists." >&2
+  exit 1
+fi
+
+prompt "Category (feat/fix/docs/ci/test)" "feat|fix|docs|ci|test"; CATEGORY="$VALUE"
+prompt "Breaking change? (yes/no)" "yes|no"; BREAKING="$VALUE"
+prompt "Summary (one line)"; SUMMARY="$VALUE"
+
+echo ""
+read -rp "Detailed description (optional, press Enter to skip): " BODY
+
+{
+  echo '---'
+  echo "category: $CATEGORY"
+  if [[ "$BREAKING" == "yes" ]]; then
+    echo "breaking: true"
+  else
+    echo "breaking: false"
+  fi
+  echo '---'
+  echo ""
+  echo "$SUMMARY"
+  if [[ -n "$BODY" ]]; then
+    echo ""
+    echo "$BODY"
+  fi
+} > "$CHANGESET_DIR/$NAME.md"
+
+echo ""
+echo "Created $CHANGESET_DIR/$NAME.md"
