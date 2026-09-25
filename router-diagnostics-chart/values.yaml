@@ -33,9 +33,10 @@ logs:
 # -- mode: job only
 job:
   image:
-    # -- The image bundling the support-bundle binary Apollo publishes, pinned to a
-    # troubleshoot.sh version. Override only to pin an older version or point at a
-    # private mirror.
+    # -- The image bundling the support-bundle binary Apollo publishes, tagged to match this
+    # chart's own release version. The troubleshoot.sh version it bundles is a separate,
+    # independently-pinned detail — see a collected bundle's meta.json find out which one.
+    # Override only to pin an older release or point at a private mirror.
     repository: "apollograph/router-diagnostics"
     tag: "v0.134.1"
     pullPolicy: IfNotPresent
