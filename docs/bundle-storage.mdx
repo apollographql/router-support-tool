@@ -24,6 +24,8 @@ Storage only applies to `mode: job` — `mode: local` has no equivalent, since t
 | `job.storage.url.headers` | No | Static headers templated directly into the request — same exposure caveat as static credentials above |
 | `job.storage.existingSecret` | No | Name of a Secret you create yourself. See [Credentials](#credentials) below for what it holds per provider |
 
+For `provider: s3`/`gcs`, `existingSecret` and a static credential (`s3.accessKeyId`/`secretAccessKey` or `gcs.credentialsJson`) are mutually exclusive. Setting both fails at `helm install`/`helm template` with an explicit error.
+
 ## Examples
 
 ### S3, via IRSA (recommended — no Secret to manage)
@@ -153,7 +155,7 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
 
 ## Credentials
 
-Bundle uploads go through the provider's own CLI (`aws s3 cp` / `gcloud storage cp`), any credential source that CLI already knows how to resolve works:
+For `s3`/`gcs`, bundle uploads go through the provider's own CLI (`aws s3 cp` / `gcloud storage cp`), so any credential source that CLI already knows how to resolve works. (`provider: url` doesn't use a CLI at all — it's a plain `curl -X <method> -T <bundle> <endpoint>`, so its only credential mechanism is the HTTP headers described below.)
 
 - **IRSA (AWS) / Workload Identity (GCP) — recommended.** No secrets to store or rotate. Requires setting `job.serviceAccount.annotations` with `eks.amazonaws.com/role-arn` or `iam.gke.io/gcp-service-account`. This is an annotation on the ServiceAccount, not a Kubernetes RBAC grant.
 - **Static credentials via a Secret** — for clusters without IRSA/Workload Identity (on-prem, or an S3-compatible store like MinIO/Ceph with no equivalent federation). Set `job.storage.existingSecret` to a Secret you create yourself, with `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` keys for `provider: s3` or a GCP service-account JSON key for `provider: gcs`. The chart mounts it into the Job's container, we never see or template the values themselves.
@@ -186,3 +188,7 @@ Once the Job completes and uploads succeed, the bundle is retrieved the same way
 - **A bare endpoint (`provider: url`)** — retrieval is entirely up to whatever the receiving service does with the upload; this tool's role ends once the `PUT`/`POST` succeeds.
 
 If you didn't configure `job.storage` at all, there is no retrieval path — see [Job Mode reference → Bundle Retrieval](./job-mode-details#bundle-retrieval).
+
+## Before you share a retrieved bundle
+
+Every file in the bundle is redacted automatically before it's uploaded, but redaction can fail on a single file without failing the whole run. **If a bundle reports a redaction error, don't share it until you understand what it means** — an error means redaction may not have completed on some file.

@@ -4,7 +4,7 @@ subtitle: Choose how you'll run the Router Support Tool
 description: Pick between mode local and mode job, and confirm what your Helm values need to supply based on how you deployed the router.
 ---
 
-Getting a spec into the cluster is done through a single Helm chart, `router-diagnostics`, with a `mode` value controlling how collection runs. Both modes collect the same spec with the same collectors and redactors. Who runs it, where it runs, and what it needs from you differ.
+Getting a spec into the cluster is done through a single Helm chart, `router-diagnostics-chart`, with a `mode` value controlling how collection runs. Both modes collect the same spec with the same collectors and redactors. Who runs it, where it runs, and what it needs from you differ.
 
 There are two independent things to figure out before you install anything:
 
@@ -31,7 +31,7 @@ Whichever mode you picked, the chart needs to know how to find your router. That
 
 | Deployment | What you supply | Why |
 | --- | --- | --- |
-| **[Official Apollo router Helm chart](TODO: add link)** | `namespace` only | The chart's collectors target your router by its standard `app.kubernetes.io/name=router` label and know the ConfigMap name and ports it uses |
+| **[Official Apollo router Helm chart](https://github.com/apolloconfig/apollo-helm-chart)** | `namespace` only | The chart's collectors target your router by its standard `app.kubernetes.io/name=router` label and know the ConfigMap name and ports it uses |
 | **Raw manifests / custom deployment** | `namespace`, `selector`, `configMapName`, `metricsPort` (if not `9090`) | None of the official chart's conventions apply, so nothing about your router's location or config can be assumed |
 
 Both the [local mode](./local-mode) and [job mode](./job-mode) pages show the install command for each case.

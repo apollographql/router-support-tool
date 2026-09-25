@@ -39,7 +39,18 @@ Once the Job completes, retrieval depends on whether `job.storage` was configure
 
 Installing `mode: job` requires creating a Job, a namespace-scoped ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
 
-Collection itself runs using **a namespace-scoped ServiceAccount the chart creates**, not the installer's own credentials. It needs read access in the router's namespace to pods, pod logs, ConfigMaps, and deployments — standard permissions for anyone managing a k8s workload — plus three separate cluster-scoped grants for `nodeMetrics`, deliberately kept independent so you can decline the more sensitive ones without losing the others. See [Collecting Metrics → If Prometheus isn't set up yet](./collecting-metrics#if-prometheus-isnt-set-up-yet) for exactly what those three grants are and what each authorizes.
+Collection itself runs using a namespace-scoped ServiceAccount the chart creates. All namespace-scoped access is read-only (`get`/`list`) and covers everything `clusterResources`/`logs`/`configMap` touch:
+
+- **Core** — `configmaps`, `endpoints`, `events`, `limitranges`, `persistentvolumeclaims`, `pods`, `pods/log`, `resourcequotas`, `serviceaccounts`, `services`
+- **`apps`** — `daemonsets`, `deployments`, `replicasets`, `statefulsets`
+- **`batch`** — `cronjobs`, `jobs`
+- **`rbac.authorization.k8s.io`** — `roles`, `rolebindings`
+- **`policy`** — `poddisruptionbudgets`
+- **`networking.k8s.io`** — `ingresses`, `networkpolicies`
+- **`discovery.k8s.io`** — `endpointslices`
+- **`coordination.k8s.io`** — `leases`
+
+On top of this, three separate cluster-scoped grants apply for `nodeMetrics`, deliberately kept independent so you can decline the more sensitive ones without losing the others. See [Collecting Metrics → If Prometheus isn't set up yet](./collecting-metrics#if-prometheus-isnt-set-up-yet) for exactly what those three grants are and what each authorizes.
 
 **`pods/exec` is not required** — nothing this tool does runs inside your router container.
 
