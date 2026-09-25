@@ -3,6 +3,6 @@ category: feat
 breaking: false
 ---
 
-Preview release of the router support tool
+Preview release of the GraphOS Router Support Tool
 
-Ships on-demand support-bundle collection for Kubernetes: the router-diagnostics-chart Helm chart (mode: local and mode: job), the router-diagnostics Job image, and the router-diagnostics-collect script, published to Docker Hub and GitHub Releases.
+Ships on-demand support-bundle collection for Kubernetes: the GraphOS Router Support Tool, a new way to package up a diagnostic snapshot of your GraphOS Router and its Kubernetes environment including router version and config, logs, pod health, and metrics into a single sanitized archive, on demand, without affecting your router.
