@@ -22,7 +22,7 @@ jobs:
           # not the commit "Build Job Image" actually built. head_sha is that exact commit.
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - uses: apollographql/release-tooling/rtf-orchestrator-run-known@2a86a497f7ba8a809b4903c63d0ccbb2d539ebc7
+      - uses: apollographql/release-tooling/rtf-orchestrator-run-known@0164abcc44f36be7659ce0be5bc984e4f44614d1
         with:
           git_ref: ${{ github.event.workflow_run.head_sha }}
           test_plan_id: d92be985-ca2a-457c-9fc8-d692256782ae
