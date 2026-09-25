@@ -1,30 +1,29 @@
 # Changesets
 
-This directory tracks user-facing changes to the router support tool. Every PR that changes
-customer-visible behavior should include a changeset file (enforced by CI).
+This directory tracks user-facing changes to the router support tool. Every PR
+should include a changeset file (enforced by CI).
 
 ## Creating a Changeset
 
 **Interactive (recommended):**
 
 ```sh
-mise run changeset
+mise run add-changeset
 ```
 
 **Manual:**
 
-Create a new Markdown file in this directory with a unique name (e.g. `fix-metrics-host-resolution.md`):
+Create a new Markdown file in this directory with a unique name (e.g. `add-metrics-port-value.md`):
 
 ```markdown
 ---
-category: fix
+category: feat
 breaking: false
 ---
 
-Fixed the raw-manifest tier's metrics host resolution under mode: job
+Add metricsPort to configure the router's metrics port
 
-`selector` wasn't being passed through to the metrics collector's host resolution, so
-Prometheus scraping silently fell back to the wrong host.
+Defaults to `9090`. Set this if your router's Prometheus exporter binds to a different port.
 ```
 
 ## File Format
@@ -47,10 +46,6 @@ breaking: <true|false>
 | `docs`   | Documentation changes  | Maintenance               |
 | `ci`     | CI/build changes       | Maintenance               |
 | `test`   | Test-only changes      | Maintenance               |
-
-There's no per-package bump-type field here (unlike `apollographql/operator`'s changesets) — this
-repo's release version is chosen manually (see `specs/release-process.md`), not computed from
-changesets.
 
 **Breaking (required):**
 
@@ -76,9 +71,6 @@ an optional blank-line-separated body with more detail.
 2. When the release is tagged and published, the release workflow reads
    `.changeset/notes/<version>.md` from the tagged commit and sets it as the GitHub Release's
    notes, overwriting whatever was typed when the release was published.
-
-There's no committed changelog file to maintain beyond that per-release notes snapshot — no
-`CHANGELOG.md`, and category/breaking metadata isn't rendered anywhere public once consumed.
 
 ## Exemptions
 

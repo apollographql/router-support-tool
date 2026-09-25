@@ -3,7 +3,6 @@ name: "Release: Finalize"
 # Runs automatically after every required check has succeeded on a push to main after a
 # release PR from release_prepare.yaml is merged.
 on:
-  workflow_dispatch: {}
   workflow_run:
     types: [completed]
     # Each of these fires this trigger independently the moment that one workflow completes,
@@ -17,35 +16,25 @@ on:
 jobs:
   finalize:
     name: "Finalize release"
+    # Only run when the triggering workflow succeeded on a push (not a PR)
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push')
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
-      commit_sha: ${{ steps.sha.outputs.sha }}
+      commit_sha: ${{ github.event.workflow_run.head_sha }}
       release_needed: ${{ steps.check.outputs.needed }}
       version: ${{ steps.check.outputs.version }}
     steps:
-      - name: "Resolve commit SHA"
-        id: sha
-        run: |
-          # On a workflow_run trigger, github.sha is the tip of the default branch right now,
-          # not necessarily the commit that actually triggered this run — head_sha is that exact
-          # commit. On workflow_dispatch there's no workflow_run context at all, so github.sha
-          # (the default branch tip, which is exactly what we want to re-check) is correct as-is.
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: "Checkout code"
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.sha.outputs.sha }}
+          # On a workflow_run trigger, github.sha is the tip of the default branch right now,
+          # not necessarily the commit that actually triggered this run — head_sha is that
+          # exact commit.
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: "Install mise tools"
         uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
@@ -55,7 +44,7 @@ jobs:
       - name: "Check that every required workflow succeeded for this commit"
         id: gate
         run: |
-          SHA="${{ steps.sha.outputs.sha }}"
+          SHA="${{ github.event.workflow_run.head_sha }}"
           READY=true
           for WORKFLOW in "Static Checks" "Test with RTF" "Official Chart Collect Script Integration Test" "Raw-Manifest Collect Script Integration Test"; do
             # gh api's --jq takes a single filter expression, not extra jq flags like --arg —
