@@ -1,0 +1,27 @@
+name: Build Chart
+
+# Publishes router-diagnostics-chart to Apollo's private internal Helm registry, keyed by
+# commit SHA (the default 0.0.0+<sha> version scheme, matching build-job-image.yaml's internal
+# image tagging). Runs on every PR/push unconditionally (no path filter), same as that workflow.
+on:
+  pull_request: {}
+  push:
+    branches:
+      - main
+
+jobs:
+  build_chart:
+    name: "Publish router-diagnostics-chart internally"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "Publish chart to apollo-private-helm"
+        uses: apollographql/release-tooling/release-helm-internal@6ab89bdcf9cd1a86ecaa85925b75e003405e5edc
+        with:
+          chart_path: router-diagnostics-chart
+          commit_sha: ${{ github.sha }}
