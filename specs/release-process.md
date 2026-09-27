@@ -26,8 +26,8 @@ There's no `dev`/`main` split here — everything lives on `main`, unlike `apoll
 `main` directly.
 
 1. **Verify CI is green on `main`** for the commit being released. This includes
-   `.github/workflows/build-job-image.yaml`, which on every push to `main` builds the Job image
-   and publishes it internally, keyed by commit SHA — that internal build is what gets
+   `run-rtf-test-plan.yaml`'s `build_job_image` job, which on every push to `main` builds the Job
+   image and publishes it internally, keyed by commit SHA — that internal build is what gets
    republished to Docker Hub later, so it must have already succeeded for this commit.
 2. **Confirm the troubleshoot.sh pin.** The Renovate-driven lock-step PR (Dockerfile ARG,
    `router-diagnostics-collect/collect.sh`'s own pin, chart's `troubleshoot_version`) should

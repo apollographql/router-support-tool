@@ -47,7 +47,11 @@ case "$CONDITION" in
     # is what actually produces a previous-container log within the same pod.
     set -- $(router_pods)
     pod="$1"
-    kubectl exec "$pod" -n "$NAMESPACE" -c router -- kill 1
+    # `kill` is a shell builtin, not a standalone binary - `kubectl exec ... -- kill 1`
+    # execs "kill" directly with no shell involved, so it fails with "executable file not
+    # found" on any image that doesn't separately ship procps' /bin/kill. Routing it
+    # through `sh -c` is what actually gets the builtin.
+    kubectl exec "$pod" -n "$NAMESPACE" -c router -- sh -c 'kill 1'
     kubectl wait --for=condition=Ready "pod/$pod" -n "$NAMESPACE" --timeout=60s
     ;;
   *)

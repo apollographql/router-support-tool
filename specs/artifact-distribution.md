@@ -10,8 +10,8 @@ cut a release, see `specs/release-process.md`.
 **Source:** `router-diagnostics-job-image/` (Dockerfile bundling `support-bundle`, `aws-cli`,
 `gcloud`, `curl`).
 
-**Internal build:** `.github/workflows/build-job-image.yaml`, on every PR and every push to
-`main`, unconditionally.
+**Internal build:** the `build_job_image` job in `.github/workflows/run-rtf-test-plan.yaml`, on
+every PR and every push to `main`, unconditionally.
 
 **External publish:** to `docker.io/apollograph/router-diagnostics` which re-publishes the already-built internal
 image by digest. Tagged with the release version (see `specs/release-process.md`).
