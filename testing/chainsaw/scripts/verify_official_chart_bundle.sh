@@ -16,6 +16,11 @@ EXPECTED_GRAPH_REF=$4
 
 RELEASE_NAME="router-diagnostics"
 
+fail() {
+  echo "FAIL: $1" >&2
+  exit 1
+}
+
 helm install "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
   --set namespace="$NAMESPACE" \
   --set mode=local
@@ -24,14 +29,17 @@ helm install "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
 # own label / port 9090) - collect.sh takes these directly, it doesn't read the release.
 "$COLLECT_SCRIPT" --namespace "$NAMESPACE"
 
+# --- collect.sh caches the pinned support-bundle binary on first use ---
+# This CI runner starts with no pre-existing cache, so the call above just exercised the
+# real download-from-GitHub path.
+PINNED_VERSION=$(grep -m1 '^SUPPORT_BUNDLE_VERSION=' "$COLLECT_SCRIPT" | sed -E 's/^SUPPORT_BUNDLE_VERSION="(.*)"$/\1/')
+[ -n "$PINNED_VERSION" ] || fail "couldn't extract SUPPORT_BUNDLE_VERSION from $COLLECT_SCRIPT"
+CACHED_BIN="$HOME/.router-diagnostics/bin/support-bundle-v${PINNED_VERSION}"
+[ -x "$CACHED_BIN" ] || fail "collect.sh didn't cache the pinned binary at $CACHED_BIN"
+
 BUNDLE=$(ls -t support-bundle-*.tar.gz | head -1)
 DIR="${BUNDLE%.tar.gz}"
 tar xzf "$BUNDLE"
-
-fail() {
-  echo "FAIL: $1" >&2
-  exit 1
-}
 
 # --- meta.json: render-time facts (specs/collection/meta_json.md) ---
 META="$DIR/meta.json"
