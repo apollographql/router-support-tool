@@ -38,6 +38,18 @@ case "$CONDITION" in
       misconfigure_metrics "$pod"
     done
     ;;
+  router-recently-restarted)
+    # Restart exactly one router pod's container in place (same pod, same name) and wait
+    # for it to come back Ready. This is deliberately NOT `kubectl rollout restart` -
+    # that replaces the pod entirely via the ReplicaSet, producing a brand-new pod with no
+    # restart history at all, so there'd be nothing for `logs`'s previous-container
+    # capture to find. Killing PID 1 inside the existing container (restartPolicy: Always)
+    # is what actually produces a previous-container log within the same pod.
+    set -- $(router_pods)
+    pod="$1"
+    kubectl exec "$pod" -n "$NAMESPACE" -c router -- kill 1
+    kubectl wait --for=condition=Ready "pod/$pod" -n "$NAMESPACE" --timeout=60s
+    ;;
   *)
     echo "unknown or not-yet-implemented condition: $CONDITION" >&2
     exit 1

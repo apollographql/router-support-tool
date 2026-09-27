@@ -73,9 +73,20 @@ jq -e --arg version "$ROUTER_VERSION" '
 ' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
 
 # clusterResources collector: pod status and restart counts.
-# Every router pod should be Running with zero restarts by this point.
+# Every router pod should be Running by this point regardless of condition - env_setup.sh
+# always waits for Ready before returning control here.
 jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.phase] | all(. == "Running")' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
-jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.containerStatuses[0].restartCount] | all(. == 0)' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+
+case "$CONDITION" in
+  router-recently-restarted)
+    # Exactly one router pod was restarted in place by env_setup.sh - assert exactly one
+    # has a nonzero restart count.
+    jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.containerStatuses[0].restartCount | select(. > 0)] | length == 1' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+    ;;
+  *)
+    jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.containerStatuses[0].restartCount] | all(. == 0)' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+    ;;
+esac
 
 # clusterResources collector: configured resource requests/limits are captured - set on
 # the router container in router-manifest.yaml purely so this has a real value to check.
@@ -115,6 +126,23 @@ case "$CONDITION" in
     grep -q '# HELP' "$BUNDLE_DIR/router-metrics/result.json"
     ;;
 esac
+
+# --- Router recently restarted: the logs collector's previous-container capture ---
+if [ "$CONDITION" = "router-recently-restarted" ]; then
+  # troubleshoot.sh always requests the previous container's log when one exists,
+  # see specs/collection/base_spec.md, written as <name>-previous.log.
+  PREVIOUS_LOG=$(find "$BUNDLE_DIR/router-logs" -name '*-previous.log')
+  test -n "$PREVIOUS_LOG"
+  test -s "$PREVIOUS_LOG"
+  grep -q '"message":"state machine transitioned"' "$PREVIOUS_LOG"
+  grep -q '"state":"Startup"' "$PREVIOUS_LOG"
+
+  # The current (post-restart) container's own log must also show a fresh startup.
+  CURRENT_LOG=$(find "$BUNDLE_DIR/router-logs" -name '*.log' ! -name '*-previous.log')
+  test -n "$CURRENT_LOG"
+  grep -q '"message":"state machine transitioned"' "$CURRENT_LOG"
+  grep -q '"state":"Startup"' "$CURRENT_LOG"
+fi
 
 # --- APOLLO_KEY must never be collected ---
 if grep -rq "APOLLO_KEY" "$BUNDLE_DIR"; then
