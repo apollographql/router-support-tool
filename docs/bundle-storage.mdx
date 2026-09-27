@@ -6,7 +6,7 @@ description: Full reference for mode job's job.storage — every provider and cr
 
 Storage only applies to `mode: job` — `mode: local` has no equivalent, since the bundle already lands as a plain file the customer holds. Leave `job.storage.provider` unset to render the Job exactly as it would without this section: no upload step, the bundle stays in the completed pod until it's garbage-collected.
 
-**Configuring storage is required for `mode: job`.** Without it, there is no supported way to retrieve the bundle once the Job's container exits.
+Configuring storage is optional, but if you leave it unset, you must retrieve the bundle yourself with `kubectl cp` before the pod is garbage-collected, or you lose it. See [Retrieval](#retrieval) below for how. Configure `job.storage` when you want the upload to happen automatically.
 
 | Value | Required | Purpose |
 | --- | --- | --- |
@@ -187,7 +187,14 @@ Once the Job completes and uploads succeed, the bundle is retrieved the same way
 - **GCS** — `gcloud storage cp gs://<bucket>/<prefix>support-bundle-<timestamp>.tar.gz .`, or browse the bucket in the console. Same IAM note as S3: the uploading identity can't read the bucket back.
 - **A bare endpoint (`provider: url`)** — retrieval is entirely up to whatever the receiving service does with the upload; this tool's role ends once the `PUT`/`POST` succeeds.
 
-If you didn't configure `job.storage` at all, there is no retrieval path — see [Job Mode reference → Bundle Retrieval](./job-mode-details#bundle-retrieval).
+- **No `job.storage` configured** — retrieve it yourself, manually, before the pod is garbage-collected:
+
+  ```bash
+  kubectl get pods -n <namespace> -l job-name=router-diagnostics-job
+  kubectl cp <namespace>/<pod-name>:/support-bundle-<timestamp>.tar.gz ./bundle.tar.gz
+  ```
+
+  You have until `job.ttlSecondsAfterFinished` elapses (default `3600`, one hour) — after that, Kubernetes deletes the pod along with the bundle inside it. Set `job.ttlSecondsAfterFinished` higher if you need more lead time than that.
 
 ## Before you share a bundle
 
