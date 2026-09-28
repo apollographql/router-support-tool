@@ -7,7 +7,7 @@ matrix:
   variant_names: "${condition}_${router_version}"
   dimensions:
     condition: [healthy, some-metrics-misconfigured, all-metrics-misconfigured, router-recently-restarted]
-    router_version: ["v2.17.0"] # latest Apollo Router release as of 2026-09-15
+    router_version: ["v2.4.0", "v2.10.1", "v2.13.0", "v2.17.0"] # latest Apollo Router release as of 2026-09-15
 
 environment:
   inline:
@@ -35,10 +35,18 @@ environment:
         kind: relative_path
         path: data/mock_backend_server.py
 
+      # Full redaction coverage is only schema-valid on v2.17.0
+      # Every other tested version gets a minimal, schema-stable config instead.
       - name: router-config.yaml
         env_var: ROUTER_CONFIG
-        kind: relative_path
-        path: data/base-router-config.yaml
+        kind: conditional
+        cases:
+          - where: { var: router_version, eq: v2.17.0 }
+            kind: relative_path
+            path: data/redaction-testing-router-config.yaml
+          - where: { var: router_version, ne: v2.17.0 }
+            kind: relative_path
+            path: data/minimal-router-config.yaml
 
       - name: supergraph.graphql
         env_var: SUPERGRAPH_SCHEMA
@@ -88,13 +96,25 @@ scenario:
 
       - name: router-config.yaml
         env_var: ROUTER_CONFIG
-        kind: relative_path
-        path: data/base-router-config.yaml
+        kind: conditional
+        cases:
+          - where: { var: router_version, eq: v2.17.0 }
+            kind: relative_path
+            path: data/redaction-testing-router-config.yaml
+          - where: { var: router_version, ne: v2.17.0 }
+            kind: relative_path
+            path: data/minimal-router-config.yaml
 
       - name: expected-redacted-router-config.yaml
         env_var: EXPECTED_REDACTED_ROUTER_CONFIG
-        kind: relative_path
-        path: data/expected-redacted-router-config.yaml
+        kind: conditional
+        cases:
+          - where: { var: router_version, eq: v2.17.0 }
+            kind: relative_path
+            path: data/expected-redacted-router-config.yaml
+          - where: { var: router_version, ne: v2.17.0 }
+            kind: relative_path
+            path: data/minimal-expected-redacted-router-config.yaml
 
       - name: router-diagnostics-chart
         env_var: CHART_DIR
