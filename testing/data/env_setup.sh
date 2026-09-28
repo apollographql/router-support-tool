@@ -38,6 +38,28 @@ case "$CONDITION" in
       misconfigure_metrics "$pod"
     done
     ;;
+  router-recently-restarted)
+    # Restart exactly one router pod's container in place (same pod, same name) and wait
+    # for it to come back Ready. This is deliberately NOT `kubectl rollout restart` -
+    # that replaces the pod entirely via the ReplicaSet, producing a brand-new pod with no
+    # restart history at all, so there'd be nothing for `logs`'s previous-container
+    # capture to find. Killing PID 1 inside the existing container (restartPolicy: Always)
+    # is what actually produces a previous-container log within the same pod.
+    set -- $(router_pods)
+    pod="$1"
+    # `kill` is a shell builtin, not a standalone binary - `kubectl exec ... -- kill 1`
+    # execs "kill" directly with no shell involved, so it fails with "executable file not
+    # found" on any image that doesn't separately ship procps' /bin/kill. Routing it
+    # through `sh -c` is what actually gets the builtin.
+    kubectl exec "$pod" -n "$NAMESPACE" -c router -- sh -c 'kill 1'
+    # Check that the pod is ready
+    for _ in $(seq 1 60); do
+      ready=$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+      [ "$ready" = "True" ] && break
+      sleep 1
+    done
+    [ "$ready" = "True" ]
+    ;;
   *)
     echo "unknown or not-yet-implemented condition: $CONDITION" >&2
     exit 1

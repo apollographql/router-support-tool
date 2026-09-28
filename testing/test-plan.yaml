@@ -6,7 +6,7 @@ description: >
 matrix:
   variant_names: "${condition}_${router_version}"
   dimensions:
-    condition: [healthy, some-metrics-misconfigured, all-metrics-misconfigured]
+    condition: [healthy, some-metrics-misconfigured, all-metrics-misconfigured, router-recently-restarted]
     router_version: ["v2.17.0"] # latest Apollo Router release as of 2026-09-15
 
 environment:

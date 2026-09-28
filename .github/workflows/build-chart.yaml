@@ -1,8 +1,9 @@
 name: Build Chart
 
 # Publishes router-diagnostics-chart to Apollo's private internal Helm registry, keyed by
-# commit SHA (the default 0.0.0+<sha> version scheme, matching build-job-image.yaml's internal
-# image tagging). Runs on every PR/push unconditionally (no path filter), same as that workflow.
+# commit SHA (the default 0.0.0+<sha> version scheme, matching the Job image's own internal
+# tagging in run-rtf-test-plan.yaml's build_job_image job). Runs on every PR/push
+# unconditionally (no path filter), same as that job.
 on:
   pull_request: {}
   push:
