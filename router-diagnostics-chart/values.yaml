@@ -61,7 +61,8 @@ job:
   storage:
     # -- Optional. `s3`, `gcs`, or `url`. Leave unset (the default) to render the Job
     # exactly as it would without this section: no upload step, bundle stays local to the
-    # completed pod until it's garbage-collected. See specs/storage/object_storage.md.
+    # completed pod until it's garbage-collected. Retrieve it manually with `kubectl cp`
+    # before then.
     provider: ""
     # -- Required for `provider: s3`/`gcs`. Destination bucket for the uploaded bundle.
     bucket: ""
