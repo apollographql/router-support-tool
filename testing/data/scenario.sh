@@ -138,8 +138,8 @@ if [ "$CONDITION" = "router-recently-restarted" ]; then
   grep -q '"state":"Startup"' "$PREVIOUS_LOG"
 
   # The current (post-restart) container's own log must also show a fresh startup.
-  CURRENT_LOG=$(find "$BUNDLE_DIR/router-logs" -name '*.log' ! -name '*-previous.log')
-  test -n "$CURRENT_LOG"
+  CURRENT_LOG="$(dirname "$PREVIOUS_LOG")/router.log"
+  test -f "$CURRENT_LOG"
   grep -q '"message":"state machine transitioned"' "$CURRENT_LOG"
   grep -q '"state":"Startup"' "$CURRENT_LOG"
 fi

@@ -52,7 +52,13 @@ case "$CONDITION" in
     # found" on any image that doesn't separately ship procps' /bin/kill. Routing it
     # through `sh -c` is what actually gets the builtin.
     kubectl exec "$pod" -n "$NAMESPACE" -c router -- sh -c 'kill 1'
-    kubectl wait --for=condition=Ready "pod/$pod" -n "$NAMESPACE" --timeout=60s
+    # Check that the pod is ready
+    for _ in $(seq 1 60); do
+      ready=$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+      [ "$ready" = "True" ] && break
+      sleep 1
+    done
+    [ "$ready" = "True" ]
     ;;
   *)
     echo "unknown or not-yet-implemented condition: $CONDITION" >&2
