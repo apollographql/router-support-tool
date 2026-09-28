@@ -7,7 +7,11 @@ description: The Apollo GraphOS Router Support Tool packages up a diagnostic sna
 
 The GraphOS Router Support Tool produces a diagnostic snapshot of your GraphOS Router and its Kubernetes environment including router version and config, logs, pod health, and metrics into a single sanitized archive, on demand, without affecting your router.
 
-The GraphOS Router Support Tool collects the data support engagements actually need in one pass:
+## The problem it solves
+
+Getting the full picture when something goes wrong has historically meant a manual, back-and-forth process: `kubectl describe`, hunting down `router.yaml`, grepping logs, screenshotting a dashboard. The tool gathers all of it in one pass — often enough to diagnose and fix the issue yourself, and if not, exactly what a support ticket needs.
+
+This includes:
 
 - Router version and startup configuration
 - Current and previous-container logs (so a router that already restarted still has its history captured)
