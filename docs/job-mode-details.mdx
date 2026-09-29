@@ -33,7 +33,7 @@ The image bundles a pinned version of troubleshoot's `support-bundle` binary as 
 
 ## Bundle Retrieval
 
-Once the Job completes, retrieval depends on whether `job.storage` was configured. Without it, you retrieve the bundle manually with `kubectl cp` before the pod is garbage-collected (`job.ttlSecondsAfterFinished`, default one hour). With it configured, the Job uploads the bundle itself as its last step. See [Support bundle storage and retrieval](./bundle-storage) for the full `job.storage` reference, worked examples per provider, and exactly how to retrieve the bundle either way.
+Once the Job completes, retrieval depends on whether `job.storage` was configured — without it, the bundle is produced but there is no supported way to get it back out, since the Job's container exits as soon as collection finishes. See [Support bundle storage and retrieval](./bundle-storage) for the full `job.storage` reference, worked examples per provider, and how to retrieve the bundle from each destination.
 
 ## Kubernetes RBAC
 

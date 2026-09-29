@@ -5,6 +5,7 @@ description: A per-collector breakdown of what the GraphOS Router Support Tool c
 ---
 
 import NodeMetricsRBAC from './resources/nodemetrics-rbac.mdx';
+import BeforeYouShare from './resources/before-you-share.mdx';
 
 The tables below outline everything we attempt to collect with the GraphOS Router Support Tool. This page is meant to be shared with your platform team so they can review it, grant the access needed for the collectors they want, and know exactly what's lost if they decline one.
 
@@ -72,4 +73,4 @@ The `logs` collector captures every container in the pod, and the kubelet Summar
 
 ## Before you share a bundle
 
-Every file collected here is redacted automatically before the bundle is written, but redaction can fail on a single file without failing the whole run. **If a bundle reports a redaction error, don't share it until you understand what it means** — an error means redaction may not have completed on some file.
+<BeforeYouShare />

@@ -4,9 +4,11 @@ subtitle: "Configuring job.storage, and getting the bundle back out"
 description: Full reference for mode job's job.storage — every provider and credential path, the cloud IAM each needs, and worked examples for S3, GCS, and a bare HTTP(S) endpoint.
 ---
 
+import BeforeYouShare from './resources/before-you-share.mdx';
+
 Storage only applies to `mode: job` — `mode: local` has no equivalent, since the bundle already lands as a plain file the customer holds. Leave `job.storage.provider` unset to render the Job exactly as it would without this section: no upload step, the bundle stays in the completed pod until it's garbage-collected.
 
-Configuring storage is optional, but if you leave it unset, you must retrieve the bundle yourself with `kubectl cp` before the pod is garbage-collected, or you lose it. See [Retrieval](#retrieval) below for how. Configure `job.storage` when you want the upload to happen automatically.
+**Configuring storage is required for `mode: job`.** Without it, there is no supported way to retrieve the bundle once the Job's container exits.
 
 | Value | Required | Purpose |
 | --- | --- | --- |
@@ -187,15 +189,8 @@ Once the Job completes and uploads succeed, the bundle is retrieved the same way
 - **GCS** — `gcloud storage cp gs://<bucket>/<prefix>support-bundle-<timestamp>.tar.gz .`, or browse the bucket in the console. Same IAM note as S3: the uploading identity can't read the bucket back.
 - **A bare endpoint (`provider: url`)** — retrieval is entirely up to whatever the receiving service does with the upload; this tool's role ends once the `PUT`/`POST` succeeds.
 
-- **No `job.storage` configured** — retrieve it yourself, manually, before the pod is garbage-collected:
-
-  ```bash
-  kubectl get pods -n <namespace> -l job-name=router-diagnostics-job
-  kubectl cp <namespace>/<pod-name>:/support-bundle-<timestamp>.tar.gz ./bundle.tar.gz
-  ```
-
-  You have until `job.ttlSecondsAfterFinished` elapses (default `3600`, one hour) — after that, Kubernetes deletes the pod along with the bundle inside it. Set `job.ttlSecondsAfterFinished` higher if you need more lead time than that.
+If you didn't configure `job.storage` at all, there is no retrieval path. The Job's container exits as soon as collection (and any upload attempt) finishes, so there's no running container left for `kubectl exec`/`kubectl cp` to attach to — `job.ttlSecondsAfterFinished` only delays when Kubernetes deletes the finished Job/pod object, it doesn't keep the container alive. See [Job Mode reference → Bundle Retrieval](./job-mode-details#bundle-retrieval).
 
 ## Before you share a bundle
 
-Every file in the bundle is redacted automatically before it's uploaded, but redaction can fail on a single file without failing the whole run. **If a bundle reports a redaction error, don't share it until you understand what it means** — an error means redaction may not have completed on some file.
+<BeforeYouShare />
