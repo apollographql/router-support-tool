@@ -34,6 +34,8 @@ The `configMap` collector reads the ConfigMap holding your router's rendered con
 
 If your namespace runs more than one router release, every release's config is collected, each in its own separately-named file in the bundle.
 
+`keyExists: false` in `configmaps/<namespace>/<release-name>.json` does not mean the config is missing. This is a troubleshoot.sh quirk: the `configMap` collector's `keyExists` field is only ever set `true` when the collector is configured with a specific `key` to look for. Our spec uses `includeAllData: true` with no `key` set so `keyExists` is always `false` in this output, regardless of whether the config was actually captured. Check for the config itself, the `data` in that same file, rather than reading `keyExists` as a success/failure signal.
+
 ### Schema collection
 
 Schema only lands in the cluster, and therefore only in the bundle, when you set `.Values.supergraphFile` on the router's own Helm chart (not this tool's chart). If you're on managed federation (GraphOS schema governance), you never set that value, so there's no schema ConfigMap for this collector to find, and schema is simply absent from the bundle.
