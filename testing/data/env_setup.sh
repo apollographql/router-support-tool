@@ -52,7 +52,17 @@ case "$CONDITION" in
     # found" on any image that doesn't separately ship procps' /bin/kill. Routing it
     # through `sh -c` is what actually gets the builtin.
     kubectl exec "$pod" -n "$NAMESPACE" -c router -- sh -c 'kill 1'
-    # Check that the pod is ready
+    # Wait for the container to actually restart before trusting readiness - checking
+    # Ready right after `kill 1` can read a stale "True" from before the kubelet has
+    # even observed the container exit, breaking out of the loop before the restart
+    # (and the previous-container log it produces) has happened at all.
+    for _ in $(seq 1 60); do
+      restarts=$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.status.containerStatuses[?(@.name=="router")].restartCount}')
+      [ "${restarts:-0}" -gt 0 ] && break
+      sleep 1
+    done
+    [ "${restarts:-0}" -gt 0 ]
+    # Now that the restart has actually happened, check that the pod is ready again.
     for _ in $(seq 1 60); do
       ready=$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
       [ "$ready" = "True" ] && break
