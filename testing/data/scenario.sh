@@ -5,6 +5,9 @@ sh "$ENV_SETUP_SCRIPT"
 
 NAMESPACE="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
 
+# Decoupled from the router's own boot config  applied explicitly here
+kubectl apply -n "$NAMESPACE" -f "$ROUTER_CONFIG_CONFIGMAP"
+
 # Generates the log line the operation bodies' redactor needs to be tested against.
 # router.yaml logs raw request/response bodies, but only if an operation actually runs. 
 # The sentinel value travels in via a variable and is asserted redacted below.
@@ -103,10 +106,16 @@ jq -e '
 grep -qi "forbidden" "$BUNDLE_DIR/cluster-resources/nodes-errors.json"
 
 # configMap collector: assert the collected router.yaml matches the expected config byte
-# for byte. $EXPECTED_REDACTED_ROUTER_CONFIG is redaction-testing-router-config.yaml with the redactors'
-# masking already applied.
+# for byte, up through (not including) override_subgraph_url. $EXPECTED_REDACTED_ROUTER_CONFIG
+# is the fixture with the redactors' masking already applied, and deliberately ends right
+# before that section.
 jq -j '.data["router.yaml"]' "$BUNDLE_DIR/configmaps/$NAMESPACE/router-config.json" > /tmp/collected-router-config.yaml
-diff "$EXPECTED_REDACTED_ROUTER_CONFIG" /tmp/collected-router-config.yaml
+# Command substitution strips the trailing blank line left behind by cutting right
+# before override_subgraph_url, so this matches $EXPECTED_REDACTED_ROUTER_CONFIG's own
+# clean ending exactly.
+TRUNCATED_COLLECTED_CONFIG=$(sed '/^override_subgraph_url:/,$d' /tmp/collected-router-config.yaml)
+printf '%s\n' "$TRUNCATED_COLLECTED_CONFIG" > /tmp/collected-router-config-truncated.yaml
+diff "$EXPECTED_REDACTED_ROUTER_CONFIG" /tmp/collected-router-config-truncated.yaml
 
 # job mode emits one http collector per pod: router-metrics-<pod-name>/result.json.
 # If no files exist the selector didn't match any pods at render time.
@@ -169,41 +178,112 @@ fi
 # --- Redaction tests: The sentinel value must be gone and something structurally
 # adjacent must survive, so an empty/absent section can't be mistaken for a rule that fired.
 #
-# The full suite below only applies to $ROUTER_VERSION == v2.17.0 - every other tested
-# version runs against minimal-router-config.yaml instead of redaction-testing-router-config.yaml
+# base-router-config.yaml is a subset of redaction-testing-router-config.yaml's coverage,
+# so everything below runs for every variant.
 CONFIGMAP_JSON=$(find "$BUNDLE_DIR/configmaps" -name 'router-config.json')
 test -n "$CONFIGMAP_JSON"
 
-if [ "$ROUTER_VERSION" = "v2.17.0" ]; then
-  # JWT and auth config redaction tests - JWKS-fetch headers,
-  # block-style, single-entry flow, and two-entry flow all redacted.
-  # url/issuers/algorithms are untouched.
-  if grep -qE "SENTINEL_JWKS_HEADER_VALUE|SENTINEL_JWKS_FLOW_HEADER_SINGLE|SENTINEL_JWKS_FLOW_MULTI_FIRST|SENTINEL_JWKS_FLOW_MULTI_SECOND" "$CONFIGMAP_JSON"; then
+# JWT and auth config redaction tests - JWKS-fetch header, block-style entry.
+# url/issuers/algorithms are untouched.
+#
+# In the full config, this and the aws_sig_v4 block below sit right after
+# override_subgraph_url, so these checks also cover the known over-redaction
+# risk there: a key name may be lost, never real content.
+if grep -qE "SENTINEL_JWKS_HEADER_VALUE" "$CONFIGMAP_JSON"; then
+  echo "JWKS-fetch header sentinel found unredacted in bundle" >&2
+  exit 1
+fi
+grep -q "x-vault-token" "$CONFIGMAP_JSON"      # header name untouched
+grep -q "issuer.example.com" "$CONFIGMAP_JSON" # issuers/algorithms/url are not secret
+
+if grep -qE "SENTINEL_REDIS_USERNAME|SENTINEL_REDIS_PASSWORD" "$CONFIGMAP_JSON"; then
+  echo "Redis credential sentinel found unredacted in bundle" >&2
+  exit 1
+fi
+grep -q "required_to_start" "$CONFIGMAP_JSON" # non-secret redis field survives
+
+if grep -qE "SENTINEL_AWS_ACCESS_KEY_ID|SENTINEL_AWS_SECRET_ACCESS_KEY" "$CONFIGMAP_JSON"; then
+  echo "AWS SigV4 hardcoded credential sentinel found unredacted in bundle" >&2
+  exit 1
+fi
+grep -q "service_name: vpc-lattice-svcs" "$CONFIGMAP_JSON" # non-secret sibling field survives
+
+# Subgraph urls redaction tests. Two entries, checked by sentinel absence rather than
+# an exact diff (see the truncated-diff comment above) - accounts (bare, quoted) is
+# deterministically masked by our own redactor; inventory (credentialed, unquoted) is
+# left to a troubleshoot.sh built-in, which still must not leak the credential or host.
+if grep -q "accounts.internal.svc.cluster.local" "$CONFIGMAP_JSON"; then
+  echo "override_subgraph_url bare hostname (accounts) found unredacted in bundle" >&2
+  exit 1
+fi
+if grep -q "SENTINEL_SUBGRAPH_URL_PASSWORD" "$CONFIGMAP_JSON"; then
+  echo "override_subgraph_url credential (inventory) found unredacted in bundle" >&2
+  exit 1
+fi
+if grep -q "inventory.internal.svc.cluster.local" "$CONFIGMAP_JSON"; then
+  echo "override_subgraph_url hostname (inventory) found unredacted in bundle" >&2
+  exit 1
+fi
+
+# Subgraph urls redaction tests - schema URLs, subgraph names untouched
+if grep -q "0.0.0.0:4200" "$CONFIGMAP_JSON"; then
+  echo "supergraph.graphql subgraph URL found unredacted in bundle" >&2
+  exit 1
+fi
+grep -qF 'name: \"accounts\"' "$CONFIGMAP_JSON"
+# @link pins the federation spec version, not a customer host - stays unredacted
+grep -qF 'specs.apollo.dev/link' "$CONFIGMAP_JSON"
+
+# TLS private keys - all three key locations masked, certificates/chains untouched.
+KEY_COUNT=$(grep -o -- '-----BEGIN EC PRIVATE KEY-----[^-]*-----END EC PRIVATE KEY-----' "$CONFIGMAP_JSON" | grep -c '\*\*\*HIDDEN\*\*\*')
+test "$KEY_COUNT" -eq 3
+grep -q -- "-----BEGIN CERTIFICATE-----" "$CONFIGMAP_JSON"
+
+# Operation bodies - the request/response bodies logged for the sentinel operation
+# above must be masked, with everything else in the log line intact.
+ROUTER_LOG=$(find "$BUNDLE_DIR/router-logs" -name '*.log')
+test -n "$ROUTER_LOG"
+if grep -q "SENTINEL_OPERATION_BODY_VALUE" $ROUTER_LOG; then
+  echo "Operation body sentinel found unredacted in router logs" >&2
+  exit 1
+fi
+grep -q '"kind":"supergraph.request"' $ROUTER_LOG
+grep -q '"kind":"supergraph.response"' $ROUTER_LOG
+
+# Surrounding fields stay - the redaction must be scoped to the body value only.
+grep -q '"level":"INFO"' $ROUTER_LOG
+grep -q '"trace_id":"' $ROUTER_LOG
+grep -q '"target":"apollo_router::plugins::telemetry::config_new::events"' $ROUTER_LOG
+
+# The mask must not have run on past the closing quote it belongs to: the whole
+# quoted value must be exactly ***HIDDEN***.
+# (Checked this way, not by adjacency to a specific next key, since the router's
+# field order for headers vs. body isn't guaranteed across versions.)
+grep -ohE '"http\.request\.body":"[^"]*"' $ROUTER_LOG | grep -qxF '"http.request.body":"***HIDDEN***"'
+grep -ohE '"http\.response\.body":"[^"]*"' $ROUTER_LOG | grep -qxF '"http.response.body":"***HIDDEN***"'
+
+if [ "$REDACTION" = "full" ]; then
+  # Extra JWKS shapes (single-entry and two-entry flow-style) that only
+  # redaction-testing-router-config.yaml carries.
+  if grep -qE "SENTINEL_JWKS_FLOW_HEADER_SINGLE|SENTINEL_JWKS_FLOW_MULTI_FIRST|SENTINEL_JWKS_FLOW_MULTI_SECOND" "$CONFIGMAP_JSON"; then
     echo "JWKS-fetch header sentinel found unredacted in bundle" >&2
     exit 1
   fi
-  grep -q "x-vault-token" "$CONFIGMAP_JSON"      # header name untouched
-  grep -q "issuer.example.com" "$CONFIGMAP_JSON" # issuers/algorithms/url are not secret
   grep -q "RS256" "$CONFIGMAP_JSON"
   grep -q "jwks-not-found" "$CONFIGMAP_JSON"
   grep -q "x-flow-multi-a" "$CONFIGMAP_JSON"     # both flow-list header names are untouched
   grep -q "x-flow-multi-b" "$CONFIGMAP_JSON"
 
-  # The pathless-URL and quoted-username/password sentinels here live in a commented-out
-  # fixture in router.yaml. Redaction is plain text matching so a
-  # commented-out line is still real input to it.
-  if grep -qE "SENTINEL_REDIS_URL_PASSWORD|SENTINEL_REDIS_PATHLESS_PASSWORD|SENTINEL_REDIS_USERNAME|SENTINEL_REDIS_PASSWORD" "$CONFIGMAP_JSON"; then
+  # Extra Redis shapes (embedded-URL, pathless, quoted) that live in a commented-out
+  # fixture only redaction-testing-router-config.yaml carries. Redaction is plain text
+  # matching so a commented-out line is still real input to it.
+  if grep -qE "SENTINEL_REDIS_URL_PASSWORD|SENTINEL_REDIS_PATHLESS_PASSWORD" "$CONFIGMAP_JSON"; then
     echo "Redis credential sentinel found unredacted in bundle" >&2
     exit 1
   fi
-  grep -q "required_to_start" "$CONFIGMAP_JSON" # non-secret redis field survives
-  if grep -qE "SENTINEL_AWS_ACCESS_KEY_ID|SENTINEL_AWS_SECRET_ACCESS_KEY" "$CONFIGMAP_JSON"; then
-    echo "AWS SigV4 hardcoded credential sentinel found unredacted in bundle" >&2
-    exit 1
-  fi
-  grep -q "service_name: vpc-lattice-svcs" "$CONFIGMAP_JSON" # non-secret sibling field survives
 
-  # Header values redaction tests
+  # Header values redaction tests - only redaction-testing-router-config.yaml carries these
+  # (see base-router-config.yaml for why: this schema changed incompatibly across versions).
   if grep -qE "SENTINEL_HEADER_INSERT_VALUE|SENTINEL_HEADER_INSERT_DEFAULT|SENTINEL_HEADER_PROPAGATE_DEFAULT" "$CONFIGMAP_JSON"; then
     echo "Header plugin literal value sentinel found unredacted in bundle" >&2
     exit 1
@@ -211,100 +291,6 @@ if [ "$ROUTER_VERSION" = "v2.17.0" ]; then
   grep -q "x-sentinel-static" "$CONFIGMAP_JSON"       # header names survive
   grep -q "x-sentinel-frombody" "$CONFIGMAP_JSON"
   grep -q "x-sentinel-source-header" "$CONFIGMAP_JSON"
-
-  # Subgraph urls redaction tests
-  if grep -q "SENTINEL_SUBGRAPH_URL_PASSWORD" "$CONFIGMAP_JSON"; then
-    echo "override_subgraph_url sentinel found unredacted in bundle" >&2
-    exit 1
-  fi
-
-  # Subgraph urls redaction tests - schema URLs, subgraph names untouched
-  if grep -q "0.0.0.0:4200" "$CONFIGMAP_JSON"; then
-    echo "supergraph.graphql subgraph URL found unredacted in bundle" >&2
-    exit 1
-  fi
-  grep -qF 'name: \"accounts\"' "$CONFIGMAP_JSON"
-  # @link pins the federation spec version, not a customer host - stays unredacted
-  grep -qF 'specs.apollo.dev/link' "$CONFIGMAP_JSON"
-
-  # TLS private keys - all three key locations masked,
-  # certificates/chains untouched.
-  KEY_COUNT=$(grep -o -- '-----BEGIN EC PRIVATE KEY-----[^-]*-----END EC PRIVATE KEY-----' "$CONFIGMAP_JSON" | grep -c '\*\*\*HIDDEN\*\*\*')
-  test "$KEY_COUNT" -eq 3
-  grep -q -- "-----BEGIN CERTIFICATE-----" "$CONFIGMAP_JSON"
-
-  # Operation bodies - the request/response bodies logged for the sentinel operation
-  # above must be masked, with everything else in the log line intact. Only
-  # redaction-testing-router-config.yaml enables instrumentation.events.supergraph - minimal-router-config.yaml
-  # doesn't, so there's nothing to check here for other versions.
-  ROUTER_LOG=$(find "$BUNDLE_DIR/router-logs" -name '*.log')
-  test -n "$ROUTER_LOG"
-  if grep -q "SENTINEL_OPERATION_BODY_VALUE" $ROUTER_LOG; then
-    echo "Operation body sentinel found unredacted in router logs" >&2
-    exit 1
-  fi
-  grep -q '"kind":"supergraph.request"' $ROUTER_LOG
-  grep -q '"kind":"supergraph.response"' $ROUTER_LOG
-  grep -q '"http.request.body":"\*\*\*HIDDEN\*\*\*"' $ROUTER_LOG
-  grep -q '"http.response.body":"\*\*\*HIDDEN\*\*\*"' $ROUTER_LOG
-
-  # Surrounding fields stay - the redaction must be scoped to the body value only.
-  grep -q '"level":"INFO"' $ROUTER_LOG
-  grep -q '"trace_id":"' $ROUTER_LOG
-  grep -q '"target":"apollo_router::plugins::telemetry::config_new::events"' $ROUTER_LOG
-
-  # The mask must not have run on past the closing quote it belongs to: the whole
-  # quoted value must be exactly ***HIDDEN***.
-  # (Checked this way, not by adjacency to a specific next key, since the router's
-  # field order for headers vs. body isn't guaranteed across versions.)
-  grep -ohE '"http\.request\.body":"[^"]*"' $ROUTER_LOG | grep -qxF '"http.request.body":"***HIDDEN***"'
-  grep -ohE '"http\.response\.body":"[^"]*"' $ROUTER_LOG | grep -qxF '"http.response.body":"***HIDDEN***"'
-else
-  # minimal-router-config.yaml's secrets - the byte-for-byte diff against
-  # $EXPECTED_REDACTED_ROUTER_CONFIG above already proves all of this, these are just
-  # explicit, readable positive/negative controls for each one. Everything except header
-  # redaction is covered - see minimal-router-config.yaml for why that one's excluded.
-  if grep -qE "SENTINEL_JWKS_HEADER_VALUE" "$CONFIGMAP_JSON"; then
-    echo "JWKS-fetch header sentinel found unredacted in bundle" >&2
-    exit 1
-  fi
-  grep -q "x-vault-token" "$CONFIGMAP_JSON"      # header name untouched
-  grep -q "issuer.example.com" "$CONFIGMAP_JSON" # issuers/algorithms/url are not secret
-
-  if grep -qE "SENTINEL_REDIS_USERNAME|SENTINEL_REDIS_PASSWORD" "$CONFIGMAP_JSON"; then
-    echo "Redis credential sentinel found unredacted in bundle" >&2
-    exit 1
-  fi
-  grep -q "required_to_start" "$CONFIGMAP_JSON" # non-secret redis field survives
-
-  if grep -qE "SENTINEL_AWS_ACCESS_KEY_ID|SENTINEL_AWS_SECRET_ACCESS_KEY" "$CONFIGMAP_JSON"; then
-    echo "AWS SigV4 hardcoded credential sentinel found unredacted in bundle" >&2
-    exit 1
-  fi
-  grep -q "service_name: vpc-lattice-svcs" "$CONFIGMAP_JSON" # non-secret sibling field survives
-
-  if grep -q "SENTINEL_SUBGRAPH_URL_PASSWORD" "$CONFIGMAP_JSON"; then
-    echo "override_subgraph_url sentinel found unredacted in bundle" >&2
-    exit 1
-  fi
-
-  # TLS private keys - all three key locations masked, certificates/chains untouched.
-  KEY_COUNT=$(grep -o -- '-----BEGIN EC PRIVATE KEY-----[^-]*-----END EC PRIVATE KEY-----' "$CONFIGMAP_JSON" | grep -c '\*\*\*HIDDEN\*\*\*')
-  test "$KEY_COUNT" -eq 3
-  grep -q -- "-----BEGIN CERTIFICATE-----" "$CONFIGMAP_JSON"
-
-  # Operation bodies - minimal-router-config.yaml also enables
-  # instrumentation.events.supergraph, so this is exercised here too.
-  ROUTER_LOG=$(find "$BUNDLE_DIR/router-logs" -name '*.log')
-  test -n "$ROUTER_LOG"
-  if grep -q "SENTINEL_OPERATION_BODY_VALUE" $ROUTER_LOG; then
-    echo "Operation body sentinel found unredacted in router logs" >&2
-    exit 1
-  fi
-  grep -q '"kind":"supergraph.request"' $ROUTER_LOG
-  grep -q '"kind":"supergraph.response"' $ROUTER_LOG
-  grep -ohE '"http\.request\.body":"[^"]*"' $ROUTER_LOG | grep -qxF '"http.request.body":"***HIDDEN***"'
-  grep -ohE '"http\.response\.body":"[^"]*"' $ROUTER_LOG | grep -qxF '"http.response.body":"***HIDDEN***"'
 fi
 
 tar tzf /tmp/bundle.tar.gz > /tmp/bundle-contents.txt

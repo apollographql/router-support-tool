@@ -62,10 +62,6 @@ authentication:
           region: us-east-1
           service_name: vpc-lattice-svcs
 
-# Tests specs/collection/data_sanitization/subgraph_urls.md's embedded-credential case.
-override_subgraph_url:
-  accounts: "https://svc-user:SENTINEL_SUBGRAPH_URL_PASSWORD@accounts.internal.svc.cluster.local:4001/graphql"
-
 # Tests specs/collection/data_sanitization/tls_private_keys.md's three key locations,
 # same test material as redaction-testing-router-config.yaml's own tls section.
 # Self-signed, CI-only - not used to serve real traffic.
@@ -143,3 +139,16 @@ tls:
           AwEHoUQDQgAEw8FPJfapEzz15DXvrZLGz8EtfIFFFYg2Mju/bQRLolpRGyUox4ry
           LW2szQ5JrqWFfha50aEkzDpQEQuwlmGnwg==
           -----END EC PRIVATE KEY-----
+
+# Tests specs/collection/data_sanitization/subgraph_urls.md. Deliberately last: a known
+# troubleshoot.sh built-in redactor over-redacts past this block's closing quote into
+# whatever key follows (specs/collection/data_sanitization/overview.md -> A built-in
+# redactor can over-redact past a masked URL) - putting it last means nothing is at risk
+# of being swallowed. Two entries per subgraph_urls.md's own "one quoted and one not"
+# note: accounts is bare (no credential) and quoted - deterministically masked by our own
+# redactor, the only shape we can guarantee. inventory carries a credential and is
+# unquoted - left to the built-in's own masking, not asserted byte-for-byte (see
+# scenario.sh, which checks both sentinels are absent rather than diffing this section).
+override_subgraph_url:
+  accounts: "https://accounts.internal.svc.cluster.local:4001/graphql"
+  inventory: https://svc-user:SENTINEL_SUBGRAPH_URL_PASSWORD@inventory.internal.svc.cluster.local:4001/graphql

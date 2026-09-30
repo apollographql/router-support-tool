@@ -48,35 +48,6 @@ apq:
         password: SENTINEL_REDIS_PASSWORD
         required_to_start: false
 
-authentication:
-  router:
-    jwt:
-      jwks:
-        # Block-style headers (mask every entry), a quoted value, and issuers/algorithms
-        # to confirm non-secret JWKS fields survive redaction untouched.
-        - url: http://localhost:9090/jwks-not-found
-          issuers:
-            - "https://issuer.example.com"
-          algorithms:
-            - RS256
-          headers:
-            - name: x-vault-token
-              value: "SENTINEL_JWKS_HEADER_VALUE"
-        # Single-entry flow-style headers
-        - url: http://localhost:9090/jwks-not-found-flow
-          headers: [{ name: x-api-key-flow, value: SENTINEL_JWKS_FLOW_HEADER_SINGLE }]
-        # Two-entry flow-style headers, both values must be masked
-        - url: http://localhost:9090/jwks-not-found-flow-multi
-          headers: [{ name: x-flow-multi-a, value: SENTINEL_JWKS_FLOW_MULTI_FIRST }, { name: x-flow-multi-b, value: SENTINEL_JWKS_FLOW_MULTI_SECOND }]
-  subgraph:
-    all:
-      aws_sig_v4:
-        hardcoded:
-          access_key_id: SENTINEL_AWS_ACCESS_KEY_ID
-          secret_access_key: SENTINEL_AWS_SECRET_ACCESS_KEY
-          region: us-east-1
-          service_name: vpc-lattice-svcs
-
 # Tests specs/collection/data_sanitization/header_values.md
 headers:
   all:
@@ -92,10 +63,6 @@ headers:
         - propagate:
             named: x-sentinel-source-header
             default: SENTINEL_HEADER_PROPAGATE_DEFAULT
-
-# Tests specs/collection/data_sanitization/subgraph_urls.md
-override_subgraph_url:
-  accounts: "https://svc-user:SENTINEL_SUBGRAPH_URL_PASSWORD@accounts.internal.svc.cluster.local:4001/graphql"
 
 # Tests specs/collection/data_sanitization/tls_private_keys.md
 tls:
@@ -172,3 +139,38 @@ tls:
           AwEHoUQDQgAEw8FPJfapEzz15DXvrZLGz8EtfIFFFYg2Mju/bQRLolpRGyUox4ry
           LW2szQ5JrqWFfha50aEkzDpQEQuwlmGnwg==
           -----END EC PRIVATE KEY-----
+
+# Tests specs/collection/data_sanitization/subgraph_urls.md.
+#
+# `authentication` follows immediately so its secrets sit where the
+# built-in's known over-redaction would land if unbounded. 
+# Everything from here on is excluded from the byte-diff and checked
+# by sentinel instead.
+override_subgraph_url:
+  accounts: "https://accounts.internal.svc.cluster.local:4001/graphql"
+  inventory: https://svc-user:SENTINEL_SUBGRAPH_URL_PASSWORD@inventory.internal.svc.cluster.local:4001/graphql
+
+authentication:
+  router:
+    jwt:
+      jwks:
+        - url: http://localhost:9090/jwks-not-found
+          issuers:
+            - "https://issuer.example.com"
+          algorithms:
+            - RS256
+          headers:
+            - name: x-vault-token
+              value: "SENTINEL_JWKS_HEADER_VALUE"
+        - url: http://localhost:9090/jwks-not-found-flow
+          headers: [{ name: x-api-key-flow, value: SENTINEL_JWKS_FLOW_HEADER_SINGLE }]
+        - url: http://localhost:9090/jwks-not-found-flow-multi
+          headers: [{ name: x-flow-multi-a, value: SENTINEL_JWKS_FLOW_MULTI_FIRST }, { name: x-flow-multi-b, value: SENTINEL_JWKS_FLOW_MULTI_SECOND }]
+  subgraph:
+    all:
+      aws_sig_v4:
+        hardcoded:
+          access_key_id: SENTINEL_AWS_ACCESS_KEY_ID
+          secret_access_key: SENTINEL_AWS_SECRET_ACCESS_KEY
+          region: us-east-1
+          service_name: vpc-lattice-svcs

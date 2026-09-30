@@ -1,5 +1,3 @@
-# Expected post-redaction form of minimal-router-config.yaml - see that file for why a
-# separate, schema-stable config exists for non-v2.17.0 versions in the RTF test plan.
 supergraph:
   listen: 0.0.0.0:4000
 
@@ -51,7 +49,6 @@ authentication:
           region: us-east-1
           service_name: vpc-lattice-svcs
 
-override_subgraph_url:***HIDDEN***
 tls:
   supergraph:
     certificate: |
