@@ -27,13 +27,16 @@ extract() {
 }
 
 COLLECTORS=$(extract "support-bundle-spec" \
-  '[.spec.collectors[] | to_entries[0] as $e | {kind: "collector", type: $e.key, name: ($e.value.name // $e.value.collectorName)}]')
+  '[.spec.collectors[]? | to_entries[0] as $e | {kind: "collector", type: $e.key, name: ($e.value.name // $e.value.collectorName)}]')
+
+HOST_COLLECTORS=$(extract "support-bundle-spec" \
+  '[.spec.hostCollectors[]? | to_entries[0] as $e | {kind: "hostCollector", type: $e.key, name: ($e.value.name // $e.value.collectorName)}]')
 
 REDACTORS=$(extract "redactor-spec" \
   '[.spec.redactors[] | {kind: "redactor", type: "redactor", name: .name}]')
 
-ACTUAL=$(jq -cs '(.[0] // []) + (.[1] // []) | sort_by(.kind, .type, .name)' \
-  <(echo "${COLLECTORS:-[]}") <(echo "${REDACTORS:-[]}"))
+ACTUAL=$(jq -cs '(.[0] // []) + (.[1] // []) + (.[2] // []) | sort_by(.kind, .type, .name)' \
+  <(echo "${COLLECTORS:-[]}") <(echo "${HOST_COLLECTORS:-[]}") <(echo "${REDACTORS:-[]}"))
 
 if [ "${UPDATE_BASELINE:-}" = "1" ]; then
   jq '.' <<<"$ACTUAL" > "$BASELINE"
