@@ -1,6 +1,6 @@
 #!/bin/sh
 # Collects a router-diagnostics support bundle for mode: local. Caches a pinned
-# support-bundle binary locally, resolves the router's Service, bridges its metrics port
+# support-bundle binary locally, selects one router Pod and bridges its metrics port
 # with a temporary kubectl port-forward, then runs support-bundle against the cluster's
 # discoverable specs.
 #
@@ -106,7 +106,7 @@ if [ ! -x "$BIN" ]; then
   echo "router-diagnostics: cached support-bundle v${SUPPORT_BUNDLE_VERSION}" >&2
 fi
 
-SVC_ERR=$(mktemp)
+PF_ERR=$(mktemp)
 PF_LOG=$(mktemp)
 PF_PID=""
 cleanup() {
@@ -114,19 +114,20 @@ cleanup() {
     kill "$PF_PID" 2>/dev/null || true
     wait "$PF_PID" 2>/dev/null || true
   fi
-  rm -f "$SVC_ERR" "$PF_LOG"
+  rm -f "$PF_ERR" "$PF_LOG"
 }
 trap cleanup EXIT INT TERM
 
-if ! SERVICE=$(kubectl get svc -n "$NAMESPACE" -l "$SELECTOR" -o jsonpath='{.items[0].metadata.name}' 2>"$SVC_ERR"); then
-  echo "error: kubectl get svc failed: $(cat "$SVC_ERR")" >&2
-  exit 1
-fi
+POD=$(kubectl get pods -n "$NAMESPACE" -l "$SELECTOR" -o jsonpath='{.items[0].metadata.name}' 2>"$PF_ERR" || true)
 
-if [ -z "$SERVICE" ]; then
-  echo "warning: no Service labeled $SELECTOR found in namespace $NAMESPACE, router-metrics will fail with a connection error." >&2
+if [ -z "$POD" ]; then
+  if [ -s "$PF_ERR" ]; then
+    echo "warning: kubectl get pods failed: $(cat "$PF_ERR"), router-metrics will be skipped." >&2
+  else
+    echo "warning: no Pod labeled $SELECTOR found in namespace $NAMESPACE, router-metrics will be skipped." >&2
+  fi
 else
-  kubectl port-forward -n "$NAMESPACE" "svc/$SERVICE" "$METRICS_PORT:$METRICS_PORT" >"$PF_LOG" 2>&1 &
+  kubectl port-forward -n "$NAMESPACE" "pod/$POD" "$METRICS_PORT:$METRICS_PORT" >"$PF_LOG" 2>&1 &
   PF_PID=$!
 
   READY=0
@@ -139,7 +140,7 @@ else
   done
 
   if [ "$READY" -ne 1 ]; then
-    echo "warning: port-forward to $SERVICE:$METRICS_PORT never became ready, router-metrics collector will fail with a connection error" >&2
+    echo "warning: port-forward to $POD:$METRICS_PORT never became ready, router-metrics collector will be skipped" >&2
     echo "--- kubectl port-forward output ---" >&2
     cat "$PF_LOG" >&2
   fi
