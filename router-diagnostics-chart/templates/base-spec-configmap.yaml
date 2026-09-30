@@ -61,6 +61,7 @@ data:
             selector:
               - {{ .Values.selector | default "app.kubernetes.io/name=router" }}
             {{- end }}
+            key: configuration.yaml
             includeAllData: true
 
         - nodeMetrics:
