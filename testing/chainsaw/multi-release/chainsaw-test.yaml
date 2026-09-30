@@ -5,23 +5,12 @@ metadata:
 spec:
   # Exercises specs/collection/base_spec.md's "Each router release in a namespace gets
   # its own file in the support bundle" claim, and specs/collection/meta_json.md's
-  # "Multiple router releases in one namespace" note.
-  #
-  # Two ConfigMaps carrying the standard router label stand in for two separate router
-  # releases in the same namespace (one per graph, for example). No router
-  # Deployment/Service is needed: the configMap collector matches purely on the label,
-  # independent of pod health, so hand-created ConfigMaps exercise the same code path a
-  # real second release would - this is the same reasoning the raw-manifest test
-  # already relies on for its own single ConfigMap.
-
-  # This test also doesn't install a real router (official-chart and
-  # exercises collect.sh with zero Services matching its selector
-  # ensuring collect.sh degrades gracefully in this case is also verified here.
-  #
-  # All paths here are relative to this test's own directory, because that's how
-  # Chainsaw resolves them.
+  # "Multiple router releases in one namespace".
   steps:
     - try:
+        # Hand-created ConfigMaps stand in for two router releases - the configMap
+        # collector matches on the label alone so no real Deployment is needed.
+        # Also exercises collect.sh's graceful degradation when no pods match the selector.
         - script:
             content: |
               kubectl create configmap router-alpha -n "$NAMESPACE" --from-file=router.yaml=router-a.yaml
