@@ -106,44 +106,4 @@ if [ ! -x "$BIN" ]; then
   echo "router-diagnostics: cached support-bundle v${SUPPORT_BUNDLE_VERSION}" >&2
 fi
 
-PF_ERR=$(mktemp)
-PF_LOG=$(mktemp)
-PF_PID=""
-cleanup() {
-  if [ -n "$PF_PID" ]; then
-    kill "$PF_PID" 2>/dev/null || true
-    wait "$PF_PID" 2>/dev/null || true
-  fi
-  rm -f "$PF_ERR" "$PF_LOG"
-}
-trap cleanup EXIT INT TERM
-
-POD=$(kubectl get pods -n "$NAMESPACE" -l "$SELECTOR" -o jsonpath='{.items[0].metadata.name}' 2>"$PF_ERR" || true)
-
-if [ -z "$POD" ]; then
-  if [ -s "$PF_ERR" ]; then
-    echo "warning: kubectl get pods failed: $(cat "$PF_ERR"), router-metrics will be skipped." >&2
-  else
-    echo "warning: no Pod labeled $SELECTOR found in namespace $NAMESPACE, router-metrics will be skipped." >&2
-  fi
-else
-  kubectl port-forward -n "$NAMESPACE" "pod/$POD" "$METRICS_PORT:$METRICS_PORT" >"$PF_LOG" 2>&1 &
-  PF_PID=$!
-
-  READY=0
-  for _ in $(seq 1 30); do
-    if grep -q "Forwarding from" "$PF_LOG" 2>/dev/null; then
-      READY=1
-      break
-    fi
-    sleep 0.5
-  done
-
-  if [ "$READY" -ne 1 ]; then
-    echo "warning: port-forward to $POD:$METRICS_PORT never became ready, router-metrics collector will be skipped" >&2
-    echo "--- kubectl port-forward output ---" >&2
-    cat "$PF_LOG" >&2
-  fi
-fi
-
 "$BIN" --load-cluster-specs --namespace "$NAMESPACE" --auto-update=false

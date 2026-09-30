@@ -34,16 +34,9 @@ data:
               {{- end }}
             {{- end }}
 
-        {{- if eq .Values.mode "local" }}
-        - http:
-            name: router-metrics
-            get:
-              # Local mode runs on the invoking user's machine, which can't reach pod IPs
-              # directly. collect.sh port-forwards one pod's metrics port to localhost before
-              # invoking support-bundle; a customer running support-bundle directly must set
-              # up that port-forward themselves.
-              url: http://localhost:{{ .Values.metricsPort | default 9090 }}/metrics
-        {{- else }}
+        # Metrics collection differs by mode because pod IPs are only reachable in-cluster.
+        # Job mode — support-bundle runs inside a Kubernetes Job and can reach pod IPs directly
+        {{- if ne .Values.mode "local" }}
         {{- include "router-diagnostics-chart.routerMetricsCollectors" . | trim | nindent 8 }}
         {{- end }}
 
@@ -73,6 +66,30 @@ data:
                 {{- end }}
                 "troubleshoot_version": "0.134.1"
               }
+    # mode: local — support-bundle runs on the user's machine where pod IPs are not
+    # reachable, so a hostCollectors.run script (below) handles all port-forwards at
+    # collection time.
+{{- if eq .Values.mode "local" }}
+      hostCollectors:
+        - run:
+            collectorName: router-metrics
+            outputDir: router-metrics
+            command: sh
+            args:
+              - -c
+              - |
+                PODS=$(kubectl get pods -n "{{ .Values.namespace }}" -l "{{ .Values.selector | default "app.kubernetes.io/name=router" }}" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)
+                for POD in $PODS; do
+                  kubectl port-forward -n "{{ .Values.namespace }}" "pod/$POD" "{{ .Values.metricsPort | default 9090 }}:{{ .Values.metricsPort | default 9090 }}" >/dev/null 2>&1 &
+                  PF_PID=$!
+                  for i in $(seq 1 30); do
+                    curl -sf "http://localhost:{{ .Values.metricsPort | default 9090 }}/metrics" -o "$TS_OUTPUT_DIR/${POD}.txt" 2>/dev/null && break
+                    sleep 0.5
+                  done
+                  kill "$PF_PID" 2>/dev/null || true
+                  wait "$PF_PID" 2>/dev/null || true
+                done
+{{- end }}
   redactor-spec: |
     apiVersion: troubleshoot.sh/v1beta2
     kind: Redactor
