@@ -88,7 +88,7 @@ jobs:
               ;;
             job)
               # Not a real image — this job only renders manifests, it never runs the Job.
-              FLAGS="$FLAGS --set mode=job --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0"
+              FLAGS="$FLAGS --set mode=job --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 --set job.storage.provider=s3 --set job.storage.bucket=ci-test"
               ;;
           esac
 
@@ -143,6 +143,7 @@ jobs:
         run: |
           helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=job \
             --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
+            --set job.storage.provider=s3 --set job.storage.bucket=ci-test \
             --show-only templates/base-spec-configmap.yaml \
             | yq '.data["support-bundle-spec"]' > rendered-spec.job.yaml
 

@@ -31,6 +31,7 @@ helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
 
 helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=job \
   --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
+  --set job.storage.provider=s3 --set job.storage.bucket=ci-test \
   --show-only templates/base-spec-configmap.yaml \
   | yq '.data["support-bundle-spec"]' > "$WORKDIR/rendered-spec.job.yaml"
 
