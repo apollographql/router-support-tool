@@ -6,13 +6,11 @@ description: Full reference for mode job's job.storage — every provider and cr
 
 import BeforeYouShare from './resources/before-you-share.mdx';
 
-Storage only applies to `mode: job` — `mode: local` has no equivalent, since the bundle already lands as a plain file the customer holds. Leave `job.storage.provider` unset to render the Job exactly as it would without this section: no upload step, the bundle stays in the completed pod until it's garbage-collected.
-
-**Configuring storage is required for `mode: job`.** Without it, there is no supported way to retrieve the bundle once the Job's container exits.
+Storage only applies to and is required for `mode: job`. Because there is no way to get the bundle out otherwise, the chart fails the install at render time if `mode: job` is set and `job.storage.provider` is left unset.
 
 | Value | Required | Purpose |
 | --- | --- | --- |
-| `job.storage.provider` | No (but see above) | `s3`, `gcs`, or `url` |
+| `job.storage.provider` | Yes, for `mode: job` | `s3`, `gcs`, or `url` |
 | `job.storage.bucket` | Required for `s3`/`gcs` | Destination bucket for the uploaded bundle |
 | `job.storage.prefix` | No | Key prefix within the bucket, e.g. `router-bundles/` |
 | `job.storage.s3.region` | Required for `s3` unless implied by `endpoint` | AWS region, or the equivalent for an S3-compatible store |
@@ -188,8 +186,6 @@ Once the Job completes and uploads succeed, the bundle is retrieved the same way
 - **S3** — `aws s3 cp s3://<bucket>/<prefix>support-bundle-<timestamp>.tar.gz .`, or browse the bucket in the console. The uploading identity (IRSA role or static credential) only has `PutObject`, so a separate identity with read access is normally what your platform team uses to pull it down.
 - **GCS** — `gcloud storage cp gs://<bucket>/<prefix>support-bundle-<timestamp>.tar.gz .`, or browse the bucket in the console. Same IAM note as S3: the uploading identity can't read the bucket back.
 - **A bare endpoint (`provider: url`)** — retrieval is entirely up to whatever the receiving service does with the upload; this tool's role ends once the `PUT`/`POST` succeeds.
-
-If you didn't configure `job.storage` at all, there is no retrieval path. The Job's container exits as soon as collection (and any upload attempt) finishes, so there's no running container left for `kubectl exec`/`kubectl cp` to attach to — `job.ttlSecondsAfterFinished` only delays when Kubernetes deletes the finished Job/pod object, it doesn't keep the container alive. See [Job Mode reference → Bundle Retrieval](./job-mode-details#bundle-retrieval).
 
 ## Before you share a bundle
 

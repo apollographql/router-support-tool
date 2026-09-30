@@ -6,7 +6,7 @@ description: Install the router-diagnostics chart with mode job so a platform te
 
 Use `mode: job` when your own kubectl access to production is restricted and a platform team runs collection on your behalf. A Kubernetes Job runs collection in-cluster, using a namespace-scoped ServiceAccount the chart creates for it.
 
-Configure bundle storage before you install. Without this, the bundle is produced but cannot be retrieved. See [Support bundle storage and retrieval → Retrieval](../bundle-storage#retrieval).
+`job.storage` is required for this mode and the chart fails the install if `job.storage.provider` is left unset. See [Support bundle storage and retrieval](../bundle-storage) for the full reference.
 
 ## Install the chart
 
