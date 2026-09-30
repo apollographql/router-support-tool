@@ -34,23 +34,18 @@ data:
               {{- end }}
             {{- end }}
 
+        {{- if eq .Values.mode "local" }}
         - http:
             name: router-metrics
             get:
-              {{- if eq .Values.mode "local" }}
-              # Local mode runs the support-bundle on the invoking user's own machine,
-              # which can't resolve the router's in-cluster Service DNS name so it
-              # targets a `localhost`port-forward instead.
+              # Local mode runs on the invoking user's machine, which can't reach pod IPs
+              # directly. collect.sh port-forwards one pod's metrics port to localhost before
+              # invoking support-bundle; a customer running support-bundle directly must set
+              # up that port-forward themselves.
               url: http://localhost:{{ .Values.metricsPort | default 9090 }}/metrics
-              {{- else if .Values.selector }}
-              # Selector set (raw-manifest tier). No fixed label to resolve a host
-              # from so find the Service that matched `selector` instead.
-              url: http://{{ include "router-diagnostics-chart.metricsTargetHost" . | default "<router-metrics-host-not-found>" }}:{{ .Values.metricsPort | default 9090 }}/metrics
-              {{- else }}
-              # Selector unset (official chart tier)
-              # Resolve the Service by its fixed label.
-              url: http://{{ include "router-diagnostics-chart.routerServiceName" . | default "<router-metrics-host-not-found>" }}.{{ .Values.namespace }}.svc.cluster.local:{{ .Values.metricsPort | default 9090 }}/metrics
-              {{- end }}
+        {{- else }}
+        {{- include "router-diagnostics-chart.routerMetricsCollectors" . | trim | nindent 8 }}
+        {{- end }}
 
         - configMap:
             collectorName: router-config-rendered

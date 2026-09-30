@@ -1,37 +1,21 @@
-{{- define "router-diagnostics-chart.routerServiceName" -}}
-{{- $svc := "" }}
+{{/*
+Renders one http collector per router pod matching the selector when the collection
+job runs in-cluster and can reach pod IPs directly. Pod IPs are resolved at Helm 
+render time.
+*/}}
+{{- define "router-diagnostics-chart.routerMetricsCollectors" -}}
 {{- $selector := .Values.selector | default "app.kubernetes.io/name=router" }}
 {{- $key := index (splitList "=" $selector) 0 }}
 {{- $value := index (splitList "=" $selector) 1 }}
-{{- $services := (lookup "v1" "Service" .Values.namespace "").items }}
-{{- range $services }}
-  {{- if eq (index .metadata.labels $key) $value }}
-    {{- $svc = .metadata.name }}
-  {{- end }}
+{{- $metricsPort := .Values.metricsPort | default 9090 }}
+{{- range (lookup "v1" "Pod" .Values.namespace "").items }}
+{{- if eq (index .metadata.labels $key) $value }}
+- http:
+    name: router-metrics-{{ .metadata.name }}
+    get:
+      url: http://{{ .status.podIP }}:{{ $metricsPort }}/metrics
 {{- end }}
-{{- $svc }}
-{{- end -}}
-
-{{/*
-Finds the internal Kubernetes DNS host for the router-metrics collector by doing the following:
-
-1. Searches the current namespace for a Service matching '.Values.selector'.
-2. If found, returns its full internal FQDN (e.g., service.namespace.svc.cluster.local).
-3. If not found, returns an empty string ("") to gracefully disable the metrics target.
-*/}}
-{{- define "router-diagnostics-chart.metricsTargetHost" -}}
-{{- $selector := .Values.selector | default "app.kubernetes.io/name=router" }}
-{{- $parts := splitList "=" $selector }}
-{{- $key := index $parts 0 }}
-{{- $value := index $parts 1 }}
-{{- $host := "" }}
-{{- $services := (lookup "v1" "Service" .Values.namespace "").items }}
-{{- range $services }}
-  {{- if and .spec.selector (eq (index .spec.selector $key) $value) }}
-    {{- $host = printf "%s.%s.svc.cluster.local" .metadata.name $.Values.namespace }}
-  {{- end }}
 {{- end }}
-{{- $host }}
 {{- end -}}
 
 {{/*

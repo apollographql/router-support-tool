@@ -19,7 +19,7 @@ References to "the official Apollo router Helm chart" are pinned to `v2.17.0` an
 | Pod spec (`spec.containers[].env`) | Router deployment env vars: `APOLLO_GRAPH_REF`, `APOLLO_ROUTER_OFFICIAL_HELM_CHART` | `clusterResources` collector | Graph ref for bundle tagging, whether the router was deployed via Apollo's official Helm chart | None additional | API server CPU | k8s control plane | If a customer routes `APOLLO_GRAPH_REF` through a Secret via the chart's `extraEnvVars` only the reference is captured, not the value. |
 | Separate `<release>-supergraph` ConfigMap | Schema (SDL) | `clusterResources` collector  | Full graph schema for diagnosis | `.Values.supergraphFile` set on the router's Helm chart (see [Schema collection](#schema-collection) below) | API server CPU | k8s control plane | Absent for managed-federation customers. See [Where graph schema/SDL actually lands](#where-graph-schemasdl-actually-lands) below. |
 | Container log stream | Runtime logs | `logs` collector | Recent router output, plus crash output from the previous container when one exists | None additional | Network bandwidth | Cluster network | Collected per pod, captures all containers in the pod (including proxy/mesh sidecars). **Previous-container logs are always collected**, written to `<name>-previous.log`. Configuration options: `logs.maxAge` and `logs.maxLines` are defined in `specs/deployment/v1/v1.md` → Chart values |
-| Router metrics endpoint | Full Prometheus metrics snapshot | `http` collector | Complete operational metrics — request rates, error rates, latency, traffic shaping state | Prometheus exporter enabled and reachably bound (see [Prometheus metrics prerequisites](#prometheus-metrics-prerequisites) below) | Network, router HTTP handler | Router network | Under `mode: job`, raw-manifest / custom deployments also need a customer-supplied `selector` (see [Raw-manifest metrics targeting](#raw-manifest-metrics-targeting) below) — there is no fixed label to resolve a host from for this tier. |
+| Router metrics endpoint (per pod) | Full Prometheus metrics snapshot | `http` collector (one per pod under `mode: job`; one via port-forward under `mode: local`) | Complete operational metrics — request rates, error rates, latency, traffic shaping state | Prometheus exporter enabled and reachably bound (see [Prometheus metrics prerequisites](#prometheus-metrics-prerequisites) below) | Network, router HTTP handler | Router network | Under `mode: job`, pods are resolved at Helm render time by label selector — see [Per-pod metrics collection](#per-pod-metrics-collection). Under `mode: local`, only one pod's metrics are captured. |
 | ConfigMap holding the rendered config | Sanitized `router.yaml` | `configMap` collector | Full router configuration — traffic shaping, timeouts, plugins, feature flags | A matching labeled ConfigMap present, or a customer-supplied `configMapName`/`selector` (see [`router.yaml` capture](#routeryaml-capture) below) | API server CPU | k8s control plane | Captures config as written, not effective config (env-var overrides not included). |
 
 ### `router.yaml` capture
@@ -37,30 +37,24 @@ When `supergraphFile` is set, the schema renders into a separate ConfigMap (`<re
 
 ### Prometheus metrics prerequisites
 
-The `http` collector targets the metrics endpoint at port `9090` by default. What differs for raw-manifest / custom deployments is *host* resolution under `mode: job`: the official chart has a fixed label to resolve its Service from, and a raw manifest does not, so setting the chart's `selector` value is what supplies a host instead — see [Raw-manifest metrics targeting](#raw-manifest-metrics-targeting) below.
-
-The rest of this section describes the settings that are load-bearing for the collector to return anything once it has a target, from two different places:
+The `http` collector targets the metrics endpoint at port `9090` by default. The following settings are load-bearing for the collector to return anything, from two different places:
 
 **`router.yaml`** (via `.Values.router.configuration` in the Helm chart):
 
 - `telemetry.exporters.metrics.prometheus.enabled: true` — turns the exporter on.
 - `telemetry.exporters.metrics.prometheus.listen` — the bind address. Binding to loopback means an external scrape can't reach it no matter what port the collector targets.
 
-**Helm chart value** (not a `router.yaml` setting):
+If either is off or misconfigured, every metrics collector returns empty and the rest of the bundle is unaffected.
 
-- `serviceMonitor.enabled: true` — the chart only adds a `metrics` port to the Service inside this flag. Without it, the Service has no `metrics` port at all, regardless of whether the exporter itself is on and reachable.
+**Support bundle collection has to be able to reach pod IPs over the network.** `mode: job` satisfies this automatically, since the Job's pod is inside the cluster network. `mode: local` does not: the `support-bundle` binary runs on the invoking user's own machine. See `specs/deployment/v1/v1.md` → `mode: local` for the bridging step `collect.sh` automates for this.
 
-If any of the three is off or misconfigured, the collector returns empty and the rest of the bundle is unaffected.
+#### Per-pod metrics collection
 
-**Support bundle collection has to be able to reach the router's Service over the network.** This is a property of where collection runs. `mode: job` satisfies it automatically, since the Job's pod is itself inside the cluster network. `mode: local` does not: the `support-bundle` binary runs on the invoking user's own machine, which cannot resolve the router's in-cluster Service DNS name on its own. See `specs/deployment/v1/v1.md` → `mode: local` for the bridging step `collect.sh` automates for this.
+Under `mode: job`, the spec emits one `http` collector per router pod matching the selector, named `router-metrics-<pod-name>`, each hitting that pod's IP directly at `metricsPort` (default `9090`). Pod IPs are resolved at Helm render time — a pod replaced between `helm install` and collection will produce a 404 for that slot, which is acceptable for the point-in-time collection this tool performs.
 
-### Raw-manifest metrics targeting
+`selector` controls which pods are targeted, defaulting to `app.kubernetes.io/name=router`. Raw-manifest / custom deployments that set `selector` explicitly (see `specs/deployment/v1/v1.md` → Chart values common to both modes) use that same value here automatically. If no pods match at render time, no metrics collectors are emitted and the section is absent from the bundle.
 
-Raw-manifest / custom deployments already set `selector` (see `specs/deployment/v1/v1.md` → Chart values common to both modes) for the `logs`/`configMap` collectors to find their router at all. Under `mode: job`, that same value is also what enables metrics collection.
-
-`selector` is unset by default. Left unset under `mode: job`, `router-metrics` falls back to the official chart's fixed-label Service lookup, which may find nothing for a raw manifest and leaves the section empty. Setting it switches `router-metrics` to resolve its target from `selector` instead, matching a Service whose `spec.selector` matches. `metricsPort` only overrides which port on that Service to target, defaulting to `9090`.
-
-`mode: local` never resolves a host at all, it always targets `localhost`, on the assumption that something is already port-forwarding there. `metricsPort` only changes which local port it targets (defaulting to `9090`). `collect.sh` (see `specs/deployment/v1/v1.md` → `mode: local`) automates that port-forward for both the official chart and raw-manifest / custom deployments: it resolves the router's Service via `selector` (falling back to the official chart's `app.kubernetes.io/name=router` label when unset) and forwards `metricsPort` (default `9090`) to the same local port. A customer who runs `support-bundle` directly, bypassing the script, still needs to set up that port-forward themselves.
+Under `mode: local`, a single collector named `router-metrics` targets `localhost:metricsPort`. `collect.sh` (see `specs/deployment/v1/v1.md` → `mode: local`) port-forwards one matching pod's metrics port to that local port before invoking `support-bundle`. A customer running `support-bundle` directly, bypassing the script, must set up that port-forward themselves. Only one pod's metrics are captured in local mode.
 
 ### Namespace scoping is mandatory
 
