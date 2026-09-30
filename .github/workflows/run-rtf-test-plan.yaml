@@ -22,6 +22,17 @@ jobs:
       dockerfile_location: router-diagnostics-job-image/Dockerfile
     secrets: inherit
 
+  scan_job_image:
+    name: "Scan router-diagnostics Job image"
+    needs: [build_job_image]
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/scan-job-image.yaml
+    with:
+      tag_to_test: ${{ github.ref_name == github.event.repository.default_branch && github.sha || github.event.pull_request.head.sha }}
+    secrets: inherit
+
   run_rtf_test_plan:
     name: Run RTF Test Plan
     needs: [build_job_image]

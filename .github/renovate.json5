@@ -3,6 +3,16 @@
   extends: [
     "github>Turbo87/renovate-config//rust/updateToolchain"
   ],
+  "packageRules": [
+    {
+      "description": "The Job image's pinned aws-cli/curl/ca-certificates apk versions are tracked against the same Alpine branch/arch the image is actually built from (see router-diagnostics-job-image/Dockerfile) — without this, Renovate can't tell which Alpine repo to check and skips them with 'unknown-registry'.",
+      "matchFileNames": ["router-diagnostics-job-image/Dockerfile"],
+      "matchDatasources": ["apk"],
+      "registryUrls": [
+        "https://dl-cdn.alpinelinux.org/alpine?branch=v3.22&components=main,community&arch=x86_64",
+      ],
+    },
+  ],
   "customManagers": [
     {
       "customType": "regex",
