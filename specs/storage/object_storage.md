@@ -38,20 +38,9 @@ When a customer runs the tool with `mode: job`, a Kubernetes Job is created to r
 
 Note: `mode: local` does not use this. The bundle already lands as a plain file in the current directory of whoever ran `kubectl support-bundle --load-cluster-specs`.
 
-## Leaving `job.storage` unconfigured
+## `job.storage.provider` is required for `mode: job`
 
-`job.storage.provider` is optional. When it is omitted, the bundle is written inside the completed pod's container and goes nowhere on its own.
-
-Retrieve the support bundle manually before the pod is garbage-collected:
-
-```bash
-kubectl get pods -n <namespace> -l job-name=router-diagnostics-job
-kubectl cp <namespace>/<pod-name>:/support-bundle-<timestamp>.tar.gz ./bundle.tar.gz
-```
-
-The window for this is `job.ttlSecondsAfterFinished` (default `3600`, i.e. one hour) — the pod
-sticks around that long after the Job completes before Kubernetes deletes it. Set `job.ttlSecondsAfterFinished` higher if an hour isn't enough lead time for whoever's
-retrieving it.
+Because there is no way to get the bundle out otherwise, the chart fails the install at render time (`fail` in `templates/job.yaml`) when `mode: job` and `job.storage.provider` is unset, rather than silently producing a bundle nobody can retrieve.
 
 ## Credentials
 
