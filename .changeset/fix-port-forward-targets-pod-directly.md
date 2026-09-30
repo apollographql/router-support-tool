@@ -16,4 +16,4 @@ with a `hostCollectors.run` collector whose embedded shell script loops over eve
 the selector, sequentially port-forwards each pod's metrics port to localhost, and writes each
 pod's scrape to its own `<pod-name>.txt` file. `collect.sh` no longer sets up a port-forward
 before invoking `support-bundle` — all port-forward logic is embedded in the run collector's
-shell script.
+shell script. When no pod responds on the metrics port the `router-metrics/output` file in the bundle records a plain explanation instead of leaving the section silently empty.

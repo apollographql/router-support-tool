@@ -89,6 +89,9 @@ data:
                   kill "$PF_PID" 2>/dev/null || true
                   wait "$PF_PID" 2>/dev/null || true
                 done
+                if [ -z "$(ls "$TS_OUTPUT_DIR"/*.txt 2>/dev/null)" ]; then
+                  echo "metrics not collected: no pod responded on port {{ .Values.metricsPort | default 9090 }} — prometheus may not be enabled"
+                fi
 {{- end }}
   redactor-spec: |
     apiVersion: troubleshoot.sh/v1beta2
