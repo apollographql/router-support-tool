@@ -110,26 +110,35 @@ diff "$EXPECTED_REDACTED_ROUTER_CONFIG" /tmp/collected-router-config.yaml
 
 # job mode emits one http collector per pod: router-metrics-<pod-name>/result.json.
 # If no files exist the selector didn't match any pods at render time.
-METRICS_RESULTS=()
-while IFS= read -r f; do
-  METRICS_RESULTS+=("$f")
-done < <(find "$BUNDLE_DIR" -path "*/router-metrics-*/result.json" -type f 2>/dev/null)
-[ "${#METRICS_RESULTS[@]}" -gt 0 ] || { echo "router-metrics: no per-pod result files found — selector/label mismatch at render time?" >&2; exit 1; }
+METRICS_FILES=$(find "$BUNDLE_DIR" -path "*/router-metrics-*/result.json" -type f 2>/dev/null)
+[ -n "$METRICS_FILES" ] || { echo "router-metrics: no per-pod result files found — selector/label mismatch at render time?" >&2; exit 1; }
 
 case "$CONDITION" in
   all-metrics-misconfigured)
     # Every router has prometheus.enabled=false, so every scrape should fail —
     # no # HELP line in any result.
-    for f in "${METRICS_RESULTS[@]}"; do
-      ! grep -q '# HELP' <(jq -r '.response.body' "$f") || { echo "router-metrics: unexpected # HELP in $f" >&2; exit 1; }
-    done
+    UNEXPECTED=false
+    while IFS= read -r f; do
+      if jq -r '.response.body' "$f" | grep -q '# HELP'; then
+        echo "router-metrics: unexpected # HELP in $f" >&2
+        UNEXPECTED=true
+      fi
+    done <<METRICS_EOF
+$METRICS_FILES
+METRICS_EOF
+    [ "$UNEXPECTED" = false ] || exit 1
     ;;
   healthy)
     # At least one pod's scrape should return real metrics text.
     FOUND=false
-    for f in "${METRICS_RESULTS[@]}"; do
-      grep -q '# HELP' <(jq -r '.response.body' "$f") && FOUND=true && break
-    done
+    while IFS= read -r f; do
+      if jq -r '.response.body' "$f" | grep -q '# HELP'; then
+        FOUND=true
+        break
+      fi
+    done <<METRICS_EOF
+$METRICS_FILES
+METRICS_EOF
     [ "$FOUND" = true ] || { echo "router-metrics: no result file contains # HELP" >&2; exit 1; }
     ;;
 esac
