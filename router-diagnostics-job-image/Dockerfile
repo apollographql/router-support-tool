@@ -5,12 +5,16 @@ FROM gcr.io/google.com/cloudsdktool/google-cloud-cli:${GCLOUD_VERSION}-alpine AS
 
 FROM alpine:3.22
 
-# Renovate's apk datasource only detects a version written directly
-# on the apk add line and skips one supplied through a variable.
+# renovate: datasource=repology depName=alpine_3_22/ca-certificates versioning=loose
+ARG CA_CERTIFICATES_VERSION="20260909-r0"
+# renovate: datasource=repology depName=alpine_3_22/aws-cli versioning=loose
+ARG AWS_CLI_VERSION="2.27.25-r0"
+# renovate: datasource=repology depName=alpine_3_22/curl versioning=loose
+ARG CURL_VERSION="8.14.1-r3"
 RUN apk add --no-cache \
-    ca-certificates=20260909-r0 \
-    aws-cli=2.27.25-r0 \
-    curl=8.14.1-r3
+    ca-certificates="${CA_CERTIFICATES_VERSION}" \
+    aws-cli="${AWS_CLI_VERSION}" \
+    curl="${CURL_VERSION}"
 
 COPY --from=gcloud-sdk /google-cloud-sdk /google-cloud-sdk
 ENV PATH="/google-cloud-sdk/bin:$PATH"
