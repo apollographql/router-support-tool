@@ -5,7 +5,7 @@ sh "$ENV_SETUP_SCRIPT"
 
 NAMESPACE="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
 
-# Decoupled from the router's own boot config  applied explicitly here
+# Decoupled from the router's own boot config and applied explicitly here
 kubectl apply -n "$NAMESPACE" -f "$ROUTER_CONFIG_CONFIGMAP"
 
 # Generates the log line the operation bodies' redactor needs to be tested against.
