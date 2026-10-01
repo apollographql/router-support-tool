@@ -10,6 +10,9 @@ pre-commit:
     helm-lint:
       glob: "router-diagnostics-chart/**"
       run: mise run helm-lint
+    test-storage-credentials:
+      glob: "router-diagnostics-chart/**"
+      run: mise run test-storage-credentials
 
 pre-push:
   commands:
