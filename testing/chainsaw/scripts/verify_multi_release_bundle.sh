@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# Installs router-diagnostics (mode: local) into a namespace containing two ConfigMaps
-# labeled app.kubernetes.io/name=router (standing in for two separate router releases,
-# e.g. one per graph), and checks that the configMap collector captures both as
-# separately-named files, each with its own content intact - see
-# specs/collection/base_spec.md -> "router.yaml capture" and
-# specs/collection/meta_json.md -> Multiple router releases in one namespace.
+# Installs router-diagnostics into a namespace containing two ConfigMaps
+# and checks that the configMap collector captures both as
+# separately-named files, each with its own content intact.
 #
 # Usage: verify_multi_release_bundle.sh <namespace> <chart-path> <collect-script-path>
 # chart-path/collect-script-path are not repo-root-relative - see the calling
