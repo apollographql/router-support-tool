@@ -1,6 +1,6 @@
 #!/bin/sh
 # Collects a router-diagnostics support bundle for mode: local. Caches a pinned
-# support-bundle binary locally, resolves the router's Service, bridges its metrics port
+# support-bundle binary locally, selects one router Pod and bridges its metrics port
 # with a temporary kubectl port-forward, then runs support-bundle against the cluster's
 # discoverable specs.
 #
@@ -104,45 +104,6 @@ if [ ! -x "$BIN" ]; then
   chmod +x "$TMP_BIN"
   mv "$TMP_BIN" "$BIN"
   echo "router-diagnostics: cached support-bundle v${SUPPORT_BUNDLE_VERSION}" >&2
-fi
-
-SVC_ERR=$(mktemp)
-PF_LOG=$(mktemp)
-PF_PID=""
-cleanup() {
-  if [ -n "$PF_PID" ]; then
-    kill "$PF_PID" 2>/dev/null || true
-    wait "$PF_PID" 2>/dev/null || true
-  fi
-  rm -f "$SVC_ERR" "$PF_LOG"
-}
-trap cleanup EXIT INT TERM
-
-if ! SERVICE=$(kubectl get svc -n "$NAMESPACE" -l "$SELECTOR" -o jsonpath='{.items[0].metadata.name}' 2>"$SVC_ERR"); then
-  echo "error: kubectl get svc failed: $(cat "$SVC_ERR")" >&2
-  exit 1
-fi
-
-if [ -z "$SERVICE" ]; then
-  echo "warning: no Service labeled $SELECTOR found in namespace $NAMESPACE, router-metrics will fail with a connection error." >&2
-else
-  kubectl port-forward -n "$NAMESPACE" "svc/$SERVICE" "$METRICS_PORT:$METRICS_PORT" >"$PF_LOG" 2>&1 &
-  PF_PID=$!
-
-  READY=0
-  for _ in $(seq 1 30); do
-    if grep -q "Forwarding from" "$PF_LOG" 2>/dev/null; then
-      READY=1
-      break
-    fi
-    sleep 0.5
-  done
-
-  if [ "$READY" -ne 1 ]; then
-    echo "warning: port-forward to $SERVICE:$METRICS_PORT never became ready, router-metrics collector will fail with a connection error" >&2
-    echo "--- kubectl port-forward output ---" >&2
-    cat "$PF_LOG" >&2
-  fi
 fi
 
 "$BIN" --load-cluster-specs --namespace "$NAMESPACE" --auto-update=false

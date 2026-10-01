@@ -108,22 +108,38 @@ grep -qi "forbidden" "$BUNDLE_DIR/cluster-resources/nodes-errors.json"
 jq -j '.data["router.yaml"]' "$BUNDLE_DIR/configmaps/$NAMESPACE/router-config.json" > /tmp/collected-router-config.yaml
 diff "$EXPECTED_REDACTED_ROUTER_CONFIG" /tmp/collected-router-config.yaml
 
-# Guard against the bug if the Service selector doesn't match,
-# the collector never reaches a router at all and returns an error.
-if grep -q 'router-metrics-host-not-found' "$BUNDLE_DIR/router-metrics/result.json"; then
-  echo "router-metrics collector never resolved the router Service - selector/label mismatch?" >&2
-  exit 1
-fi
+# job mode emits one http collector per pod: router-metrics-<pod-name>/result.json.
+# If no files exist the selector didn't match any pods at render time.
+METRICS_FILES=$(find "$BUNDLE_DIR" -path "*/router-metrics-*/result.json" -type f 2>/dev/null)
+[ -n "$METRICS_FILES" ] || { echo "router-metrics: no per-pod result files found — selector/label mismatch at render time?" >&2; exit 1; }
 
 case "$CONDITION" in
   all-metrics-misconfigured)
-    # Every router has prometheus.enabled=false, so the scrape should genuinely fail -
-    # no metrics text anywhere in the result.
-    ! grep -q '# HELP' "$BUNDLE_DIR/router-metrics/result.json"
+    # Every router has prometheus.enabled=false, so every scrape should fail —
+    # no # HELP line in any result.
+    UNEXPECTED=false
+    while IFS= read -r f; do
+      if jq -r '.response.body' "$f" | grep -q '# HELP'; then
+        echo "router-metrics: unexpected # HELP in $f" >&2
+        UNEXPECTED=true
+      fi
+    done <<METRICS_EOF
+$METRICS_FILES
+METRICS_EOF
+    [ "$UNEXPECTED" = false ] || exit 1
     ;;
   healthy)
-    # The scrape should return real metrics text.
-    grep -q '# HELP' "$BUNDLE_DIR/router-metrics/result.json"
+    # At least one pod's scrape should return real metrics text.
+    FOUND=false
+    while IFS= read -r f; do
+      if jq -r '.response.body' "$f" | grep -q '# HELP'; then
+        FOUND=true
+        break
+      fi
+    done <<METRICS_EOF
+$METRICS_FILES
+METRICS_EOF
+    [ "$FOUND" = true ] || { echo "router-metrics: no result file contains # HELP" >&2; exit 1; }
     ;;
 esac
 

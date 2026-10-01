@@ -16,11 +16,6 @@
   },
   {
     "kind": "collector",
-    "type": "http",
-    "name": "router-metrics"
-  },
-  {
-    "kind": "collector",
     "type": "logs",
     "name": "router-logs"
   },
@@ -28,6 +23,11 @@
     "kind": "collector",
     "type": "nodeMetrics",
     "name": "router-resource-usage"
+  },
+  {
+    "kind": "hostCollector",
+    "type": "run",
+    "name": "router-metrics"
   },
   {
     "kind": "redactor",

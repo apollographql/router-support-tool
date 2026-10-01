@@ -34,23 +34,11 @@ data:
               {{- end }}
             {{- end }}
 
-        - http:
-            name: router-metrics
-            get:
-              {{- if eq .Values.mode "local" }}
-              # Local mode runs the support-bundle on the invoking user's own machine,
-              # which can't resolve the router's in-cluster Service DNS name so it
-              # targets a `localhost`port-forward instead.
-              url: http://localhost:{{ .Values.metricsPort | default 9090 }}/metrics
-              {{- else if .Values.selector }}
-              # Selector set (raw-manifest tier). No fixed label to resolve a host
-              # from so find the Service that matched `selector` instead.
-              url: http://{{ include "router-diagnostics-chart.metricsTargetHost" . | default "<router-metrics-host-not-found>" }}:{{ .Values.metricsPort | default 9090 }}/metrics
-              {{- else }}
-              # Selector unset (official chart tier)
-              # Resolve the Service by its fixed label.
-              url: http://{{ include "router-diagnostics-chart.routerServiceName" . | default "<router-metrics-host-not-found>" }}.{{ .Values.namespace }}.svc.cluster.local:{{ .Values.metricsPort | default 9090 }}/metrics
-              {{- end }}
+        # Metrics collection differs by mode because pod IPs are only reachable in-cluster.
+        # Job mode — support-bundle runs inside a Kubernetes Job and can reach pod IPs directly
+        {{- if ne .Values.mode "local" }}
+        {{- include "router-diagnostics-chart.routerMetricsCollectors" . | trim | nindent 8 }}
+        {{- end }}
 
         - configMap:
             collectorName: router-config-rendered
@@ -78,6 +66,19 @@ data:
                 {{- end }}
                 "troubleshoot_version": "0.134.1"
               }
+    # mode: local — support-bundle runs on the user's machine where pod IPs are not
+    # reachable, so a hostCollectors.run script handles all port-forwards at collection time.
+{{- if eq .Values.mode "local" }}
+      hostCollectors:
+        - run:
+            collectorName: router-metrics
+            outputDir: router-metrics
+            command: sh
+            args:
+              - -c
+              - |
+                {{- tpl (.Files.Get "files/local-metrics-collect.sh") . | nindent 16 }}
+{{- end }}
   redactor-spec: |
     apiVersion: troubleshoot.sh/v1beta2
     kind: Redactor
