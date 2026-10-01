@@ -1,10 +1,3 @@
-# Used for every router_version except v2.17.0 in the RTF test plan's matrix.
-# redaction-testing-router-config.yaml exhaustively exercises every redaction rule, but its schema
-# isn't stable across the whole router_version range. For example, headers.all.request's shape
-# changed between v2.4.0 and v2.17.0 with no syntax valid on both (confirmed via
-# `router config validate`), so header redaction is the one category this file can't cover.
-# Every other category is covered, with a config confirmed schema-valid on v2.4.0, v2.10.1,
-# v2.13.0, and v2.17.0.
 supergraph:
   listen: 0.0.0.0:4000
 
@@ -19,28 +12,22 @@ telemetry:
         enabled: true
         listen: 0.0.0.0:9090
         path: /metrics
-  # specs/collection/data_sanitization/operation_bodies.md - the sentinel operation sent
-  # by scenario.sh's curl call is what this actually logs.
   instrumentation:
     events:
       supergraph:
         request: info
         response: info
 
-# Tests specs/collection/data_sanitization/redis_credentials.md's username/password
-# field shape.
 apq:
   router:
     cache:
       redis:
         urls:
           - "redis://localhost:6391"
-        username: SENTINEL_REDIS_USERNAME
-        password: SENTINEL_REDIS_PASSWORD
+        username: ***HIDDEN***
+        password: ***HIDDEN***
         required_to_start: false
 
-# Tests specs/collection/data_sanitization/jwt_and_auth_config.md's JWKS header case,
-# and aws_sig_v4's hardcoded case.
 authentication:
   router:
     jwt:
@@ -52,19 +39,16 @@ authentication:
             - RS256
           headers:
             - name: x-vault-token
-              value: "SENTINEL_JWKS_HEADER_VALUE"
+              value: "***HIDDEN***"
   subgraph:
     all:
       aws_sig_v4:
         hardcoded:
-          access_key_id: SENTINEL_AWS_ACCESS_KEY_ID
-          secret_access_key: SENTINEL_AWS_SECRET_ACCESS_KEY
+          access_key_id: ***HIDDEN***
+          secret_access_key: ***HIDDEN***
           region: us-east-1
           service_name: vpc-lattice-svcs
 
-# Tests specs/collection/data_sanitization/tls_private_keys.md's three key locations,
-# same test material as redaction-testing-router-config.yaml's own tls section.
-# Self-signed, CI-only - not used to serve real traffic.
 tls:
   supergraph:
     certificate: |
@@ -80,11 +64,7 @@ tls:
       TU/XGqo=
       -----END CERTIFICATE-----
     key: |
-      -----BEGIN EC PRIVATE KEY-----
-      MHcCAQEEIAVoZMBkcnizlfy10FJb+iXKFvKaWL2pHoVrb2PtxvGcoAoGCCqGSM49
-      AwEHoUQDQgAEEY6EL9MVTdQYaWb9UP14FFIw30JfOhc/Dj2MGY/ITDNZ6nhjhiIA
-      +6pEZAp5EXZh9A27BKcgHrNSXEtKPtWBtA==
-      -----END EC PRIVATE KEY-----
+      -----BEGIN EC PRIVATE KEY-----***HIDDEN***-----END EC PRIVATE KEY-----
     certificate_chain: |
       -----BEGIN CERTIFICATE-----
       MIIBgTCCASegAwIBAgIUekJsIs9C1ZtolJXebnaYJsfLtxgwCgYIKoZIzj0EAwIw
@@ -113,11 +93,7 @@ tls:
           zMTuNP5Zv2G0gSkMz2wvBA8RJJ29VEQ=
           -----END CERTIFICATE-----
         key: |
-          -----BEGIN EC PRIVATE KEY-----
-          MHcCAQEEIBNWKJI+2L6hGCXDV/TrRM6tScIOnXdTw34PdYkHDGvWoAoGCCqGSM49
-          AwEHoUQDQgAEkNerTENNxFLJjXN69IG3KKVEs8WnltT6sF/8bYRFh6aSdTnkGX0r
-          YOR3bgSoHM/ubBJdBgAy9tx/V0JEUyGL+Q==
-          -----END EC PRIVATE KEY-----
+          -----BEGIN EC PRIVATE KEY-----***HIDDEN***-----END EC PRIVATE KEY-----
   connector:
     all:
       client_authentication:
@@ -134,21 +110,4 @@ tls:
           cwn1uKPZBEVm4rCxrcruyUDEf3WT+WKG
           -----END CERTIFICATE-----
         key: |
-          -----BEGIN EC PRIVATE KEY-----
-          MHcCAQEEILKPwQVyeMfux+nXAigxk/pd+ZtWpTTkmZG+2q3aDv4BoAoGCCqGSM49
-          AwEHoUQDQgAEw8FPJfapEzz15DXvrZLGz8EtfIFFFYg2Mju/bQRLolpRGyUox4ry
-          LW2szQ5JrqWFfha50aEkzDpQEQuwlmGnwg==
-          -----END EC PRIVATE KEY-----
-
-# Tests specs/collection/data_sanitization/subgraph_urls.md. Deliberately last: a known
-# troubleshoot.sh built-in redactor over-redacts past this block's closing quote into
-# whatever key follows (specs/collection/data_sanitization/overview.md -> A built-in
-# redactor can over-redact past a masked URL) - putting it last means nothing is at risk
-# of being swallowed. Two entries per subgraph_urls.md's own "one quoted and one not"
-# note: accounts is bare (no credential) and quoted - deterministically masked by our own
-# redactor, the only shape we can guarantee. inventory carries a credential and is
-# unquoted - left to the built-in's own masking, not asserted byte-for-byte (see
-# scenario.sh, which checks both sentinels are absent rather than diffing this section).
-override_subgraph_url:
-  accounts: "https://accounts.internal.svc.cluster.local:4001/graphql"
-  inventory: https://svc-user:SENTINEL_SUBGRAPH_URL_PASSWORD@inventory.internal.svc.cluster.local:4001/graphql
+          -----BEGIN EC PRIVATE KEY-----***HIDDEN***-----END EC PRIVATE KEY-----

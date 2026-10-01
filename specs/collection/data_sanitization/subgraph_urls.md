@@ -28,10 +28,15 @@ This surface masks the **whole block**, keys included — RE2 has no lookbehind,
       - "configmaps/*/*.json"
   removals:
     regex:
-      - redactor: '(override_subgraph_url:)(?P<mask>(?:\\n\s+(?:[^\\]|\\")+)+)'
+      - redactor: '(override_subgraph_url:)(?P<mask>(?:\\n\s+[\w.-]+:\s*(?:\\"[^"\\]*\\"|[^\\@"]+))+)'
 ```
 
-**Consequence:** subgraph *names* don't survive this surface — the pattern can only mask the block wholesale, a side effect of the RE2 constraint. They're only preserved via the schema (below), when one is collected.
+Each entry's mask is anchored on its own closing delimiter. Two shapes per entry:
+
+- **Quoted** (`\\"[^"\\]*\\"`): bounded by its own closing quote. Handles any value, credentialed or not.
+- **Unquoted, no `@`** (`[^\\@"]+`): bounded by the line's own end, since there's no quote to anchor on. The `@` exclusion is deliberate — a bare (credential-free) unquoted value can safely rely on its own line ending, because the built-in redactor above never touches a URL without embedded credentials in the first place. A *credentialed* unquoted value is excluded on purpose: if the built-in has already erased this entry's line boundary (which it does, since a `user:pass@` shape is exactly what triggers it), an unquoted match has nothing safe to stop at either. That case is left entirely to the built-in's own masking instead — it does mask the credential and host, just not the whole address, and it's still subject to the built-in's own key-name-eating side effect.
+
+**Consequence:** subgraph *names* don't survive this surface — the pattern can only mask each entry's value wholesale, a side effect of the RE2 constraint. They're only preserved via the schema (below), when one is collected.
 
 ## Redactor: subgraph URLs in the supergraph schema
 
@@ -65,8 +70,6 @@ That schema is collected whenever the customer sets `.Values.supergraphFile` —
 - Assumes the SDL is collected as one physical line inside the ConfigMap JSON; it would not match if the schema were ever collected as a standalone `.graphql` file.
 - The second pattern anchors on `baseURL` directly to reach Apollo Connectors' external API addresses (`@source(http: { baseURL: … })`, nested inside `@join__directive`) — a connector base URL is usually third-party, making it the disclosure most likely to name a business relationship.
 - Managed-federation customers are unaffected: their schema comes from Uplink at runtime and never lands in a ConfigMap.
-
-**Required before this is considered done:** collect with (a) `override_subgraph_url` set for two subgraphs, one quoted and one not, followed by a top-level key, (b) a `supergraphFile` schema carrying `@join__graph` URLs and a connector `baseURL`, and (c) a `@link` directive. Confirm every address is masked, and subgraph names and the `@link` URL survive.
 
 The key after the block is deliberately not asserted as surviving — see `overview.md` → [A built-in redactor can over-redact past a masked URL](overview.md#a-built-in-redactor-can-over-redact-past-a-masked-url).
 

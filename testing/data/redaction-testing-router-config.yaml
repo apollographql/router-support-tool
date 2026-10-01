@@ -1,12 +1,22 @@
-# Used for every router_version except v2.17.0 in the RTF test plan's matrix.
-# redaction-testing-router-config.yaml exhaustively exercises every redaction rule, but its schema
-# isn't stable across the whole router_version range. For example, headers.all.request's shape
-# changed between v2.4.0 and v2.17.0 with no syntax valid on both (confirmed via
-# `router config validate`), so header redaction is the one category this file can't cover.
-# Every other category is covered, with a config confirmed schema-valid on v2.4.0, v2.10.1,
-# v2.13.0, and v2.17.0.
 supergraph:
   listen: 0.0.0.0:4000
+  # Tests specs/collection/data_sanitization/redis_credentials.md - URL-embedded credentials
+  # plus two more shapes as comments. These are commented out because the router's
+  # Redis client rejects a `urls` list with inconsistent usernames across entries, and
+  # rejects combining URL-embedded creds with explicit username/password on one cache.
+  # Redaction is plain text matching, so a commented-out line is still good data
+  # for the redactor even though the router itself never parses it.
+  # Pathless form (no username, a normal pre-ACL Redis idiom):
+  #   - "redis://:SENTINEL_REDIS_PATHLESS_PASSWORD@localhost:6392"
+  # Separate username/password fields, quoted (apq's below are the unquoted form):
+  #   username: "SENTINEL_REDIS_USERNAME_QUOTED"
+  #   password: "SENTINEL_REDIS_PASSWORD_QUOTED"
+  query_planning:
+    cache:
+      redis:
+        urls:
+          - "redis://redisuser:SENTINEL_REDIS_URL_PASSWORD@localhost:6390"
+        required_to_start: false
 
 health_check:
   listen: 0.0.0.0:8088
@@ -19,16 +29,15 @@ telemetry:
         enabled: true
         listen: 0.0.0.0:9090
         path: /metrics
-  # specs/collection/data_sanitization/operation_bodies.md - the sentinel operation sent
-  # by scenario.sh's curl call is what this actually logs.
+  # specs/collection/data_sanitization/operation_bodies.md
   instrumentation:
     events:
       supergraph:
         request: info
         response: info
 
-# Tests specs/collection/data_sanitization/redis_credentials.md's username/password
-# field shape.
+# Tests specs/collection/data_sanitization/redis_credentials.md,
+# username/password as separate fields
 apq:
   router:
     cache:
@@ -39,32 +48,23 @@ apq:
         password: SENTINEL_REDIS_PASSWORD
         required_to_start: false
 
-# Tests specs/collection/data_sanitization/jwt_and_auth_config.md's JWKS header case,
-# and aws_sig_v4's hardcoded case.
-authentication:
-  router:
-    jwt:
-      jwks:
-        - url: http://localhost:9090/jwks-not-found
-          issuers:
-            - "https://issuer.example.com"
-          algorithms:
-            - RS256
-          headers:
-            - name: x-vault-token
-              value: "SENTINEL_JWKS_HEADER_VALUE"
-  subgraph:
-    all:
-      aws_sig_v4:
-        hardcoded:
-          access_key_id: SENTINEL_AWS_ACCESS_KEY_ID
-          secret_access_key: SENTINEL_AWS_SECRET_ACCESS_KEY
-          region: us-east-1
-          service_name: vpc-lattice-svcs
+# Tests specs/collection/data_sanitization/header_values.md
+headers:
+  all:
+    request:
+      operations:
+        - insert:
+            name: x-sentinel-static
+            value: SENTINEL_HEADER_INSERT_VALUE
+        - insert:
+            name: x-sentinel-frombody
+            path: "$.doesNotExist"
+            default: SENTINEL_HEADER_INSERT_DEFAULT
+        - propagate:
+            named: x-sentinel-source-header
+            default: SENTINEL_HEADER_PROPAGATE_DEFAULT
 
-# Tests specs/collection/data_sanitization/tls_private_keys.md's three key locations,
-# same test material as redaction-testing-router-config.yaml's own tls section.
-# Self-signed, CI-only - not used to serve real traffic.
+# Tests specs/collection/data_sanitization/tls_private_keys.md
 tls:
   supergraph:
     certificate: |
@@ -140,15 +140,37 @@ tls:
           LW2szQ5JrqWFfha50aEkzDpQEQuwlmGnwg==
           -----END EC PRIVATE KEY-----
 
-# Tests specs/collection/data_sanitization/subgraph_urls.md. Deliberately last: a known
-# troubleshoot.sh built-in redactor over-redacts past this block's closing quote into
-# whatever key follows (specs/collection/data_sanitization/overview.md -> A built-in
-# redactor can over-redact past a masked URL) - putting it last means nothing is at risk
-# of being swallowed. Two entries per subgraph_urls.md's own "one quoted and one not"
-# note: accounts is bare (no credential) and quoted - deterministically masked by our own
-# redactor, the only shape we can guarantee. inventory carries a credential and is
-# unquoted - left to the built-in's own masking, not asserted byte-for-byte (see
-# scenario.sh, which checks both sentinels are absent rather than diffing this section).
+# Tests specs/collection/data_sanitization/subgraph_urls.md.
+#
+# `authentication` follows immediately so its secrets sit where the
+# built-in's known over-redaction would land if unbounded. 
+# Everything from here on is excluded from the byte-diff and checked
+# by sentinel instead.
 override_subgraph_url:
   accounts: "https://accounts.internal.svc.cluster.local:4001/graphql"
   inventory: https://svc-user:SENTINEL_SUBGRAPH_URL_PASSWORD@inventory.internal.svc.cluster.local:4001/graphql
+
+authentication:
+  router:
+    jwt:
+      jwks:
+        - url: http://localhost:9090/jwks-not-found
+          issuers:
+            - "https://issuer.example.com"
+          algorithms:
+            - RS256
+          headers:
+            - name: x-vault-token
+              value: "SENTINEL_JWKS_HEADER_VALUE"
+        - url: http://localhost:9090/jwks-not-found-flow
+          headers: [{ name: x-api-key-flow, value: SENTINEL_JWKS_FLOW_HEADER_SINGLE }]
+        - url: http://localhost:9090/jwks-not-found-flow-multi
+          headers: [{ name: x-flow-multi-a, value: SENTINEL_JWKS_FLOW_MULTI_FIRST }, { name: x-flow-multi-b, value: SENTINEL_JWKS_FLOW_MULTI_SECOND }]
+  subgraph:
+    all:
+      aws_sig_v4:
+        hardcoded:
+          access_key_id: SENTINEL_AWS_ACCESS_KEY_ID
+          secret_access_key: SENTINEL_AWS_SECRET_ACCESS_KEY
+          region: us-east-1
+          service_name: vpc-lattice-svcs

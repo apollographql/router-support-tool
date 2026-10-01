@@ -15,7 +15,8 @@ Every file here is scoped to the router's own `router.yaml` (captured per `specs
 
 ## Built-in redactors
 
-troubleshoot.sh ships a default set of redactors that runs on every file regardless of spec content. This includes env-var-named secrets (`password`, `token`, `*_SECRET_ACCESS_KEY`, etc.), URL-embedded credentials, database connection strings, and a few Kubernetes-specific patterns (`last-applied-configuration` annotations, kURL bootstrap tokens).
+troubleshoot.sh ships a default set of redactors that runs on every file regardless of spec content. This includes env-var-named secrets (`password`, `token`, `*_SECRET_ACCESS_KEY`, etc.), URL-embedded credentials, database connection strings, and a few Kubernetes-specific patterns (`last-applied-configuration` annotations, kURL bootstrap tokens). Built-ins always run before any custom redactor in this directory, on every file, whether or not a custom rule also targets that file.
+
 
 ## How custom redaction works
 

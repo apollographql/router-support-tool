@@ -12,7 +12,7 @@ telemetry:
         enabled: false
         listen: 0.0.0.0:9090
         path: /metrics
-  # Must match base-router-config.yaml's instrumentation.events.supergraph block. Without
+  # Must match redaction-testing-router-config.yaml's instrumentation.events.supergraph block. Without
   # this, misconfigure_metrics also silences operation-body logging as a side effect, and
   # scenario.sh's "kind":"supergraph.request"/response log assertions fail even though the
   # sentinel request succeeded.
@@ -22,7 +22,7 @@ telemetry:
         request: info
         response: info
 
-# Must match base-router-config.yaml's tls.supergraph block. This file is swapped in over
+# Must match redaction-testing-router-config.yaml's tls.supergraph block. This file is swapped in over
 # a running router's config to disable Prometheus only - without this, misconfigure_metrics
 # (env_setup.sh) also drops TLS as a side effect, and scenario.sh's https:// sentinel curl
 # then fails with a TLS handshake error instead of exercising metrics.

@@ -154,7 +154,7 @@ data:
               - "configmaps/*/*.json"
           removals:
             regex:
-              - redactor: '(override_subgraph_url:)(?P<mask>(?:\\n\s+(?:[^\\]|\\")+)+)'
+              - redactor: '(override_subgraph_url:)(?P<mask>(?:\\n\s+[\w.-]+:\s*(?:\\"[^"\\]*\\"|[^\\@"]+))+)'
         - name: router-subgraph-url-schema
           fileSelector:
             files:
