@@ -5,13 +5,13 @@ description: The Apollo GraphOS Router Support Tool packages up a diagnostic sna
 
 ---
 
-The GraphOS Router Support Tool produces a diagnostic snapshot of your GraphOS Router and its Kubernetes environment including router version and config, logs, pod health, and metrics into a single sanitized archive, on demand, without affecting your router.
+The GraphOS Router Support Tool produces a diagnostic snapshot of your GraphOS Router and its Kubernetes environment including router version, router config, logs, pod health, and metrics into a single sanitized archive, on demand, without affecting your router.
 
 ## The problem it solves
 
-Getting the full picture when something goes wrong has historically meant a manual, back-and-forth process: `kubectl describe`, hunting down `router.yaml`, grepping logs, screenshotting a dashboard. The tool gathers all of it in one pass — often enough to diagnose and fix the issue yourself, and if not, exactly what a support ticket needs.
+Getting the full picture when something goes wrong has historically meant a manual, back-and-forth process: `kubectl describe`, hunting down `router.yaml`, grepping logs, and screenshotting a dashboard. By contrast, this tool gathers everything at once so you can diagnose and fix the issue yourself or point support to exactly the right problem.
 
-This includes:
+What's collected by the tool includes:
 
 - Router version and startup configuration
 - Current and previous-container logs (so a router that already restarted still has its history captured)
@@ -19,9 +19,9 @@ This includes:
 - A point-in-time Prometheus metrics snapshot, if you expose one
 - Sanitized router.yaml including secrets, tokens, and credentials stripped out automatically before the bundle ever leaves your cluster
 
-See [Data Collected](./data-collected) for the full per-signal breakdown — what each one requires, what it costs in permissions, and what's lost if you decline it.
+Go to [Data Collected](./data-collected) for the full per-signal breakdown—what each one requires, what it costs in permissions, and what's lost if you decline it.
 
-And it does this without touching Apollo's systems. You generate and store the bundle entirely within infrastructure you control, locally on disk, or in a bucket you own. Apollo only sees it if and when you choose to share it during a support engagement.
+And it does this without touching Apollo's systems. You generate and store the bundle entirely within infrastructure you control, locally on disk or in a bucket you own. Apollo only sees it if and when you choose.
 
 The support tool is built on top of [troubleshoot.sh](https://troubleshoot.sh/), the open-source Kubernetes support-bundle framework, so collection and redaction are handled by their engine. The GraphOS Router Support Tool adds everything around it: what to collect, how the spec reaches your cluster, how you trigger a collection, and where the resulting bundle goes. We have also built custom redactors that ensure tokens, credentials, connection strings, and IP addresses are stripped automatically, along with router-specific values like JWT/auth configuration.
 
@@ -39,10 +39,10 @@ A few things we built in deliberately:
 
 Getting the spec into your cluster is done through a single Helm chart, `router-diagnostics-chart`, with a `mode` value controlling how collection actually runs:
 
-- **`mode: local`** — you run collection yourself, from your own machine, with your own kubectl access.
-- **`mode: job`** — a Kubernetes Job runs collection in-cluster, for teams whose kubectl access to production is restricted and who need a platform team to run it on their behalf.
+- **`mode: local`**: You run collection yourself, from your own machine, with your own `kubectl` access.
+- **`mode: job`**: A Kubernetes Job runs collection in-cluster, for teams whose `kubectl` access to production is restricted and who need a platform team to run it on their behalf.
 
-Both modes install the troubleshoot.sh `support-bundle` engine at a version Apollo pins — via a standalone collection script for `mode: local`, or baked into the published Job image for `mode: job` — so results are reproducible regardless of what a customer happens to have installed already.
+Both modes install the troubleshoot.sh `support-bundle` engine at a version Apollo pins—using a standalone collection script for `mode: local`, or baked into the published Job image for `mode: job`—so results are reproducible regardless of whatever else happens to have been installed already.
 
 See the [Getting Started guide](./getting-started/getting-started) to pick a mode and get a first support bundle collected.
 
@@ -52,7 +52,7 @@ The tool produces a single artifact:
 
 support-bundle-2026-09-11T14_32_00.tar.gz
 
-[TODO: screenshot of bundle contents / meta.json excerpt]
+![Generated support bundle including meta.json content](./images/support-tool-output.png)
 
 Every bundle also includes a `meta.json`, generated at chart-install time: `spec_version`, `mode` (`local` or `job`), `namespace`, and the pinned `troubleshoot_version` this run used, plus `sidecar_injection_disabled` for `mode: job`. It's a fixed snapshot of what the chart was configured to do and is useful for confirming which pin or mode produced a given bundle, but it can't tell you why a section came back empty.
 
@@ -60,4 +60,4 @@ From there, it's yours. Inspect it, keep it, or attach it to a support ticket.
 
 ## Get Started
 
-Ready to try it out? Follow the [Getting Started guide](./getting-started/getting-started).
+Ready to try it out? Go to the [Getting Started guide](./getting-started/getting-started).

@@ -4,13 +4,13 @@ subtitle: Running the tool as a Kubernetes Job (mode: job)
 description: Install the router-diagnostics chart with mode job so a platform team can run collection on your behalf and configure storage so the bundle can be retrieved.
 ---
 
-Use `mode: job` when your own kubectl access to production is restricted and a platform team runs collection on your behalf. A Kubernetes Job runs collection in-cluster, using a namespace-scoped ServiceAccount the chart creates for it.
+Use `mode: job` when your own `kubectl` access to production is restricted and a platform team runs collection on your behalf. A Kubernetes Job runs collection in-cluster, using a namespace-scoped ServiceAccount the chart creates for it.
 
-`job.storage` is required for this mode and the chart fails the install if `job.storage.provider` is left unset. See [Support bundle storage and retrieval](../bundle-storage) for the full reference.
+`job.storage` is required for this mode, and the chart fails the install if `job.storage.provider` is left unset. For the full reference, go to [Support bundle storage and retrieval](../bundle-storage).
 
 ## Install the chart
 
-**If you deployed the router with the official Apollo Helm chart**, the example below shows how to configure support bundle upload to AWS S3 via IRSA:
+**If you deployed your router with the official Apollo Helm chart**, this example shows how to configure support bundle upload to AWS S3 via IRSA:
 
 ```bash
 helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
@@ -24,9 +24,9 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --set job.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=arn:aws:iam::123456789012:role/router-diagnostics-s3-writer
 ```
 
-The Job image defaults to Apollo's published `router-diagnostics` image — override `job.image.repository`/`job.image.tag` only to pin a different version or point at a private mirror.
+The Job image defaults to Apollo's published `router-diagnostics` image. Override `job.image.repository`/`job.image.tag` only to pin a different version or point at a private mirror.
 
-**If you're on a raw-manifest or custom deployment**, also supply `selector` and `configMapName`, since none of the official chart's conventions apply to your deployment:
+**If you're on a raw-manifest or custom deployment**, also supply `selector` and `configMapName`, because none of the official chart's conventions apply to your deployment:
 
 ```bash
 helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
@@ -42,21 +42,21 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --set job.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=arn:aws:iam::123456789012:role/router-diagnostics-s3-writer
 ```
 
-`selector` also determines how the Job reaches your metrics endpoint under this tier. See [Collecting Metrics](../collecting-metrics#mode-job) for details.
+`selector` also determines how the Job reaches your metrics endpoint under this tier. For more details, go to [Collecting Metrics](../collecting-metrics#mode-job).
 
 The Job runs immediately on install and uploads the bundle as soon as collection finishes.
 
 ## Choosing a storage destination
 
-The example above uploads to S3 using IRSA with no credentials to store or rotate. `job.storage` also supports GCS (Workload Identity), an S3-compatible store (MinIO, Ceph RGW, and similar, via `job.storage.s3.endpoint`), or a bare HTTP(S) endpoint (`provider: url`) for a receiver that isn't S3 or GCS at all. See [Support bundle storage and retrieval](../bundle-storage) for the full set of `job.storage` values, credential options, and worked examples per provider.
+The previous example uploads to S3 using IRSA with no credentials to store or rotate. `job.storage` also supports GCS (Workload Identity), an S3-compatible store (MinIO, Ceph RGW, and similar, via `job.storage.s3.endpoint`), or a bare HTTP(S) endpoint (`provider: url`) for a receiver that isn't S3 or GCS at all. For the full set of `job.storage` values, credential options, and worked examples per provider, go to [Support bundle storage and retrieval](../bundle-storage).
 
 ## Retrieving the bundle
 
-Once the Job completes, the configured destination has the bundle. Retrieve it the way you'd retrieve anything else from that bucket or endpoint (e.g. `aws s3 cp` for S3) — see [Support bundle storage and retrieval → Retrieval](../bundle-storage#retrieval) for specifics per provider. This tool doesn't manage retention on the destination.
+Once the Job completes, the configured destination has the bundle. Retrieve it the way you'd retrieve anything else from that bucket or endpoint (for example, `aws s3 cp` for S3). For specifics per provider, go to [Support bundle storage and retrieval → Retrieval](../bundle-storage#retrieval). This tool doesn't manage retention on the destination.
 
 ## Service mesh environments
 
-**Injecting a sidecar into the Job's pod risks the Job never completing.** Kubernetes only marks a Job `Complete` once every container in its pod has exited, but a mesh proxy (e.g. `istio-proxy`) is a long-running sidecar that keeps waiting for traffic after the collection container is done, so the pod sits in `Running` indefinitely instead of reaching `Completed`, leaving a stuck workload behind with no clean signal that collection succeeded.
+**Injecting a sidecar into the Job's pod risks the Job never completing.** Kubernetes only marks a Job `Complete` once every container in its pod has exited, but a mesh proxy (for example, `istio-proxy`) is a long-running sidecar that keeps waiting for traffic after the collection container is done, so the pod sits in `Running` indefinitely instead of reaching `Completed`, leaving a stuck workload behind with no clear signal that collection succeeded.
 
 To avoid that, the chart sets `job.podAnnotations` to disable sidecar injection by default, for Istio and Linkerd:
 

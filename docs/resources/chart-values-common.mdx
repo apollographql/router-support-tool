@@ -1,12 +1,13 @@
-Every value below applies regardless of which mode you run.
-See [Local Mode](../local-mode-details) / [Job Mode](../job-mode-details) for what each mode needs beyond this shared set.
+Every one of these values applies regardless of which mode you run.
 
 | Value | Required | Default | Applies to | Purpose |
 | --- | --- | --- | --- | --- |
-| `namespace` | Yes | — | Official chart, raw manifest / custom | The router's namespace. Rendered into every collector that accepts it, including `clusterResources.namespaces` as a single-element list. Never rely on the kubectl context's default namespace — it isn't used. |
-| `mode` | Yes | — | Official chart, raw manifest / custom | Selects how collection runs: `local` runs it on your own machine using your own kubectl credentials and `job` runs it in-cluster as a Kubernetes Job using a ServiceAccount the chart creates.  |
-| `selector` | Raw-manifest tier only | The official chart's `app.kubernetes.io/name=router` label | Raw manifests / custom | Pod label selector, e.g. `app=my-router`. Also what the metrics collector resolves its target from — see [Collecting Metrics](../collecting-metrics). |
-| `configMapName` | Raw-manifest tier only | Label-based targeting, no name needed | Raw manifests / custom | Name of the ConfigMap holding the router's rendered config |
-| `metricsPort` | No | `9090` | Official chart, raw manifest / custom | Port the router's metrics endpoint is reachable on, if not `9090` — see [Collecting Metrics](../collecting-metrics). |
-| `logs.maxAge` | No | Unset — no age cap | Official chart, raw manifest / custom | Maps to the `logs` collector's `limits.maxAge`. How far back to reach, e.g. `2h` |
+| `namespace` | Yes | — | Official chart, raw manifest / custom | Your router's namespace. Rendered into every collector that accepts it, including `clusterResources.namespaces` as a single-element list. Never rely on the `kubectl` context's default namespace; it isn't used. |
+| `mode` | Yes | — | Official chart, raw manifest / custom | Selects how collection runs: `local` runs on your own machine using your own kubectl credentials and `job` runs in-cluster as a Kubernetes Job using a ServiceAccount the chart creates.  |
+| `selector` | Raw-manifest tier only | The official chart's `app.kubernetes.io/name=router` label | Raw manifests / custom | Pod label selector, for example, `app=my-router`. Also what the metrics collector resolves its target from. For more information, go to [Collecting Metrics](../collecting-metrics). |
+| `configMapName` | Raw-manifest tier only | Label-based targeting, no name needed | Raw manifests / custom | Name of the ConfigMap holding your router's rendered config |
+| `metricsPort` | No | `9090` | Official chart, raw manifest / custom | Port your router's metrics endpoint is reachable on, if not `9090`. For more information, go to [Collecting Metrics](../collecting-metrics). |
+| `logs.maxAge` | No | Unset—no age cap | Official chart, raw manifest / custom | Maps to the `logs` collector's `limits.maxAge`. How far back to reach, for example, `2h` |
 | `logs.maxLines` | No | `10000` (troubleshoot.sh default) | Official chart, raw manifest / custom | Maps to `limits.maxLines`. Lines kept, newest per container |
+
+Go to [Local Mode](../local-mode-details) / [Job Mode](../job-mode-details) to determine what each mode needs beyond this shared set.

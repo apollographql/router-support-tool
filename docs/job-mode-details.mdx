@@ -10,7 +10,7 @@ This page is the complete reference for `mode: job`.
 
 ## The Job image
 
-The image bundles a pinned version of troubleshoot's `support-bundle` binary as well as `aws-cli` and `gcloud` for bundle upload. See [Support bundle storage and retrieval](./bundle-storage).
+The image bundles a pinned version of troubleshoot's `support-bundle` binary as well as `aws-cli` and `gcloud` for bundle upload. For more information, go to [Support bundle storage and retrieval](./bundle-storage).
 
 ## Chart values
 
@@ -23,36 +23,36 @@ The image bundles a pinned version of troubleshoot's `support-bundle` binary as 
 | Value | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `job.image.repository` | No | `apollograph/router-diagnostics` | The Job's container image, published by Apollo. Override only to pin an older version or point at a private mirror. |
-| `job.image.tag` | No | `v0.1.0` | Tagged to match this chart's own release version — the troubleshoot.sh version it bundles is a separate, independently-pinned detail, recorded in a collected bundle's `meta.json` rather than in this tag. Override only to pin an older release or point at a private mirror. |
+| `job.image.tag` | No | v1.0.0 | Tagged to match this chart's own release version—the troubleshoot.sh version it bundles is a separate, independently-pinned detail, recorded in a collected bundle's `meta.json` rather than in this tag. Override only to pin an older release or point at a private mirror. |
 | `job.image.pullPolicy` | No | `IfNotPresent` | Standard Kubernetes image pull policy |
-| `job.collectNodeMetrics` | No | `true` | Set `false` to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding entirely and decline `nodeMetrics` data up front — see [Collecting Metrics → If Prometheus isn't set up yet](./collecting-metrics#if-prometheus-isnt-set-up-yet) |
-| `job.podAnnotations` | No | `{sidecar.istio.io/inject: "false", linkerd.io/inject: disabled}` | Annotations merged onto the Job's pod template — customer values win over these defaults. See [Job Mode → Service mesh environments](./getting-started/job-mode#service-mesh-environments) |
+| `job.collectNodeMetrics` | No | `true` | Set `false` to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding entirely and decline `nodeMetrics` data up front. For more information, go to [Collecting Metrics → If Prometheus isn't set up yet](./collecting-metrics#if-prometheus-isnt-set-up-yet) |
+| `job.podAnnotations` | No | `{sidecar.istio.io/inject: "false", linkerd.io/inject: disabled}` | Annotations merged onto the Job's pod template—customer values win over these defaults. For more information, go to [Job Mode → Service mesh environments](./getting-started/job-mode#service-mesh-environments) |
 | `job.podLabels` | No | `{}` | Arbitrary labels merged onto the Job's pod template |
-| `job.ttlSecondsAfterFinished` | No | `3600` | Maps to the Job's `ttlSecondsAfterFinished` — how long after completion Kubernetes automatically deletes the Job and its pod |
-| `job.serviceAccount.annotations` | Only if using IRSA/Workload Identity | `{}` | Merged onto the Job's ServiceAccount. Carries `eks.amazonaws.com/role-arn` (IRSA) or `iam.gke.io/gcp-service-account` (Workload Identity), whichever matches `job.storage.provider` — see [Support bundle storage and retrieval → Credentials](./bundle-storage#credentials) |
+| `job.ttlSecondsAfterFinished` | No | `3600` | Maps to the Job's `ttlSecondsAfterFinished`—how long after completion Kubernetes automatically deletes the Job and its pod |
+| `job.serviceAccount.annotations` | Only if using IRSA/Workload Identity | `{}` | Merged onto the Job's ServiceAccount. Carries `eks.amazonaws.com/role-arn` (IRSA) or `iam.gke.io/gcp-service-account` (Workload Identity), whichever matches `job.storage.provider`. For more information, go to [Support bundle storage and retrieval → Credentials](./bundle-storage#credentials) |
 
 ## Bundle Retrieval
 
-Storage is required for `mode: job` because there is no way to get the bundle out otherwise. The chart fails the install at render time if `mode: job` is set and `job.storage.provider` is left unset. See [Support bundle storage and retrieval](./bundle-storage) for the full `job.storage` reference, worked examples per provider, and how to retrieve the bundle from each destination.
+Storage is required for `mode: job` because there is no way to get the bundle out otherwise. The chart fails the install at render time if `mode: job` is set and `job.storage.provider` is left unset. Go to [Support bundle storage and retrieval](./bundle-storage) for the full `job.storage` reference, worked examples per provider, and how to retrieve the bundle from each destination.
 
 ## Kubernetes RBAC
 
-Installing `mode: job` requires creating a Job, a namespace-scoped ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
+Installing `mode: job` requires creating a Job, a namespace-scoped ServiceAccount, a Role/RoleBinding, and—because container memory/CPU come from the kubelet—cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
 
 Collection itself runs using a namespace-scoped ServiceAccount the chart creates. All namespace-scoped access is read-only (`get`/`list`) and covers everything `clusterResources`/`logs`/`configMap` touch:
 
-- **Core** — `configmaps`, `endpoints`, `events`, `limitranges`, `persistentvolumeclaims`, `pods`, `pods/log`, `resourcequotas`, `serviceaccounts`, `services`
-- **`apps`** — `daemonsets`, `deployments`, `replicasets`, `statefulsets`
-- **`batch`** — `cronjobs`, `jobs`
-- **`rbac.authorization.k8s.io`** — `roles`, `rolebindings`
-- **`policy`** — `poddisruptionbudgets`
-- **`networking.k8s.io`** — `ingresses`, `networkpolicies`
-- **`discovery.k8s.io`** — `endpointslices`
-- **`coordination.k8s.io`** — `leases`
+- **Core**: `configmaps`, `endpoints`, `events`, `limitranges`, `persistentvolumeclaims`, `pods`, `pods/log`, `resourcequotas`, `serviceaccounts`, `services`
+- **`apps`**: `daemonsets`, `deployments`, `replicasets`, `statefulsets`
+- **`batch`**: `cronjobs`, `jobs`
+- **`rbac.authorization.k8s.io`**: `roles`, `rolebindings`
+- **`policy`**: `poddisruptionbudgets`
+- **`networking.k8s.io`**: `ingresses`, `networkpolicies`
+- **`discovery.k8s.io`**: `endpointslices`
+- **`coordination.k8s.io`**: `leases`
 
-On top of this, three separate cluster-scoped grants apply for `nodeMetrics`, deliberately kept independent so you can decline the more sensitive ones without losing the others. See [Collecting Metrics → If Prometheus isn't set up yet](./collecting-metrics#if-prometheus-isnt-set-up-yet) for exactly what those three grants are and what each authorizes.
+On top of this, three separate cluster-scoped grants apply for `nodeMetrics`, deliberately kept independent so you can decline the more sensitive ones without losing the others. Go to [Collecting Metrics → If Prometheus isn't set up yet](./collecting-metrics#if-prometheus-isnt-set-up-yet) for exactly what those three grants are and what each authorizes.
 
-**`pods/exec` is not required** — nothing this tool does runs inside your router container.
+**`pods/exec` is not required**: nothing this tool does runs inside your router container.
 
 ## Cluster footprint
 

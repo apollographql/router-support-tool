@@ -12,23 +12,23 @@ Storage only applies to and is required for `mode: job`. Because there is no way
 | --- | --- | --- |
 | `job.storage.provider` | Yes, for `mode: job` | `s3`, `gcs`, or `url` |
 | `job.storage.bucket` | Required for `s3`/`gcs` | Destination bucket for the uploaded bundle |
-| `job.storage.prefix` | No | Key prefix within the bucket, e.g. `router-bundles/` |
+| `job.storage.prefix` | No | Key prefix within the bucket, for example, `router-bundles/` |
 | `job.storage.s3.region` | Required for `s3` unless implied by `endpoint` | AWS region, or the equivalent for an S3-compatible store |
 | `job.storage.s3.endpoint` | No | Override for a non-AWS S3-compatible endpoint (MinIO, Ceph RGW, etc.) |
 | `job.storage.s3.forcePathStyle` | No | Most on-prem S3-compatible stores need this set `true` |
-| `job.storage.s3.accessKeyId` / `secretAccessKey` | No, not recommended | Static credential templated directly into the Job's container — visible in `helm get values` and git history if committed. Prefer `existingSecret` or IRSA. |
+| `job.storage.s3.accessKeyId` / `secretAccessKey` | No, not recommended | Static credential templated directly into the Job's container. Visible in `helm get values` and git history if committed. Prefer `existingSecret` or IRSA. |
 | `job.storage.gcs.project` | No | The GCP project `gcloud` bills API calls to |
-| `job.storage.gcs.credentialsJson` | No, not recommended | A GCP service-account JSON key, same exposure caveat as the S3 static credentials above. Set via `-f values.yaml` or `--set-json`, never plain `--set` — Helm's `--set` parses commas and braces as its own syntax and will silently mangle the JSON. |
+| `job.storage.gcs.credentialsJson` | No, not recommended | A GCP service-account JSON key, same exposure caveat as `job.storage.s3.accessKeyId`. Set via `-f values.yaml` or `--set-json`, never plain `--set` because Helm's `--set` parses commas and braces as its own syntax and silently distorts the JSON. |
 | `job.storage.url.endpoint` | Required for `url` | The bare HTTP(S) endpoint the bundle is uploaded to |
 | `job.storage.url.method` | No | `PUT` or `POST`, defaults to `PUT` |
-| `job.storage.url.headers` | No | Static headers templated directly into the request — same exposure caveat as static credentials above |
-| `job.storage.existingSecret` | No | Name of a Secret you create yourself. See [Credentials](#credentials) below for what it holds per provider |
+| `job.storage.url.headers` | No | Static headers templated directly into the request. Same exposure caveat as `job.storage.s3.accessKeyId`. |
+| `job.storage.existingSecret` | No | Name of a Secret you create yourself. Go to [Credentials](#credentials) for what it holds by provider. |
 
 For `provider: s3`/`gcs`, `existingSecret` and a static credential (`s3.accessKeyId`/`secretAccessKey` or `gcs.credentialsJson`) are mutually exclusive. Setting both fails at `helm install`/`helm template` with an explicit error.
 
 ## Examples
 
-### S3, via IRSA (recommended — no Secret to manage)
+### S3, via IRSA (recommended—no Secret to manage)
 
 ```bash
 helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
@@ -62,7 +62,7 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
 ```
 
 ### An S3-compatible store (MinIO, Ceph RGW)
-This usually needs `forcePathStyle` and an explicit `endpoint`, and typically has no IRSA-equivalent federation, so a Secret is the normal path:
+This option needs `forcePathStyle` and an explicit `endpoint`, and typically has no IRSA-equivalent federation, so a Secret is the normal path:
 
 ```bash
 kubectl create secret generic router-diagnostics-storage \
@@ -97,7 +97,7 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
 
 ### GCS, via a Secret holding a service-account key
 
-For a cluster where Workload Identity isn't available — not running on GKE, or running on GKE with Workload Identity not enabled for this cluster/namespace — hold a static service-account key in a Secret instead. Note the `-f` here — `--set` would mangle the JSON:
+For a cluster where Workload Identity isn't available—one that's not running on GKE or is running on GKE with Workload Identity not enabled for the cluster or namespace—hold a static service-account key in a Secret instead. Note `-f` here—`--set` would distort the JSON:
 
 ```bash
 kubectl create secret generic router-diagnostics-storage \
@@ -155,16 +155,16 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
 
 ## Credentials
 
-For `s3`/`gcs`, bundle uploads go through the provider's own CLI (`aws s3 cp` / `gcloud storage cp`), so any credential source that CLI already knows how to resolve works. (`provider: url` doesn't use a CLI at all — it's a plain `curl -X <method> -T <bundle> <endpoint>`, so its only credential mechanism is the HTTP headers described below.)
+For `s3`/`gcs`, bundle uploads go through the provider's own CLI (`aws s3 cp` / `gcloud storage cp`), so any credential source the CLI already knows how to resolve works. (`provider: url` doesn't use a CLI at all; it's a plain `curl -X <method> -T <bundle> <endpoint>`, so its only credential mechanism is the HTTP headers described further on.)
 
-- **IRSA (AWS) / Workload Identity (GCP) — recommended.** No secrets to store or rotate. Requires setting `job.serviceAccount.annotations` with `eks.amazonaws.com/role-arn` or `iam.gke.io/gcp-service-account`. This is an annotation on the ServiceAccount, not a Kubernetes RBAC grant.
-- **Static credentials via a Secret** — for clusters without IRSA/Workload Identity (on-prem, or an S3-compatible store like MinIO/Ceph with no equivalent federation). Set `job.storage.existingSecret` to a Secret you create yourself, with `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` keys for `provider: s3` or a GCP service-account JSON key for `provider: gcs`. The chart mounts it into the Job's container, we never see or template the values themselves.
-- **Static credentials via values — not recommended.** `job.storage.s3.accessKeyId`/`secretAccessKey` or `job.storage.gcs.credentialsJson` set directly. **The credential will be exposed** in shell history, `helm get values`, and git history if committed. Prefer the two paths above whenever you have any way to manage a Secret directly.
+- **IRSA (AWS) / Workload Identity (GCP)**: Recommended. No secrets to store or rotate. Requires setting `job.serviceAccount.annotations` with `eks.amazonaws.com/role-arn` or `iam.gke.io/gcp-service-account`. This is an annotation on the ServiceAccount, not a Kubernetes RBAC grant.
+- **Static credentials via a Secret**: For clusters without IRSA/Workload Identity (on-prem, or an S3-compatible store like MinIO/Ceph with no equivalent federation). Set `job.storage.existingSecret` to a Secret you create yourself, with `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` keys for `provider: s3` or a GCP service-account JSON key for `provider: gcs`. The chart mounts the Secret into the Job's container so we never see or template the values themselves.
+- **Static credentials via values.**: Not recommended. `job.storage.s3.accessKeyId`/`secretAccessKey` or `job.storage.gcs.credentialsJson` set directly. **The credential is exposed** in shell history, `helm get values`, and git history if committed. Prefer other options whenever you have any way to manage a Secret directly.
 
 For `provider: url`, whatever the endpoint needs (a bearer token, a signed-URL header) is supplied as an HTTP header, two ways, combinable:
 
-- **Via `job.storage.existingSecret`** — a Secret you create with zero or more arbitrary keys. Each key becomes a header name, its value the header's value. Mounted as a volume.
-- **Directly via `job.storage.url.headers`** — templated straight into the request, with the same exposure caveat as other static-values paths.
+- **Through `job.storage.existingSecret`**: A Secret you create with no, or more arbitrary, keys. Each key becomes a header name, with its value the header's value. Mounted as a volume.
+- **Through `job.storage.url.headers`**: Templated directly into the request, with the same exposure caveat as other static-values paths.
 
 Headers from both sources are sent together when both are set (`existingSecret` first, then `url.headers`). A header name appearing in both is sent twice.
 
@@ -172,16 +172,16 @@ Headers from both sources are sent together when both are set (`existingSecret` 
 
 Whichever credential path you use, the minimum cloud permissions are the same:
 
-- **S3** — `s3:PutObject` scoped to `arn:aws:s3:::<bucket>/<prefix>*` (or the equivalent bucket policy for an S3-compatible store without IAM ARNs)
-- **GCS** — `storage.objects.create` on the bucket (the predefined `roles/storage.objectCreator` role covers this)
+- **S3**: `s3:PutObject` scoped to `arn:aws:s3:::<bucket>/<prefix>*` (or the equivalent bucket policy for an S3-compatible store without IAM ARNs)
+- **GCS**: `storage.objects.create` on the bucket (the predefined `roles/storage.objectCreator` role covers this)
 
-Neither needs read, list, or delete on the bucket — the Job only ever writes one object per run. This section doesn't apply to `provider: url` — auth there is whatever the receiving endpoint enforces via headers.
+Neither needs read, list, or delete on the bucket. Instead, the Job only ever writes one object per run. This doesn't apply to `provider: url`. There, authentication is whatever the receiving endpoint enforces using headers.
 
-Retention on the destination is governed by the bucket — this tool doesn't build or operate a retention mechanism of its own.
+Retention on the destination is governed by the bucket. The tool doesn't build or operate a retention mechanism of its own.
 
 ## Retrieval
 
-Once the Job completes and uploads succeed, the bundle is retrieved the same way you'd retrieve anything else from that destination — this tool doesn't add a retrieval mechanism on top:
+Once the Job completes and uploads succeed, the bundle is retrieved the same way you'd retrieve anything else from that destination:
 
 - **S3** — `aws s3 cp s3://<bucket>/<prefix>support-bundle-<timestamp>.tar.gz .`, or browse the bucket in the console. The uploading identity (IRSA role or static credential) only has `PutObject`, so a separate identity with read access is normally what your platform team uses to pull it down.
 - **GCS** — `gcloud storage cp gs://<bucket>/<prefix>support-bundle-<timestamp>.tar.gz .`, or browse the bucket in the console. Same IAM note as S3: the uploading identity can't read the bucket back.

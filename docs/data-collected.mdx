@@ -7,7 +7,7 @@ description: A per-collector breakdown of what the GraphOS Router Support Tool c
 import NodeMetricsRBAC from './resources/nodemetrics-rbac.mdx';
 import BeforeYouShare from './resources/before-you-share.mdx';
 
-The tables below outline everything we attempt to collect with the GraphOS Router Support Tool. This page is meant to be shared with your platform team so they can review it, grant the access needed for the collectors they want, and know exactly what's lost if they decline one.
+These tables outline everything we collect with the GraphOS Router Support Tool. This page is meant to be shared with your platform team so they can review it, grant the access needed for the collectors they want, and know exactly data won't be collected if they decline a collector.
 
 ## What the base spec collects
 
@@ -16,35 +16,35 @@ The tables below outline everything we attempt to collect with the GraphOS Route
 | k8s API | Pod status, restart counts, resource limits | [`clusterResources` collector](https://troubleshoot.sh/docs/collect/cluster-resources) | Whether pods are healthy, restart count, resource limits configured | None additional | API server CPU | k8s control plane |
 | Container image tag | Router version | [`clusterResources` collector](https://troubleshoot.sh/docs/collect/cluster-resources) | Router version | None additional | API server CPU | k8s control plane |
 | Pod spec (`spec.containers[].env`) | Router deployment env vars: `APOLLO_GRAPH_REF`, `APOLLO_ROUTER_OFFICIAL_HELM_CHART` | [`clusterResources` collector](https://troubleshoot.sh/docs/collect/cluster-resources) | Graph ref and whether the router was deployed via Apollo's official Helm chart | None additional | API server CPU | k8s control plane |
-| Separate `<release>-supergraph` ConfigMap | Schema (SDL) | [`clusterResources` collector](https://troubleshoot.sh/docs/collect/cluster-resources) | Full graph schema | `.Values.supergraphFile` set on the router's Helm chart — see [Schema collection](#schema-collection) below | API server CPU | k8s control plane |
+| Separate `<release>-supergraph` ConfigMap | Schema (SDL) | [`clusterResources` collector](https://troubleshoot.sh/docs/collect/cluster-resources) | Full graph schema | `.Values.supergraphFile` set on the router's Helm chart. For more information, go to [Schema collection](#schema-collection) | API server CPU | k8s control plane |
 | Container log stream | Runtime logs | `logs` collector | Recent router output, plus crash output from the previous container when one exists | None additional | Network bandwidth | Cluster network |
-| Router metrics endpoint | Full Prometheus metrics snapshot | [`http` collector](https://troubleshoot.sh/docs/collect/http) | Complete operational metrics — request rates, error rates, latency, traffic shaping state | Prometheus exporter enabled and reachably bound — see [Collecting Metrics](./collecting-metrics) | Network, router HTTP handler | Router network |
-| ConfigMap holding the rendered config | Sanitized `router.yaml` | [`configMap` collector](https://troubleshoot.sh/docs/collect/configmap) | Full router configuration — traffic shaping, timeouts, plugins, feature flags | A matching labeled ConfigMap present or `configMapName`/`selector` values set — see [`router.yaml` capture](#routeryaml-capture) below | API server CPU | k8s control plane |
+| Router metrics endpoint | Full Prometheus metrics snapshot | [`http` collector](https://troubleshoot.sh/docs/collect/http) | Complete operational metrics—request rates, error rates, latency, traffic shaping state | Prometheus exporter enabled and reachably bound. For more information, go to [Collecting Metrics](./collecting-metrics) | Network, router HTTP handler | Router network |
+| ConfigMap holding the rendered config | Sanitized `router.yaml` | [`configMap` collector](https://troubleshoot.sh/docs/collect/configmap) | Full router configuration—traffic shaping, timeouts, plugins, feature flags | A matching labeled ConfigMap present or `configMapName`/`selector` values set. For more information, see [`router.yaml` capture](#routeryaml-capture) below | API server CPU | k8s control plane |
 
 A couple of notes that apply across the table:
 
 - **Router deployment env vars, image tag, and pod status all come from the same pod collection**, so declining or losing one doesn't affect the others.
-- **If `APOLLO_GRAPH_REF` is routed through a Secret** via the router chart's `extraEnvVars`, only the environment variable *reference* is captured, not the value — the graph ref itself doesn't land in the bundle.
-- **Config is captured as written, not effective config** — environment-variable overrides applied on top of `router.yaml` aren't reflected in what's collected.
-- **Previous-container logs are always collected**, written to `<name>-previous.log`, so a router that already restarted still has its crash output captured. Logs are collected per pod and capture every container in the pod, including proxy/mesh sidecars. How far back logs reach and how many lines are kept are configurable, see the chart's `logs.maxAge`/`logs.maxLines` values in [job-mode-details](./job-mode-details) or [local-mode-details](./local-mode-details).
+- **If `APOLLO_GRAPH_REF` is routed through a Secret** using your router chart's `extraEnvVars`, only the environment variable *reference* is captured, not the value, so the graph ref itself doesn't land in the bundle.
+- **Config is captured as written, not effective config**. Environment-variable overrides applied on top of `router.yaml` aren't reflected in what's collected.
+- **Previous-container logs are always collected** and written to `<name>-previous.log`, so a router that already restarted still has its crash output captured. Logs are collected per pod and capture every container in the pod, including proxy/mesh sidecars. How far back logs reach and how many lines are kept are configurable. For more information, access the chart's `logs.maxAge`/`logs.maxLines` values in [job-mode-details](./job-mode-details) or [local-mode-details](./local-mode-details).
 
 ### `router.yaml` capture
 
-The `configMap` collector reads the ConfigMap holding your router's rendered configuration directly. On the official Apollo router Helm chart, it's targeted by the standard `app.kubernetes.io/name=router` label. On a raw-manifest or custom deployment, supply `configMapName`/`selector` yourself (see the [Getting Started guide](./getting-started/getting-started)), without one of those, and without config discoverable under the standard label, this section comes back empty.
+The `configMap` collector reads the ConfigMap holding your router's rendered configuration directly. On the official Apollo router Helm chart, it's targeted by the standard `app.kubernetes.io/name=router` label. On a raw-manifest or custom deployment, supply `configMapName`/`selector` yourself (go to [Getting Started guide](./getting-started/getting-started)), without one of those, and without config discoverable under the standard label, this section comes back empty.
 
 If your namespace runs more than one router release, every release's config is collected, each in its own separately-named file in the bundle.
 
-`keyExists: false` in `configmaps/<namespace>/<release-name>.json` does not mean the config is missing. This is a troubleshoot.sh quirk: the `configMap` collector's `keyExists` field is only ever set `true` when the collector is configured with a specific `key` to look for. Our spec uses `includeAllData: true` with no `key` set so `keyExists` is always `false` in this output, regardless of whether the config was actually captured. Check for the config itself, the `data` in that same file, rather than reading `keyExists` as a success/failure signal.
+`keyExists: false` in `configmaps/<namespace>/<release-name>.json` doesn't mean the config is missing. This is a troubleshoot.sh quirk: the `configMap` collector's `keyExists` field is only ever set `true` when the collector is configured with a specific `key` to look for. Our spec uses `includeAllData: true` with no `key` set so `keyExists` is always `false` in this output, regardless of whether the config was actually captured. Check for the config itself, the `data` in that same file, rather than reading `keyExists` as a success/failure signal.
 
 ### Schema collection
 
-Schema only lands in the cluster, and therefore only in the bundle, when you set `.Values.supergraphFile` on the router's own Helm chart (not this tool's chart). If you're on managed federation (GraphOS schema governance), you never set that value, so there's no schema ConfigMap for this collector to find, and schema is simply absent from the bundle.
+Schema only lands in the cluster, and therefore only in the bundle, when you set `.Values.supergraphFile` on your router's own Helm chart (not this tool's chart). If you're on managed federation (GraphOS schema governance), you never set that value, so there's no schema ConfigMap for this collector to find, and schema is simply absent from the bundle.
 
 ## Memory and CPU information collected
 
-What the base spec collects is sufficient to **detect, confirm, and characterize** a memory problem: is memory growing, how fast, how close to the limit, and did the kernel already kill the container. The router also emits jemalloc-level aggregate gauges (`apollo.router.jemalloc.active`, `.allocated`, `.resident`, `.retained`, etc.) on the same Prometheus endpoint above, which can help distinguish real heap growth from jemalloc fragmentation. What none of this answers is *which code path is leaking* — that needs jemalloc heap profiling, which isn't part of this base spec.
+What the base spec collects is sufficient to **detect, confirm, and characterize** a memory problem: is memory growing, how fast, how close to the limit, and did the kernel already kill the container. The router also emits jemalloc-level aggregate gauges (`apollo.router.jemalloc.active`, `.allocated`, `.resident`, `.retained`, etc.) on the same Prometheus endpoint above, which can help distinguish real heap growth from jemalloc fragmentation. What none of this answers is *which code path is leaking*. For that, you need jemalloc heap profiling, which isn't part of this base spec.
 
-**Every row below is attempted on every run**, regardless of what else is configured. The "Requires" column states what has to be true for that specific row to come back populated; it isn't a condition on any other row.
+**Every row in this table represents a collection that is attempted on every run**, regardless of what else is configured. The "Requires" column states what has to be true for that specific row to come back populated; it isn't a condition on any other row.
 
 | Signal | Source | Collected via | What it tells you | Requires | Resource consumed | Where |
 | ----- | ----- | ----- | ----- | ----- | ----- | ----- |
@@ -53,7 +53,7 @@ What the base spec collects is sufficient to **detect, confirm, and characterize
 | OOM kill **occurrences** | Kubernetes events (`OOMKilling`, evictions) | `clusterResources` collector | That OOM kills happened, when, and how often | None additional | API server CPU | k8s control plane |
 | OOM kill **last state** | Pod status `lastState.terminated.reason: OOMKilled`, `restartCount` | `clusterResources` collector | Whether the most recent restart was an OOM kill | None additional | API server CPU | k8s control plane |
 | Node `MemoryPressure` / `DiskPressure` conditions | Node objects | `clusterResources` collector | Whether the node itself is under pressure, distinguishing a router problem from a neighbor's | None additional | API server CPU | k8s control plane |
-| `process_resident_memory_bytes` | Router Prometheus endpoint | `http` collector | Process-level RSS as the router sees it | Prometheus exporter enabled and reachably bound — see [Collecting Metrics](./collecting-metrics) | Network, router HTTP handler | Router network |
+| `process_resident_memory_bytes` | Router Prometheus endpoint | `http` collector | Process-level RSS as the router sees it | Prometheus exporter enabled and reachably bound. For more information, go to [Collecting Metrics](./collecting-metrics) | Network, router HTTP handler | Router network |
 | `process_cpu_seconds_total` | Router Prometheus endpoint | `http` collector | CPU time consumed by the router process | Same as the row above | Network, router HTTP handler | Router network |
 | `memory.rssBytes` | kubelet Summary API | `nodeMetrics` collector | Physical RAM in use | `nodes`/`nodes/proxy`/`nodes/stats` RBAC grant [[2]](#fn-2) | API server + kubelet CPU | k8s control plane → kubelet [[1]](#fn-1) |
 | `memory.usageBytes`, `memory.availableBytes` | kubelet Summary API | `nodeMetrics` collector | Usage, and headroom remaining against the limit | `nodes`/`nodes/proxy`/`nodes/stats` RBAC grant [[2]](#fn-2) | API server + kubelet CPU | k8s control plane → kubelet [[1]](#fn-1) |
@@ -63,7 +63,7 @@ What the base spec collects is sufficient to **detect, confirm, and characterize
 
 <a id="fn-1"></a>**[1]** The kubelet Summary API reports per node, per pod, and per container — this assumes one router process per container.
 
-<a id="fn-2"></a>**[2]** `nodeMetrics` is a fallback, not the preferred path — enabling the Prometheus exporter gets the same signal without any cluster-scoped RBAC grant. See [Collecting Metrics → If Prometheus isn't set up yet](./collecting-metrics#if-prometheus-isnt-set-up-yet) for that tradeoff, and [`nodeMetrics` RBAC](#nodemetrics-rbac) below for exactly what these grants authorize.
+<a id="fn-2"></a>**[2]** `nodeMetrics` is a fallback, not the preferred path. Enabling the Prometheus exporter gets the same signal without any cluster-scoped RBAC grant. Go to [Collecting Metrics → If Prometheus isn't set up yet](./collecting-metrics#if-prometheus-isnt-set-up-yet) to better understand the tradeoff, and go to [`nodeMetrics` RBAC](#nodemetrics-rbac) to learn exactly what these grants authorize.
 
 ### `nodeMetrics` RBAC
 
@@ -71,7 +71,7 @@ What the base spec collects is sufficient to **detect, confirm, and characterize
 
 ### Running a service mesh or sidecar proxy?
 
-The `logs` collector captures every container in the pod, and the kubelet Summary API reports per container, so a sidecar's own resource usage (Istio, Linkerd, Envoy) is visible in the bundle alongside the router's — useful for telling a proxy problem apart from a router one. If you're relying on the Prometheus metrics row above, a mesh enforcing strict mTLS can block that scrape specifically — see [Collecting Metrics](./collecting-metrics#running-a-service-mesh) for why, and how to fix it.
+The `logs` collector captures every container in the pod, and the kubelet Summary API reports per container, so a sidecar's own resource usage (Istio, Linkerd, Envoy) is visible in the bundle alongside your router's, which is useful for telling a proxy problem apart from a router one. If you're relying on the Prometheus metrics row, a mesh enforcing strict mTLS can block that scrape specifically. For more information, go to [Collecting Metrics](./collecting-metrics#running-a-service-mesh).
 
 ## Before you share a bundle
 

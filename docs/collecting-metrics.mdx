@@ -6,18 +6,18 @@ description: What has to be true for the GraphOS Router Support Tool to collect 
 
 import NodeMetricsRBAC from './resources/nodemetrics-rbac.mdx';
 
-A full Prometheus metrics snapshot is one of the signals the base spec collects, via the [`http` collector](https://troubleshoot.sh/docs/collect/http). This page covers everything specific to getting that collector to return metrics: what has to be true on the router's side, how each mode reaches the port, and what changes if you're running a service mesh.
-See [Data Collected](./data-collected) for how this fits alongside everything else the tool gathers. 
+A full Prometheus metrics snapshot is one of the signals the base spec collects, through the [`http` collector](https://troubleshoot.sh/docs/collect/http). This page covers everything specific to getting that collector to return metrics: what has to be true on your router's side, how each mode reaches the port, and what changes if you're running a service mesh.
+To understand how this snapshot works alongside all other data the tool gathers, go to [Data Collected](./data-collected). 
 
 ## Prerequisites on the router's side
 
 Three settings need to be in place:
 
-- **`telemetry.exporters.metrics.prometheus.enabled: true`** in `router.yaml` — turns the exporter on.
-- **`telemetry.exporters.metrics.prometheus.listen`** in `router.yaml` — the bind address. Binding to loopback means an external scrape can't reach it no matter what port the collector targets.
-- **`serviceMonitor.enabled: true`** on the **router's** Helm chart — adds a `metrics` port to the Service. Without it, the Service has no `metrics` port at all, regardless of whether the exporter itself is on and reachable.
+- **`telemetry.exporters.metrics.prometheus.enabled: true`** in `router.yaml`: turns the exporter on.
+- **`telemetry.exporters.metrics.prometheus.listen`** in `router.yaml`: The bind address. Binding the exporter to loopback means an external scrape can't reach the exporter, no matter what port the collector targets.
+- **`serviceMonitor.enabled: true`** on the **router's** Helm chart: Adds a `metrics` port to the Service. Without that port, the Service has no `metrics` port at all, regardless of whether the exporter itself is on and reachable.
 
-If any of the three is off or misconfigured, this section of the bundle comes back empty and the rest of the bundle is unaffected.
+If any of the three is turned off or misconfigured, this section of the bundle returns empty, but the rest of the bundle is unaffected.
 
 ## Raw-manifest or custom deployments
 
@@ -25,29 +25,29 @@ If you're on a raw-manifest or custom deployment, this collector also needs `sel
 
 ### `mode: job`
 
-`selector` is what the collector resolves its target host from directly. Left unset, it falls back to the official chart's `app.kubernetes.io/name=router` label, which may find nothing for a raw manifest. You can also override the `metricsPort` from its default of `9090`.
+`selector` is what the collector resolves its target host from directly. Left unset, it falls back to the official chart's `app.kubernetes.io/name=router` label, which might find nothing for a raw manifest. You can also override the `metricsPort` from its default of `9090`.
 
 ### `mode: local`
 
 The collector always targets `localhost:<metricsPort>`, on the assumption that something is already port-forwarding there. `collect.sh` sets that up for you:
 
-1. It resolves the router's Service from the `--selector` flag you pass it — falling back to the official chart's `app.kubernetes.io/name=router` label if you didn't set one. `collect.sh` has no Helm dependency: it takes this directly as a flag rather than reading it back from the installed release, so pass the same `--selector` you gave `helm install`.
-2. It starts `kubectl port-forward svc/<resolved-service> <metricsPort>:<metricsPort>` (default `9090:9090`) in the background and waits for it to accept connections.
-3. It tears the port-forward down on exit — success, failure, or interrupt — once collection finishes.
+1. If you're on a raw-manifest or custom deployment, pass the same `--selector` value you gave `helm install`. On the official chart, there's nothing to pass, `collect.sh` falls back to the chart's own `app.kubernetes.io/name=router` label, the same default the chart itself uses. Either way, `collect.sh` uses this to resolve your router's Service, taking the selector directly as a flag rather than reading it back from the installed release.
+2. `collect.sh` starts `kubectl port-forward svc/<resolved-service> <metricsPort>:<metricsPort>` (default `9090:9090`) in the background and waits for the port-forward to accept connections.
+3. `collect.sh` tears the port-forward down on exit once collection finishes.
 
-This needs `create` on the `pods/portforward` subresource in the router's namespace. Declining that doesn't fail collection, but you won't be able to collect metrics.
+Starting that port-forward needs `create` on the `pods/portforward` subresource in the router's namespace. Declining the `pods/portforward` grant doesn't fail collection, but you won't be able to collect metrics.
 
 This bridging step is **not** needed under `mode: job`. The Job's pod runs inside the cluster so the Service DNS name resolves normally there. If you run `support-bundle` directly, bypassing the script, you'd need to set up that port-forward yourself.
 
 ## If Prometheus isn't set up yet
 
-The `nodeMetrics` collector (via the kubelet Summary API) gets you container-level memory and CPU usage over time without touching the router at all — but it costs three cluster-scoped RBAC grants that enabling Prometheus doesn't. It exists for the case where you haven't configured the exporter yet and is not recommended long term. See [Data Collected → Memory and CPU information collected](./data-collected#memory-and-cpu-information-collected) for the full signal breakdown.
+The `nodeMetrics` collector (by way of the kubelet Summary API) gets you container-level memory and CPU usage over time without touching your router at all, but it costs three cluster-scoped RBAC grants that enabling Prometheus doesn't. The `nodeMetrics` collector exists for the case where you haven't configured the exporter yet and isn't recommended long term. For more information, go to [Data Collected → Memory and CPU information collected](./data-collected#memory-and-cpu-information-collected).
 
 <NodeMetricsRBAC />
 
 ## Running a service mesh?
 
 Neither `mode: local` (your own machine) nor an un-injected `mode: job` Job pod is inside the mesh. `logs`, `clusterResources`, `nodeMetrics`, and `configMap` all reach their data through the Kubernetes API server or the kubelet, which the mesh doesn't sit in front of, so running outside it doesn't affect them. The Prometheus scrape is the one collector that talks directly to a router port and a mesh enforcing strict mTLS will reject it from a pod outside the mesh.
-To remedy this, exempt the metrics port from mTLS. For Istio, `PeerAuthentication: PERMISSIVE` scoped to that port, or the `traffic.sidecar.istio.io/excludeInboundPorts` annotation. For Linkerd, `config.linkerd.io/skip-inbound-ports`. This is guidance you apply once to the router deployment, not a setting on this tool's chart.
+To fix that, exempt the metrics port from mTLS. For Istio, `PeerAuthentication: PERMISSIVE` scoped to that port, or the `traffic.sidecar.istio.io/excludeInboundPorts` annotation. For Linkerd, `config.linkerd.io/skip-inbound-ports`. Apply only once to your router deployment, not a setting on this tool's chart.
 
-If you're running `mode: job` in a mesh, also see [Job Mode → Service mesh environments](./getting-started/job-mode#service-mesh-environments), the mesh sidecar itself can keep the Job's pod from ever reaching `Completed`, which is a separate problem from whether the scrape succeeds.
+If you're running `mode: job` in a mesh, go to [Job Mode → Service mesh environments](./getting-started/job-mode#service-mesh-environments) for an explanation of how the mesh sidecar itself can keep the Job's pod from ever reaching `Completed`, which is a separate problem from whether the scrape succeeds.

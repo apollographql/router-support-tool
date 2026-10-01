@@ -6,24 +6,24 @@ description: Complete reference for running the GraphOS Router Support Tool as m
 
 import ChartValuesCommon from './resources/chart-values-common.mdx';
 
-This page is the complete reference for `mode: local`. For the shortest path to a first bundle, see [Local Mode](./getting-started/local-mode) in the Getting Started guide instead — this page fills in everything that guide left out.
+This page is the complete reference for `mode: local`. For the shortest path to a first bundle, go to [Local Mode](./getting-started/local-mode) in the Getting Started guide instead.
 
 ## The `router-diagnostics` collect script
 
-Collection for `mode: local` runs through a standalone script, not a Helm plugin — it has no dependency on Helm at all:
+Collection for `mode: local` runs through a standalone script:
 
 ```bash
-curl -sSL collect.sh https://rover.apollo.dev/<path-TODO>/router-diagnostics-collect/latest
+curl -sSL https://router.apollo.dev/router-diagnostics-collect/latest | sh
 chmod +x collect.sh
 ```
 
 This gives you a `./collect.sh` command, which does two things:
 
-1. Caches a pinned `support-bundle` binary locally, keyed by version — a pin bump downloads a fresh binary rather than reusing a stale one. Apollo controls this version, the same way `mode: job`'s image tag does.
+1. Caches a pinned `support-bundle` binary locally, keyed by version—a pin bump downloads a fresh binary rather than reusing a stale one. Apollo controls this version, the same way `mode: job`'s image tag does.
 
-2. Bridges your machine to the router's metrics port, if reachable. The router's metrics port is only reachable through its in-cluster Service DNS name, which doesn't resolve from the invoking user's own machine. Without this, the metrics collector fails with a connection error. See [Collecting Metrics](./collecting-metrics#mode-local) for exactly what this bridging step does and the permission it needs.
+2. Bridges your machine to your router's metrics port, if reachable. The metrics port is only reachable through its in-cluster Service DNS name, which doesn't resolve from the invoking user's own machine. Without that, the metrics collector fails with a connection error. Go to [Collecting Metrics](./collecting-metrics#mode-local) for exactly what this bridging step does and the permission it needs.
 
-`collect.sh` takes `--namespace`, `--selector`, and `--metrics-port` directly as flags rather than reading them back from the installed Helm release — pass whatever values you gave `helm install` again here (`--metrics-port` maps to the chart's `metricsPort` value).
+`collect.sh` takes `--namespace`, `--selector`, and `--metrics-port` directly as flags rather than reading them back from the installed Helm release. Here, pass whatever values you gave `helm install` (`--metrics-port` maps to the chart's `metricsPort` value).
 
 **`--namespace` is a plain, required flag**. It must match wherever you actually installed the chart: both the `helm install --namespace` value and the chart's own `--set namespace=<router_namespace>` value (typically the same namespace in practice). `collect.sh` uses it directly for its `kubectl` calls and for `support-bundle --load-cluster-specs --namespace`, which is what discovers the rendered spec ConfigMap.
 
@@ -33,11 +33,11 @@ This gives you a `./collect.sh` command, which does two things:
 
 ## Kubernetes RBAC
 
-Installing the chart requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself.
+Installing the chart requires permission to create a ConfigMap in the target namespace, which is the same level of access needed to install the router itself.
 
-Running `./collect.sh` uses **your own existing kubectl credentials**; no additional ServiceAccount is created for this step. Reaching the metrics collector additionally needs `create` on the `pods/portforward` subresource in the router's namespace — see [Collecting Metrics](./collecting-metrics#mode-local) for why. Declining this doesn't fail collection; it only means that section comes back empty.
+Running `./collect.sh` uses **your own existing kubectl credentials**; no additional ServiceAccount is created for this step. Reaching the metrics collector additionally needs `create` on the `pods/portforward` subresource in the router's namespace. For more information, go to [Collecting Metrics](./collecting-metrics#mode-local). Declining this doesn't fail collection; it only means that section comes back empty.
 
-**`pods/exec` is not required** — nothing this tool does runs inside your router container.
+**`pods/exec` isn't required**: nothing this tool does runs inside your router container.
 
 ## Cluster footprint
 
