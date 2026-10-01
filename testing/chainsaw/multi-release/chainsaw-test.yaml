@@ -1,0 +1,31 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: multi-release
+spec:
+  # Exercises specs/collection/base_spec.md's "Each router release in a namespace gets
+  # its own file in the support bundle" claim, and specs/collection/meta_json.md's
+  # "Multiple router releases in one namespace".
+  steps:
+    - try:
+        # Hand-created ConfigMaps stand in for two router releases - the configMap
+        # collector matches on the label alone so no real Deployment is needed.
+        # Also exercises collect.sh's graceful degradation when no pods match the selector.
+        - script:
+            content: |
+              kubectl create configmap router-alpha -n "$NAMESPACE" --from-file=router.yaml=router-a.yaml
+              kubectl label configmap router-alpha -n "$NAMESPACE" app.kubernetes.io/name=router
+
+              kubectl create configmap router-beta -n "$NAMESPACE" --from-file=router.yaml=router-b.yaml
+              kubectl label configmap router-beta -n "$NAMESPACE" app.kubernetes.io/name=router
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - script:
+            timeout: 120s
+            content: |
+              ../scripts/verify_multi_release_bundle.sh "$NAMESPACE" \
+                ../../../router-diagnostics-chart ../../../router-diagnostics-collect/collect.sh
+            env:
+              - name: NAMESPACE
+                value: ($namespace)

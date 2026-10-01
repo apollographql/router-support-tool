@@ -1,8 +1,9 @@
-name: Raw-Manifest Collect Script Integration Test
+name: Collect Script Integration Test
 
-# Exercises router-diagnostics-collect/collect.sh (mode: local) against a kind cluster, via
-# the Chainsaw test at testing/chainsaw/raw-manifest. This workflow only orchestrates -
-# cluster creation and the test itself are both plain mise tasks: `mise run kind-up && mise run e2e-chainsaw`.
+# Exercises router-diagnostics-collect/collect.sh (mode: local) against a kind cluster
+# via the Chainsaw tests.
+# This workflow only orchestrates - cluster creation and the tests are both plain mise tasks:
+# `mise run kind-up && mise run e2e-chainsaw`.
 on:
   pull_request:
   push:
@@ -25,10 +26,10 @@ jobs:
         with:
           config: testing/kind-config.yaml
 
-      - name: Run the raw-manifest Chainsaw test
+      - name: Run Chainsaw tests
         run: mise run e2e-chainsaw
         env:
-          CHAINSAW_TEST_DIRS: testing/chainsaw/raw-manifest
+          CHAINSAW_TEST_DIRS: testing/chainsaw/raw-manifest testing/chainsaw/multi-release testing/chainsaw/official-chart
 
       - name: Upload bundle for inspection
         if: always()
@@ -37,5 +38,8 @@ jobs:
           name: support-bundle
           # Chainsaw's script steps run with the test's own directory as their working
           # directory, not the repo root - this is where collect.sh actually leaves it.
-          path: testing/chainsaw/raw-manifest/support-bundle-*.tar.gz
+          path: |
+            testing/chainsaw/raw-manifest/support-bundle-*.tar.gz
+            testing/chainsaw/multi-release/support-bundle-*.tar.gz
+            testing/chainsaw/official-chart/support-bundle-*.tar.gz
           retention-days: 3
