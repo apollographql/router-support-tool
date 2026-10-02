@@ -67,11 +67,12 @@ router-metrics-router-7f8/
 └── result.json
 ```
 
-**`mode: local` is a `hostCollectors.run` collector instead, and troubleshoot.sh nests a host run collector's `outputDir` differently** under `host-collectors/run-host/`. The same per-pod metrics data lands at:
+**`mode: local` is a `hostCollectors.run` collector instead, and troubleshoot.sh nests a host run collector's `outputDir` differently** — under `host-collectors/run-host/<collectorName>/`, not at the top level. This collector's `collectorName` and `outputDir` are both `router-metrics`, so the path doubles up. The same per-pod metrics data lands at:
 
 ```
 host-collectors/run-host/
 └── router-metrics/
-    ├── router-7f8.txt
-    └── router-9ad.txt
+    └── router-metrics/
+        ├── router-7f8.txt
+        └── router-9ad.txt
 ```
