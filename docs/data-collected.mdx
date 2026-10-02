@@ -41,6 +41,7 @@ If your namespace runs more than one router release, every release's config is c
 
 - **A collected `router.yaml` isn't verified to be the one your router actually loaded.** Treat a populated `configmaps/` section as "a matching ConfigMap exists," not "confirmed active."
 - **Config may not be collected at all**, if your router reads `router.yaml` from somewhere this tool doesn't look, for example, mounted from a Secret, pulled by an init container, or mounted from a PVC.
+- **If you set `override_subgraph_url` with a normal URL (one with a path, e.g. `/graphql`), the section of your `router.yaml` immediately following it may be missing its key name in the collected bundle.** This is over-redaction, not a leak due to a troubleshoot.sh built-in redactor that matches more than it should past that URL and consumes the next line's key name before stopping, leaving that section's contents intact but orphaned under the wrong parent. If a section of your config looks like it's missing a heading, check for this before assuming your config is broken or wasn't collected.
 
 ### Schema collection
 
