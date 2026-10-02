@@ -32,7 +32,7 @@ job:
     # independently-pinned detail — see a collected bundle's meta.json find out which one.
     # Override only to pin an older release or point at a private mirror.
     repository: "apollograph/router-diagnostics"
-    tag: "v0.1.0"
+    tag: "v0.2.0"
     pullPolicy: IfNotPresent
   # -- Optional. Names of existing image pull secrets to attach to the Job's pod, in the
   # standard Kubernetes `imagePullSecrets` shape (e.g. `[{name: my-registry-secret}]`).
