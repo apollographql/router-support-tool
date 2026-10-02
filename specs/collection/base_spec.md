@@ -24,10 +24,14 @@ References to "the official Apollo router Helm chart" are pinned to `v2.17.0` an
 
 ### `router.yaml` capture
 
-The **`configMap` collector** is the mechanism that captures configuration. It reads the ConfigMap holding the rendered `configuration.yaml` directly, targeted by label selector (`app.kubernetes.io/name=router`), succeeding directly for the **official Apollo router Helm chart**, or by the customer-supplied `configMapName`/`selector` for raw-manifest and custom deployments (see `specs/deployment/v1/v1.md` → Chart values). A deployment that supplies neither, and whose config isn't discoverable under the standard label, gets an empty config section.
+The **`configMap` collector** is the primary mechanism that captures configuration. It reads the ConfigMap holding the rendered `configuration.yaml` directly, targeted by label selector (`app.kubernetes.io/name=router`), succeeding directly for the **official Apollo router Helm chart**, or by the customer-supplied `configMapName`/`selector` for raw-manifest and custom deployments (see `specs/deployment/v1/v1.md` → Chart values). A deployment that supplies neither, and whose config isn't discoverable under the standard label, gets an empty config section.
 
 **Each router release in a namespace gets its own file in the support bundle.** Label-based targeting matches every ConfigMap with `app.kubernetes.io/name=router`, so a namespace running more than one router release (one per graph, for example) has every release's config collected, each in its own separately-named file. See `specs/collection/meta_json.md` → Multiple router releases in one namespace.
 
+#### Known limitations
+- A collected `router.yaml` is not verified to be the one the router loaded. Treat a populated `configmaps/` section as "a matching ConfigMap exists", not "confirmed active."
+
+- We may not collect config at all: If `router.yaml` is mounted from a Secret, pulled by an init container, or mounted from a PVC, for example, it will not be collected.
 
 ### Schema collection
 

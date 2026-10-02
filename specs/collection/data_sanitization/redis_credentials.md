@@ -12,10 +12,6 @@ Single-line `regex` with a `mask` capture group:
 
 ```yaml
 - name: router-redis-url-embedded-credentials
-  fileSelector:
-    files:
-      - "cluster-resources/configmaps/*.json"
-      - "configmaps/*/*.json"
   removals:
     regex:
       - redactor: '((?:rediss?(?:-cluster|-sentinel)?):\/\/)(?P<mask>[^\/@"\\]*:[^\/@"\\]+)(@)'
@@ -26,6 +22,8 @@ Single-line `regex` with a `mask` capture group:
 - Scoped to the six Redis schemes (`redis`, `rediss`, `-cluster`/`-sentinel` variants) rather than any `user:pass@` substring, to avoid masking unrelated occurrences elsewhere in the config.
 - The username may be empty, the password may not (`redis://:s3cr3t@host` is a normal Redis idiom pre-ACL) — masking requires a password but not a username, and a URL with no `@` has no credentials to mask.
 - **Overlaps a built-in redactor unevenly:** the built-in only fires on `redis://user:pass@host/<db>` (and then also masks the host and db index), so ours is the only cover for the common pathless form. A bundle with the host masked and one without it are both possible outputs, depending on whether `/<db>` was present — not a sign either rule failed.
+- **Deliberately has no `fileSelector` so it runs against every file in the bundle:** Going unscoped reaches surfaces like `cluster-resources/custom-resources/*.json` that no enumerated workload-kind list anticipated, catching a Redis connection string wherever `clusterResources` happens to collect one, not just the pod-spec kinds this repo thought to list.
+- **Risk of over-redaction**: For example, a CRD schema's example field with a fully-credentialed sample string gets masked the same as a real credential.
 
 ## Redactor: `username`/`password` as separate fields
 

@@ -113,9 +113,26 @@ for log in "$DIR"/router-logs/*/router.log; do
 done
 [ "$FOUND_TARGET" = true ] || fail "no router.log contained the expected startup target"
 
-# APOLLO_KEY must never appear anywhere in the bundle
-if grep -rq "APOLLO_KEY" "$DIR"; then
-  fail "APOLLO_KEY found in bundle contents - this must never happen"
+# --- APOLLO_KEY literal-env-value redaction (specs/collection/data_sanitization/secret_shaped_env_vars.md) ---
+for kind in deployments pods replicasets; do
+  F="$DIR/cluster-resources/$kind/$NAMESPACE.json"
+  [ -e "$F" ] || fail "expected cluster-resources file missing: $F"
+  grep -q '"name": "APOLLO_KEY"' "$F" || fail "APOLLO_KEY env var name not found in $F - positive control failed, the redaction check below would be meaningless"
+  grep -q '"value": "\*\*\*HIDDEN\*\*\*"' "$F" || fail "APOLLO_KEY env var in $F was not masked"
+done
+
+if grep -rq "SENTINELAPOLLOKEYTESTING123" "$DIR"; then
+  fail "APOLLO_KEY literal value found unredacted in bundle contents - this must never happen"
+fi
+
+# --- Redis URL-embedded credential in a pod-spec env var (specs/collection/data_sanitization/redis_credentials.md) ---
+for kind in deployments pods replicasets; do
+  F="$DIR/cluster-resources/$kind/$NAMESPACE.json"
+  grep -q '"name": "REDIS_URL"' "$F" || fail "REDIS_URL env var not found in $F - positive control failed, the redaction check below would be meaningless"
+  grep -q ":6379/" "$F" || fail "REDIS_URL env var in $F appears fully masked, not just its credential - expected the port/db to survive"
+done
+if grep -rq "SENTINELREDISPODENVPASSWORD" "$DIR"; then
+  fail "REDIS_URL pod-spec credential found unredacted in bundle contents"
 fi
 
 CONFIG="$DIR/configmaps/$NAMESPACE/router-config.json"

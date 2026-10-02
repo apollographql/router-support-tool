@@ -105,7 +105,7 @@ Two categories:
 - **Built-in redactors** (troubleshoot.sh, no Apollo work) — passwords and API tokens, AWS credentials, connection strings, IP addresses, bearer tokens and Authorization headers.
 - **Custom redactors** (authored by Apollo) — JWT and auth config, header values in config (keys preserved, values stripped), operation bodies in logs, subgraph URLs, graph schema/SDL.
 
-`APOLLO_KEY` is never collected in the first place. It is structurally isolated in a separate Kubernetes Secret from the ConfigMap the tool reads, so no redaction rule is load-bearing for it.
+`APOLLO_KEY` is never collected in the first place **when it is Secret-backed**, the recommended configuration. In this case, it is structurally isolated in a separate Kubernetes Secret from the ConfigMap the tool reads, so no redaction rule is load-bearing for it. That guarantee does not extend to a customer who sets `APOLLO_KEY`, or any other secret, as a literal env value instead of via `secretKeyRef` — `clusterResources` collects the full pod spec regardless, literal value included. For that case there is a redaction safety net, not structural isolation. See `specs/collection/data_sanitization/secret_shaped_env_vars.md`.
 
 See `specs/collection/data_sanitization/` for more details on redaction.
 
