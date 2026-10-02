@@ -43,9 +43,7 @@ META="$DIR/meta.json"
 [ "$(jq -r '.namespace' "$META")" = "$NAMESPACE" ] || fail "meta.json namespace != $NAMESPACE"
 
 # Check router-metrics (run host collector): one .txt per pod via outputDir
-# troubleshoot.sh nests a host run collector's outputDir under a directory named for the
-# collectorName itself, so with both set to "router-metrics" the path doubles up.
-EXPECTED_METRICS_DIR="$DIR/host-collectors/run-host/router-metrics/router-metrics"
+EXPECTED_METRICS_DIR="$DIR/host-collectors/run-host/router-metrics/pods"
 [ -d "$EXPECTED_METRICS_DIR" ] || fail "router-metrics: expected directory $EXPECTED_METRICS_DIR not found - did the troubleshoot.sh version change where a host run collector's outputDir lands?"
 FOUND=false
 while IFS= read -r f; do

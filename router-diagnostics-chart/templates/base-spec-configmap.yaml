@@ -72,7 +72,10 @@ data:
       hostCollectors:
         - run:
             collectorName: router-metrics
-            outputDir: router-metrics
+            # troubleshoot.sh nests outputDir under a directory named for collectorName, so
+            # giving this a distinct name (rather than router-metrics again) avoids a
+            # redundant host-collectors/run-host/router-metrics/router-metrics/ bundle path.
+            outputDir: pods
             command: sh
             args:
               - -c
