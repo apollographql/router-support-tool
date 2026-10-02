@@ -1,0 +1,24 @@
+defaultOpenDepth: 2
+items:
+  - label: "Overview"
+    href: "./"
+  - label: "Getting Started"
+    children:
+      - label: "Overview"
+        href: "./getting-started/getting-started"
+      - label: "Local Mode"
+        href: "./getting-started/local-mode"
+      - label: "Job Mode"
+        href: "./getting-started/job-mode"
+  - label: "Data Collected"
+    href: "./data-collected"
+  - label: "Collecting Metrics"
+    href: "./collecting-metrics"
+  - label: "Support Bundle Storage and Retrieval"
+    href: "./bundle-storage"
+  - label: "Reference"
+    children:
+      - label: "mode: local Reference"
+        href: "./local-mode-details"
+      - label: "mode: job Reference"
+        href: "./job-mode-details"
