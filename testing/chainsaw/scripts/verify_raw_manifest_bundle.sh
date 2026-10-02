@@ -26,10 +26,7 @@ helm install "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
   --set mode=local \
   --set metricsPort=9091
 
-# Default selector matches what was installed above (unset -> official chart's own
-# label); --metrics-port must match --set metricsPort=9091 above - collect.sh takes
-# these directly, it doesn't read the release.
-"$COLLECT_SCRIPT" --namespace "$NAMESPACE" --metrics-port 9091
+"$COLLECT_SCRIPT" --namespace "$NAMESPACE"
 
 BUNDLE=$(ls -t support-bundle-*.tar.gz | head -1)
 DIR="${BUNDLE%.tar.gz}"
@@ -46,13 +43,14 @@ META="$DIR/meta.json"
 [ "$(jq -r '.namespace' "$META")" = "$NAMESPACE" ] || fail "meta.json namespace != $NAMESPACE"
 
 # Check router-metrics (run host collector): one .txt per pod via outputDir
-# outputDir: router-metrics writes per-pod files to $TS_OUTPUT_DIR/<pod>.txt;
-# the exact bundle path (router-metrics/ or host-collectors/run-host/router-metrics/) depends
-# on the troubleshoot.sh version, so find matches either.
+# troubleshoot.sh nests a host run collector's outputDir under a directory named for the
+# collectorName itself, so with both set to "router-metrics" the path doubles up.
+EXPECTED_METRICS_DIR="$DIR/host-collectors/run-host/router-metrics/router-metrics"
+[ -d "$EXPECTED_METRICS_DIR" ] || fail "router-metrics: expected directory $EXPECTED_METRICS_DIR not found - did the troubleshoot.sh version change where a host run collector's outputDir lands?"
 FOUND=false
 while IFS= read -r f; do
   grep -q "apollo_router_" "$f" && FOUND=true && break
-done < <(find "$DIR" -path "*/router-metrics/*.txt" -type f 2>/dev/null)
+done < <(find "$EXPECTED_METRICS_DIR" -maxdepth 1 -name "*.txt" -type f 2>/dev/null)
 [ "$FOUND" = true ] || fail "router-metrics: no per-pod metrics file contains apollo_router_ metrics"
 
 # Check clusterResources collector: pod is Running, zero restarts, expected image + resources are in the support bundle
