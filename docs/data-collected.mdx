@@ -25,6 +25,7 @@ A couple of notes that apply across the table:
 
 - **Router deployment env vars, image tag, and pod status all come from the same pod collection**, so declining or losing one doesn't affect the others.
 - **If `APOLLO_GRAPH_REF` is routed through a Secret** using your router chart's `extraEnvVars`, only the environment variable *reference* is captured, not the value, so the graph ref itself doesn't land in the bundle.
+- **The same pod-spec collection captures every other env var too, literal values included.** `APOLLO_KEY` is never collected as long as it's stored in a Kubernetes Secret and referenced via `secretKeyRef`, the recommended setup, and what the official Apollo router Helm chart produces because in that case the key is structurally isolated from everything this tool reads, not redacted after the fact. That guarantee doesn't extend to a deployment that sets `APOLLO_KEY`, or any other secret, as a literal env value. If your deployment sets secrets as literal env values rather than through Kubernetes Secrets, inspect your bundle before sharing it.
 - **Config is captured as written, not effective config**. Environment-variable overrides applied on top of `router.yaml` aren't reflected in what's collected.
 - **Previous-container logs are always collected** and written to `<name>-previous.log`, so a router that already restarted still has its crash output captured. Logs are collected per pod and capture every container in the pod, including proxy/mesh sidecars. How far back logs reach and how many lines are kept are configurable. For more information, access the chart's `logs.maxAge`/`logs.maxLines` values in [job-mode-details](./job-mode-details) or [local-mode-details](./local-mode-details).
 
@@ -35,6 +36,11 @@ The `configMap` collector reads the ConfigMap holding your router's rendered con
 If your namespace runs more than one router release, every release's config is collected, each in its own separately-named file in the bundle.
 
 `keyExists: false` in `configmaps/<namespace>/<release-name>.json` doesn't mean the config is missing. This is a troubleshoot.sh quirk: the `configMap` collector's `keyExists` field is only ever set `true` when the collector is configured with a specific `key` to look for. Our spec uses `includeAllData: true` with no `key` set so `keyExists` is always `false` in this output, regardless of whether the config was actually captured. Check for the config itself, the `data` in that same file, rather than reading `keyExists` as a success/failure signal.
+
+**Known limitations:**
+
+- **A collected `router.yaml` isn't verified to be the one your router actually loaded.** Treat a populated `configmaps/` section as "a matching ConfigMap exists," not "confirmed active."
+- **Config may not be collected at all**, if your router reads `router.yaml` from somewhere this tool doesn't look, for example, mounted from a Secret, pulled by an init container, or mounted from a PVC.
 
 ### Schema collection
 

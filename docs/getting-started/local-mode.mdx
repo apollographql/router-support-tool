@@ -49,7 +49,7 @@ Optionally, supply `metricsPort` if your metrics aren't exposed via the default 
 ./collect.sh --namespace production
 ```
 
-This is the same command whichever deployment tier you're on — `collect.sh` only needs `--namespace`. (It still accepts `--selector`/`--metrics-port` flags, but they have no effect; the `selector`/`metricsPort` you set at `helm install` time in Step 2 is what actually controls metrics collection.)
+This is the same command whichever deployment tier you're on. `collect.sh` only takes `--namespace`.
 
 `--namespace` here must match the value you gave both `helm install --namespace` and `--set namespace=` in Step 2. `collect.sh` uses that value to find the spec ConfigMap that the chart rendered there. For an explanation, go to [local-mode-details](../local-mode-details).
 

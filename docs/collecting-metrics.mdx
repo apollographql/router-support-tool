@@ -35,7 +35,17 @@ The spec renders a single `hostCollectors.run` script (named `router-metrics`) t
 1. Looks up every pod matching `selector` in your namespace (`kubectl get pods -l <selector>`).
 2. For each pod in turn: port-forwards straight to that pod (not a Service), scrapes `/metrics` to a file, then tears the port-forward down before moving to the next pod.
 
-Each pod's scrape lands in its own `<pod-name>.txt` under `router-metrics/` in the bundle. This needs `create` on the `pods/portforward` subresource in the router's namespace; declining it doesn't fail collection, but no pod will respond and this section stays empty.
+Each pod's scrape lands in its own `<pod-name>.txt` file, but **not** under a top-level `router-metrics/` — troubleshoot.sh nests a host `run` collector's output under `host-collectors/run-host/<collectorName>/`:
+
+```
+host-collectors/run-host/
+└── router-metrics/
+    └── pods/
+        ├── <pod-name>.txt
+        └── <pod-2-name>.txt
+```
+
+This is different from `mode: job`'s layout, where each pod gets its own top-level `router-metrics-<pod-name>/result.json` instead — worth knowing if you're scripting against bundle contents. This needs `create` on the `pods/portforward` subresource in the router's namespace; declining it doesn't fail collection, but no pod will respond and this section stays empty. If no pod responds, the script writes a plain explanation into the output instead of leaving it silently empty.
 
 ## If Prometheus isn't set up yet
 

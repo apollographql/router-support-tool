@@ -27,8 +27,6 @@ The support tool is built on top of [troubleshoot.sh](https://troubleshoot.sh/),
 
 A few things we built in deliberately:
 
-- APOLLO_KEY is never collected. It isn't redacted after the fact.
-
 - Generic secrets are stripped automatically, on every file, with no configuration. Environment-variable-named secrets (password, token, *_SECRET_ACCESS_KEY, and similar), credentials embedded in URLs, database connection strings, and a handful of Kubernetes-specific patterns (like last-applied-configuration annotations) are all redacted unconditionally, before the bundle is written.
 
 - Router-specific sensitive fields get their own redaction rules, because generic pattern-matching doesn't know your router.yaml's shape. This covers JWT verification and subgraph auth configuration, literal header values in your headers config, GraphQL operation bodies that reach router logs, subgraph routing URLs, TLS private keys (supergraph, subgraph, and connector TLS config), and Redis credentials, whether embedded in a cache connection string or set as separate username/password fields.
