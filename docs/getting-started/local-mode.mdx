@@ -15,13 +15,7 @@ curl -sSL https://router.apollo.dev/router-diagnostics-collect/latest | sh
 chmod +x collect.sh
 ```
 
-This gives you a single `./collect.sh` command. It also does two things for you automatically:
-
-- Caches a pinned version of [troubleshoot's `support-bundle` binary](https://troubleshoot.sh/docs/support-bundle/introduction) locally, keyed by version.
-- Bridges your machine to your router's metrics port, if enabled. For exactly what this does, the permission it needs, and the full list of prerequisites for metrics to be collected at all, go to [Collecting Metrics](../collecting-metrics#mode-local).
-
-`collect.sh` takes `--namespace`/`--selector`/`--metrics-port` flags. Whatever you pass to `helm install` below, pass again here (`--metrics-port` maps to the chart's `metricsPort` value).
-
+This gives you a single `./collect.sh` command, which caches a pinned version of [troubleshoot's `support-bundle` binary](https://troubleshoot.sh/docs/support-bundle/introduction) locally, keyed by version, before running collection.
 ## Step 2: Install the Helm chart
 
 **If you deployed your router with the official Apollo Helm chart:**
@@ -51,17 +45,11 @@ Optionally, supply `metricsPort` if your metrics aren't exposed via the default 
 
 ## Step 3: Collect a support bundle
 
-**Official Apollo Helm chart:**
-
 ```bash
 ./collect.sh --namespace production
 ```
 
-**Raw-manifest or custom deployment**: pass the same `selector` (and `--metrics-port`, if you set a non-default `metricsPort`) you gave `helm install` previously:
-
-```bash
-./collect.sh --namespace production --selector "app=my-router"
-```
+This is the same command whichever deployment tier you're on — `collect.sh` only needs `--namespace`. (It still accepts `--selector`/`--metrics-port` flags, but they have no effect; the `selector`/`metricsPort` you set at `helm install` time in Step 2 is what actually controls metrics collection.)
 
 `--namespace` here must match the value you gave both `helm install --namespace` and `--set namespace=` in Step 2. `collect.sh` uses that value to find the spec ConfigMap that the chart rendered there. For an explanation, go to [local-mode-details](../local-mode-details).
 

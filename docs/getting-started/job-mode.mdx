@@ -42,7 +42,7 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --set job.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=arn:aws:iam::123456789012:role/router-diagnostics-s3-writer
 ```
 
-`selector` also determines how the Job reaches your metrics endpoint under this tier. For more details, go to [Collecting Metrics](../collecting-metrics#mode-job).
+`selector` also determines which of your router's pods get scraped for metrics. For more details, go to [Collecting Metrics](../collecting-metrics#mode-job).
 
 The Job runs immediately on install and uploads the bundle as soon as collection finishes.
 

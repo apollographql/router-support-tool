@@ -6,38 +6,36 @@ description: What has to be true for the GraphOS Router Support Tool to collect 
 
 import NodeMetricsRBAC from './resources/nodemetrics-rbac.mdx';
 
-A full Prometheus metrics snapshot is one of the signals the base spec collects, through the [`http` collector](https://troubleshoot.sh/docs/collect/http). This page covers everything specific to getting that collector to return metrics: what has to be true on your router's side, how each mode reaches the port, and what changes if you're running a service mesh.
-To understand how this snapshot works alongside all other data the tool gathers, go to [Data Collected](./data-collected). 
+A full Prometheus metrics snapshot, from **every matching router pod individually**, is one of the signals the base spec collects, through the [`http` collector](https://troubleshoot.sh/docs/collect/http) (`mode: job`) or a `hostCollectors.run` script (`mode: local`). This page covers everything specific to getting that signal: what has to be true on your router's side, how each mode reaches each pod, and what changes if you're running a service mesh.
+To understand how this snapshot works alongside all other data the tool gathers, go to [Data Collected](./data-collected).
 
 ## Prerequisites on the router's side
 
-Three settings need to be in place:
+Two settings need to be in place:
 
 - **`telemetry.exporters.metrics.prometheus.enabled: true`** in `router.yaml`: turns the exporter on.
 - **`telemetry.exporters.metrics.prometheus.listen`** in `router.yaml`: The bind address. Binding the exporter to loopback means an external scrape can't reach the exporter, no matter what port the collector targets.
-- **`serviceMonitor.enabled: true`** on the **router's** Helm chart: Adds a `metrics` port to the Service. Without that port, the Service has no `metrics` port at all, regardless of whether the exporter itself is on and reachable.
 
-If any of the three is turned off or misconfigured, this section of the bundle returns empty, but the rest of the bundle is unaffected.
+If either is turned off or misconfigured, this section of the bundle returns empty, but the rest of the bundle is unaffected.
 
-## Raw-manifest or custom deployments
+## Which pods get scraped
 
-If you're on a raw-manifest or custom deployment, this collector also needs `selector` set. The mechanics differ by mode:
+`selector` controls which pods are targeted for metrics. It defaults to `app.kubernetes.io/name=router`, the official Apollo router chart's own label. Otherwise, the `selector` that Raw-manifest / custom deployments set is used. Override `metricsPort` if your exporter listens somewhere other than `9090`.
+
+If no pods match `selector` at collection time, no metrics collectors are emitted and this section is simply absent from the bundle.
 
 ### `mode: job`
 
-`selector` is what the collector resolves its target host from directly. Left unset, it falls back to the official chart's `app.kubernetes.io/name=router` label, which might find nothing for a raw manifest. You can also override the `metricsPort` from its default of `9090`.
+The spec renders one `http` collector per matching pod, named `router-metrics-<pod-name>`, each hitting that pod's IP directly at `metricsPort` — no Service, no DNS resolution involved. Pod IPs are resolved once, at `helm install` time: a pod replaced between install and collection produces a connection error for that one pod's slot, which is an acceptable gap for the point-in-time snapshot this tool collects.
 
 ### `mode: local`
 
-The collector always targets `localhost:<metricsPort>`, on the assumption that something is already port-forwarding there. `collect.sh` sets that up for you:
+The spec renders a single `hostCollectors.run` script (named `router-metrics`) that `support-bundle` executes directly on your machine. It:
 
-1. If you're on a raw-manifest or custom deployment, pass the same `--selector` value you gave `helm install`. On the official chart, there's nothing to pass, `collect.sh` falls back to the chart's own `app.kubernetes.io/name=router` label, the same default the chart itself uses. Either way, `collect.sh` uses this to resolve your router's Service, taking the selector directly as a flag rather than reading it back from the installed release.
-2. `collect.sh` starts `kubectl port-forward svc/<resolved-service> <metricsPort>:<metricsPort>` (default `9090:9090`) in the background and waits for the port-forward to accept connections.
-3. `collect.sh` tears the port-forward down on exit once collection finishes.
+1. Looks up every pod matching `selector` in your namespace (`kubectl get pods -l <selector>`).
+2. For each pod in turn: port-forwards straight to that pod (not a Service), scrapes `/metrics` to a file, then tears the port-forward down before moving to the next pod.
 
-Starting that port-forward needs `create` on the `pods/portforward` subresource in the router's namespace. Declining the `pods/portforward` grant doesn't fail collection, but you won't be able to collect metrics.
-
-This bridging step is **not** needed under `mode: job`. The Job's pod runs inside the cluster so the Service DNS name resolves normally there. If you run `support-bundle` directly, bypassing the script, you'd need to set up that port-forward yourself.
+Each pod's scrape lands in its own `<pod-name>.txt` under `router-metrics/` in the bundle. This needs `create` on the `pods/portforward` subresource in the router's namespace; declining it doesn't fail collection, but no pod will respond and this section stays empty.
 
 ## If Prometheus isn't set up yet
 
