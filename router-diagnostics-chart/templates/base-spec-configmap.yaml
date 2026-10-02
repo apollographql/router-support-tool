@@ -167,10 +167,6 @@ data:
 
         # specs/collection/data_sanitization/redis_credentials.md
         - name: router-redis-url-embedded-credentials
-          fileSelector:
-            files:
-              - "cluster-resources/configmaps/*.json"
-              - "configmaps/*/*.json"
           removals:
             regex:
               - redactor: '((?:rediss?(?:-cluster|-sentinel)?):\/\/)(?P<mask>[^\/@"\\]*:[^\/@"\\]+)(@)'
@@ -186,10 +182,18 @@ data:
 
         # specs/collection/data_sanitization/tls_private_keys.md
         - name: router-tls-private-keys
-          fileSelector:
-            files:
-              - "cluster-resources/configmaps/*.json"
-              - "configmaps/*/*.json"
           removals:
             regex:
               - redactor: '(-----BEGIN (?:RSA |EC |ENCRYPTED )?PRIVATE KEY-----)(?P<mask>.+?)(-----END (?:RSA |EC |ENCRYPTED )?PRIVATE KEY-----)'
+
+        # specs/collection/data_sanitization/secret_shaped_env_vars.md
+        - name: router-key-named-env-var
+          removals:
+            regex:
+              - selector: '"name":\s*"(?:[A-Z0-9_]*_)?KEY"'
+                redactor: '("value":\s*")(?P<mask>[^"]*)(")'
+        - name: router-pass-named-env-var
+          removals:
+            regex:
+              - selector: '"name":\s*"(?:[A-Z0-9_]*_)?PASS"'
+                redactor: '("value":\s*")(?P<mask>[^"]*)(")'

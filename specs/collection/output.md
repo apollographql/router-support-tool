@@ -57,4 +57,3 @@ Notes:
 - If more than one router release matched the label selector in `production`, the last entry becomes multiple files — one per release.
 
 - `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace (schema is found here). `configmaps/production/<release-name>.json` is the dedicated `configMap` collector's own output, one file per matched release.
-

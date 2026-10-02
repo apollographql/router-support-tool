@@ -41,6 +41,9 @@ spec:
             - "--hot-reload"
             - "--license"
             - "${LICENSE}"
+          env:
+            - name: APOLLO_KEY
+              value: "service:sentinel-test-graph:SENTINELAPOLLOKEYTESTING123:withcolon"
           ports:
             - name: graphql
               containerPort: 4000

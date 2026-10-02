@@ -153,6 +153,8 @@ Collection produces a support bundle — a `support-bundle-<timestamp>.tar.gz` a
 
 It includes router version, sanitized configuration, recent logs, metrics (if you've enabled the Prometheus endpoint), and pod status. Your Redis configuration and any Redis errors in the router logs are captured, so support can still see how Redis is configured and whether the router is failing against it. See `specs/collection/output.md` for exactly what the extracted archive looks like, including a worked directory-tree example.
 
+**A populated configuration section means a `router.yaml` matching the expected ConfigMap was found, it does not confirm that's the config your router process actually has loaded.** If your router reads its config from somewhere other than the ConfigMap this tool looks for, a file on a volume, for example, the config section may be empty, or may contain something that looks plausible but has since diverged from what's actually running.
+
 Sensitive data is redacted automatically before the output bundle is created — see [Redaction](#redaction) below. You can inspect the bundle contents before sharing. Nothing persists in the cluster after collection completes, though the chart itself remains installed unless you remove it — see [Cluster footprint](#cluster-footprint) below.
 
 ### Metrics require the Prometheus endpoint to be enabled
@@ -176,7 +178,11 @@ If the exporter is off, or bound somewhere the collector can't reach, that secti
 
 ### Redaction
 
-Redaction runs automatically with no configuration needed. JWT/auth config, header values, operation bodies in logs, subgraph URLs are redacted automatically. `APOLLO_KEY` is never collected under any circumstances.
+Redaction runs automatically with no configuration needed. JWT/auth config, header values, operation bodies in logs, subgraph URLs are redacted automatically.
+
+`APOLLO_KEY` is never collected **as long as it's stored in a Kubernetes Secret and referenced via `secretKeyRef`**, the recommended setup, and what the official Apollo router Helm chart produces. In that case the key is structurally isolated from everything this tool reads.
+
+That guarantee does not extend to a customer who sets `APOLLO_KEY`, or any other secret, as a literal env value. For this case there is a redaction safety net, not structural isolation. **If your deployment sets secrets as literal env values rather than through Kubernetes Secrets, inspect your bundle before sharing it**, the same way you would for any other config you're not certain is fully covered.
 
 ### Cluster footprint
 

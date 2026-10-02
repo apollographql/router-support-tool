@@ -49,6 +49,10 @@ spec:
               value: "wJalrXUtnFEMItesting123fakekey"
             - name: AWS_REGION
               value: "us-east-1"
+            - name: APOLLO_KEY
+              value: "service:sentinel-test-graph:SENTINELAPOLLOKEYTESTING123:withcolon"
+            - name: REDIS_URL
+              value: "redis://redisuser:SENTINELREDISPODENVPASSWORD@redis.internal:6379/0"
           ports:
             - containerPort: 4000
             - containerPort: 9091

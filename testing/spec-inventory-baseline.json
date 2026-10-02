@@ -47,12 +47,22 @@
   {
     "kind": "redactor",
     "type": "redactor",
+    "name": "router-key-named-env-var"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
     "name": "router-log-request-body"
   },
   {
     "kind": "redactor",
     "type": "redactor",
     "name": "router-log-response-body"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
+    "name": "router-pass-named-env-var"
   },
   {
     "kind": "redactor",

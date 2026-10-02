@@ -16,10 +16,6 @@ Unlike the fields in `jwt_and_auth_config.md` and `redis_credentials.md`, a PEM 
 
 ```yaml
 - name: router-tls-private-keys
-  fileSelector:
-    files:
-      - "cluster-resources/configmaps/*.json"
-      - "configmaps/*/*.json"
   removals:
     regex:
       - redactor: '(-----BEGIN (?:RSA |EC |ENCRYPTED )?PRIVATE KEY-----)(?P<mask>.+?)(-----END (?:RSA |EC |ENCRYPTED )?PRIVATE KEY-----)'
@@ -27,6 +23,7 @@ Unlike the fields in `jwt_and_auth_config.md` and `redis_credentials.md`, a PEM 
 
 **Notes:**
 
+- **Deliberately has no `fileSelector` so it runs against every file in the bundle.**
 - **Anchored on the PEM markers, not a YAML key or quoting.** A PEM block's real newlines become literal `\n` two-character sequences once `router.yaml` is captured as a JSON-escaped string, same as everywhere else in this directory — but since `.` in Go's `regexp` matches any byte except a real newline, and there are no real newline bytes left in a JSON-escaped single line, `.+?` matches straight through those literal `\n` sequences without needing to model them explicitly. This rule doesn't need the prefix/suffix YAML-structure modeling `jwt_and_auth_config.md`'s rules require.
 - **`(?:RSA |EC |ENCRYPTED )?` covers the PEM header variants** rustls-based key loading in the router can encounter (PKCS8 `PRIVATE KEY`, PKCS1 `RSA PRIVATE KEY`, SEC1 `EC PRIVATE KEY`). RE2 has no backreferences, so the opening and closing markers aren't required to match the same variant — immaterial for redaction, since everything between the first BEGIN and the next END is masked regardless.
 - **`.+?` (one or more, lazy), not `.*?`** — the mask must not be able to match the empty string (`overview.md` → Regex, single-line), and a real key body is never empty.

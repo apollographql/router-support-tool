@@ -169,9 +169,18 @@ if [ "$CONDITION" = "router-recently-restarted" ]; then
   grep -q '"state":"Startup"' "$CURRENT_LOG"
 fi
 
-# --- APOLLO_KEY must never be collected ---
-if grep -rq "APOLLO_KEY" "$BUNDLE_DIR"; then
-  echo "APOLLO_KEY found in bundle contents - this must never happen" >&2
+# --- APOLLO_KEY literal-env-value redaction (specs/collection/data_sanitization/secret_shaped_env_vars.md) ---
+PODS_JSON="$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+if ! grep -q '"name": "APOLLO_KEY"' "$PODS_JSON"; then
+  echo "APOLLO_KEY env var name not found in $PODS_JSON - positive control failed, the redaction check below would be meaningless" >&2
+  exit 1
+fi
+if ! grep -q '"value": "\*\*\*HIDDEN\*\*\*"' "$PODS_JSON"; then
+  echo "APOLLO_KEY env var in $PODS_JSON was not masked" >&2
+  exit 1
+fi
+if grep -rq "SENTINELAPOLLOKEYTESTING123" "$BUNDLE_DIR"; then
+  echo "APOLLO_KEY literal value found unredacted in bundle contents - this must never happen" >&2
   exit 1
 fi
 
