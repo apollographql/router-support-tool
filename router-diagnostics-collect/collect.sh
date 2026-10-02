@@ -82,4 +82,4 @@ if [ ! -x "$BIN" ]; then
   echo "router-diagnostics: cached support-bundle v${SUPPORT_BUNDLE_VERSION}" >&2
 fi
 
-"$BIN" --load-cluster-specs --namespace "$NAMESPACE" --auto-update=false
+"$BIN" --load-cluster-specs --namespace "$NAMESPACE" --auto-update=false --interactive=false
