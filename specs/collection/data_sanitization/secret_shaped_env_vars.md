@@ -12,6 +12,7 @@
     regex:
       - selector: '"name":\s*"(?:[A-Z0-9_]*_)?KEY"'
         redactor: '("value":\s*")(?P<mask>[^"]*)(")'
+      - redactor: '(\\"name\\":\\"(?:[A-Z0-9_]*_)?KEY\\",\\"value\\":\\")(?P<mask>[^\\"]*)(\\")'
 ```
 
 This masks the value of **any** env var whose name ends in `KEY` or `_KEY`, not just `APOLLO_KEY`.
@@ -20,6 +21,7 @@ This masks the value of **any** env var whose name ends in `KEY` or `_KEY`, not 
 
 - **Deliberately has no `fileSelector` so it runs against every file in the bundle.**
 - **This masks some non-secret values too, this is an accepted tradeoff** A `PRIMARY_KEY`, for example, will get masked by this rule.
+- Second pattern: the same env var appears a second time, escaped, inside `kubectl.kubernetes.io/last-applied-configuration`. `kubectl apply` stores the entire submitted manifest as compact JSON in that annotation, which `clusterResources` also collects.
 
 ## Redactor: any `*_PASS`-named env var
 
@@ -29,12 +31,14 @@ This masks the value of **any** env var whose name ends in `KEY` or `_KEY`, not 
     regex:
       - selector: '"name":\s*"(?:[A-Z0-9_]*_)?PASS"'
         redactor: '("value":\s*")(?P<mask>[^"]*)(")'
+      - redactor: '(\\"name\\":\\"(?:[A-Z0-9_]*_)?PASS\\",\\"value\\":\\")(?P<mask>[^\\"]*)(\\")'
 ```
 
 ### Notes
 
 - **Deliberately has no `fileSelector` so it runs against every file in the bundle.**
 - troubleshoot's built-in redactors mask a `*password*`-named env var, but not the common `PASS` abbreviation.
+- Same `last-applied-configuration` gap and fix as the `KEY` rule above.
 
 ## What's deliberately left visible
 

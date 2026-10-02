@@ -192,8 +192,10 @@ data:
             regex:
               - selector: '"name":\s*"(?:[A-Z0-9_]*_)?KEY"'
                 redactor: '("value":\s*")(?P<mask>[^"]*)(")'
+              - redactor: '(\\"name\\":\\"(?:[A-Z0-9_]*_)?KEY\\",\\"value\\":\\")(?P<mask>[^\\"]*)(\\")'
         - name: router-pass-named-env-var
           removals:
             regex:
               - selector: '"name":\s*"(?:[A-Z0-9_]*_)?PASS"'
                 redactor: '("value":\s*")(?P<mask>[^"]*)(")'
+              - redactor: '(\\"name\\":\\"(?:[A-Z0-9_]*_)?PASS\\",\\"value\\":\\")(?P<mask>[^\\"]*)(\\")'
