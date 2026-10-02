@@ -26,10 +26,7 @@ helm install "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
   --set mode=local \
   --set metricsPort=9091
 
-# Default selector matches what was installed above (unset -> official chart's own
-# label); --metrics-port must match --set metricsPort=9091 above - collect.sh takes
-# these directly, it doesn't read the release.
-"$COLLECT_SCRIPT" --namespace "$NAMESPACE" --metrics-port 9091
+"$COLLECT_SCRIPT" --namespace "$NAMESPACE"
 
 BUNDLE=$(ls -t support-bundle-*.tar.gz | head -1)
 DIR="${BUNDLE%.tar.gz}"

@@ -1,26 +1,18 @@
 #!/bin/sh
 # Collects a router-diagnostics support bundle for mode: local. Caches a pinned
-# support-bundle binary locally, selects one router Pod and bridges its metrics port
-# with a temporary kubectl port-forward, then runs support-bundle against the cluster's
+# support-bundle binary locally, then runs support-bundle against the cluster's
 # discoverable specs.
-#
-# Usage: collect.sh --namespace <namespace> [--selector <selector>] [--metrics-port <port>]
-# Takes the same values you passed to `helm install`.
+
+# Usage: collect.sh --namespace <namespace>
 set -eu
 
 # renovate: datasource=github-releases depName=replicatedhq/troubleshoot
 SUPPORT_BUNDLE_VERSION="0.134.1"
 
 NAMESPACE=""
-# Matches the official chart's own label; raw-manifest/custom deployments should pass
-# --selector explicitly, the same value given to `helm install --set selector=...`.
-SELECTOR="app.kubernetes.io/name=router"
-# Matches the chart's own default; pass --metrics-port to match a non-default
-# `--set metricsPort=...` given at install time.
-METRICS_PORT="9090"
 
 usage() {
-  echo "usage: collect.sh --namespace <namespace> [--selector <selector>] [--metrics-port <port>]" >&2
+  echo "usage: collect.sh --namespace <namespace>" >&2
 }
 
 while [ $# -gt 0 ]; do
@@ -31,22 +23,6 @@ while [ $# -gt 0 ]; do
       ;;
     --namespace=*)
       NAMESPACE="${1#*=}"
-      shift
-      ;;
-    --selector)
-      SELECTOR="$2"
-      shift 2
-      ;;
-    --selector=*)
-      SELECTOR="${1#*=}"
-      shift
-      ;;
-    --metrics-port)
-      METRICS_PORT="$2"
-      shift 2
-      ;;
-    --metrics-port=*)
-      METRICS_PORT="${1#*=}"
       shift
       ;;
     -h|--help)
