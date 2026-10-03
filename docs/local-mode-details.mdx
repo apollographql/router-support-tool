@@ -88,3 +88,9 @@ support-bundle-2026-08-11T14_23_00/
       └── <release-2-name>.json
   ```
 - `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace. `configmaps/production/<release-name>.json` is the dedicated `configMap` collector's own output.
+
+<Note>
+
+`keyExists: false` in `configmaps/<namespace>/<release-name>.json` doesn't mean the config is missing. This is a troubleshoot.sh quirk: the `configMap` collector's `keyExists` field is only ever set `true` when the collector is configured with a specific key to look for. Our spec uses `includeAllData: true` with no key set, so `keyExists` is always `false` in this output, regardless of whether the config was actually captured. Check for the config data in that same file, rather than reading `keyExists` as a success/failure signal.
+
+</Note>

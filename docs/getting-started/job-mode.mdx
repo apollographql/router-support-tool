@@ -56,7 +56,11 @@ Once the Job completes, the configured destination has the bundle. Retrieve it t
 
 ## Service mesh environments
 
+<Caution>
+
 **Injecting a sidecar into the Job's pod risks the Job never completing.** Kubernetes only marks a Job `Complete` once every container in its pod has exited, but a mesh proxy (for example, `istio-proxy`) is a long-running sidecar that keeps waiting for traffic after the collection container is done, so the pod sits in `Running` indefinitely instead of reaching `Completed`, leaving a stuck workload behind with no clear signal that collection succeeded.
+
+</Caution>
 
 To avoid that, the chart sets `job.podAnnotations` to disable sidecar injection by default, for Istio and Linkerd:
 

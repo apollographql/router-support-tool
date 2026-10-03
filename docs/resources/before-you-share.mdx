@@ -1,4 +1,8 @@
+<Caution>
+
 Every file in the bundle is redacted automatically, but redaction can fail on a single file without failing the whole run. **If a bundle reports a redaction error, don't share it until you understand what it means**. An error might mean redaction failed to complete on a file.
+
+</Caution>
 
 Redactors cover Router's own configuration and known sensitive patterns—Redis credentials, TLS private keys, JWT/auth config, and similar. The redactors don't know about custom instrumentation you've added: for example, a Rhai script that sets span attributes, custom telemetry configuration that records request context, or a coprocessor that writes its own fields into router logs. Before sharing a bundle, check the collected logs under `cluster-resources/pods/logs/` for anything your own configuration writes there, and redact the information yourself if needed.
 
