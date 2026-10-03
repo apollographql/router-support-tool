@@ -1,32 +1,34 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   extends: [
-    "github>Turbo87/renovate-config//rust/updateToolchain"
+    'github>Turbo87/renovate-config//rust/updateToolchain',
   ],
-  "customManagers": [
+  customManagers: [
     {
-      "customType": "regex",
-      "description": "The Job image's pinned aws-cli/curl/ca-certificates apk versions are supplied through an ARG, which Renovate's built-in apk datasource can't see (it only detects a version written directly on the apk add line). Repology mirrors Alpine's own per-branch package versions, so each '# renovate:' comment names the alpine_3_22/<pkg> project directly; versioning=loose is needed to sort the apk '-rN' revision suffix correctly.",
-      "fileMatch": ["^router-diagnostics-job-image/Dockerfile$"],
-      "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s*\\n\\s*ARG \\w+=\"(?<currentValue>[^\"]+)\"",
+      customType: 'regex',
+      description: "The Job image's pinned aws-cli/curl/ca-certificates apk versions are supplied through an ARG, which Renovate's built-in apk datasource can't see (it only detects a version written directly on the apk add line). Repology mirrors Alpine's own per-branch package versions, so each '# renovate:' comment names the alpine_3_22/<pkg> project directly; versioning=loose is needed to sort the apk '-rN' revision suffix correctly.",
+      managerFilePatterns: [
+        '/^router-diagnostics-job-image/Dockerfile$/',
+      ],
+      matchStrings: [
+        '# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s*\\n\\s*ARG \\w+="(?<currentValue>[^"]+)"',
       ],
     },
     {
-      "customType": "regex",
-      "description": "Keep the collect script's pinned support-bundle binary, the Job image's pinned binary, and the chart's declared troubleshoot_version in lock-step — all three match strings share a depName, so Renovate bumps them together in one PR.",
-      "fileMatch": [
-        "^router-diagnostics-collect/collect\\.sh$",
-        "^router-diagnostics-job-image/Dockerfile$",
-        "^router-diagnostics/templates/base-spec-configmap\\.yaml$",
+      customType: 'regex',
+      description: "Keep the collect script's pinned support-bundle binary, the Job image's pinned binary, and the chart's declared troubleshoot_version in lock-step — all three match strings share a depName, so Renovate bumps them together in one PR.",
+      managerFilePatterns: [
+        '/^router-diagnostics-collect/collect\\.sh$/',
+        '/^router-diagnostics-job-image/Dockerfile$/',
+        '/^router-diagnostics/templates/base-spec-configmap\\.yaml$/',
       ],
-      "matchStrings": [
-        "SUPPORT_BUNDLE_VERSION=\"(?<currentValue>.*?)\"",
-        "\"troubleshoot_version\": \"(?<currentValue>.*?)\"",
+      matchStrings: [
+        'SUPPORT_BUNDLE_VERSION="(?<currentValue>.*?)"',
+        '"troubleshoot_version": "(?<currentValue>.*?)"',
       ],
-      "depNameTemplate": "replicatedhq/troubleshoot",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.*)$",
+      depNameTemplate: 'replicatedhq/troubleshoot',
+      datasourceTemplate: 'github-releases',
+      extractVersionTemplate: '^v(?<version>.*)$',
     },
   ],
 }
