@@ -3,7 +3,7 @@ ARG GCLOUD_VERSION=584.0.0
 
 FROM gcr.io/google.com/cloudsdktool/google-cloud-cli:${GCLOUD_VERSION}-alpine AS gcloud-sdk
 
-FROM alpine:3.22
+FROM alpine:3.24
 
 # renovate: datasource=repology depName=alpine_3_22/ca-certificates versioning=loose
 ARG CA_CERTIFICATES_VERSION="20260909-r0"
