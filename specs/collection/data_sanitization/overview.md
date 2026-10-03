@@ -11,6 +11,7 @@ This directory is where Apollo's custom redactors are specified, one file per se
 | Redis credentials embedded in cache URLs | `redis_credentials.md` |
 | TLS private keys (`tls.supergraph`, `tls.subgraph.*`, `tls.connector.*`) | `tls_private_keys.md` |
 | `APOLLO_KEY` and GraphOS-key-shaped values in pod specs | `secret_shaped_env_vars.md` |
+| The collecting operator's own machine environment via a host-collector's diagnostic sidecar | `host_collector_diagnostics.md` |
 
 ## The general limit: env-indirected secrets outside `router.yaml`
 

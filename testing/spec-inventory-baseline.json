@@ -42,6 +42,11 @@
   {
     "kind": "redactor",
     "type": "redactor",
+    "name": "router-host-collector-run-diagnostics"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
     "name": "router-jwt-jwks-fetch-headers"
   },
   {

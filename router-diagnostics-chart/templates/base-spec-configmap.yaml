@@ -73,9 +73,9 @@ data:
         - run:
             collectorName: router-metrics
             # troubleshoot.sh nests outputDir under a directory named for collectorName, so
-            # giving this a distinct name (rather than router-metrics again) avoids a
-            # redundant host-collectors/run-host/router-metrics/router-metrics/ bundle path.
+            # giving this a distinct name avoids a redundant bundle path.
             outputDir: pods
+            ignoreParentEnvs: true
             command: sh
             args:
               - -c
@@ -202,3 +202,13 @@ data:
               - selector: '"name":\s*"(?:[A-Z0-9_]*_)?PASS"'
                 redactor: '("value":\s*")(?P<mask>[^"]*)(")'
               - redactor: '(\\"name\\":\\"(?:[A-Z0-9_]*_)?PASS\\",\\"value\\":\\")(?P<mask>[^\\"]*)(\\")'
+
+        # specs/collection/data_sanitization/host_collector_diagnostics.md
+        - name: router-host-collector-run-diagnostics
+          fileSelector:
+            files:
+              - "host-collectors/run-host/*-info.json"
+              - "router-metrics/*-info.json"
+          removals:
+            regex:
+              - redactor: '(?P<mask>.+)'
