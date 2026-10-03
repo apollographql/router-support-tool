@@ -9,6 +9,8 @@
 # chainsaw-test.yaml, which runs this with the test's own directory as its working directory.
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/assert_host_collector_diagnostics_redacted.sh"
+
 NAMESPACE=$1
 CHART_PATH=$2
 COLLECT_SCRIPT=$3
@@ -52,6 +54,10 @@ while IFS= read -r f; do
   grep -q "apollo_router_" "$f" && FOUND=true && break
 done < <(find "$EXPECTED_METRICS_DIR" -maxdepth 1 -name "*.txt" -type f 2>/dev/null)
 [ "$FOUND" = true ] || fail "router-metrics: no per-pod metrics file contains apollo_router_ metrics"
+
+# --- host-collector diagnostic sidecar: present and fully redacted (see
+# specs/collection/data_sanitization/host_collector_diagnostics.md) ---
+assert_host_collector_diagnostics_redacted "$DIR"
 
 # --- clusterResources: pod is Running, zero restarts, expected resources ---
 # No image check here (unlike raw-manifest) - the official chart pins its own image tag,

@@ -1,0 +1,77 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: official-chart-metrics-no-servicemonitor
+spec:
+  # Deploys the official chart with serviceMonitor.enabled explicitly false 
+  # and confirms metrics collection still populates with real
+  # Prometheus output.
+  #
+  # Not concurrency-safe with official-chart or raw-manifest: all three use the collect
+  # script's hardcoded local port 9090 under mode: local.
+  concurrent: false
+  # This test's namespace holds more to tear down than the others (the extra
+  # metrics-probe pod from wait_for_metrics.sh, on top of both Helm releases), which has
+  # pushed namespace deletion past the default 30s cleanup timeout on a loaded CI runner
+  # even though the test's own checks already passed - bump it rather than let that
+  # false-fail the test.
+  timeouts:
+    cleanup: 90s
+  steps:
+    - try:
+        - script:
+            timeout: 120s
+            content: |
+              helm install router oci://ghcr.io/apollographql/helm-charts/router \
+                --version 2.17.0 \
+                -n "$NAMESPACE" \
+                --values ../official-chart/values.yaml \
+                --set serviceMonitor.enabled=false \
+                --set-file supergraphFile=../../fixtures/supergraph.graphql
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - assert:
+            timeout: 90s
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: router
+              status:
+                (conditions[?type == 'Available']):
+                - status: "True"
+        - script:
+            timeout: 10s
+            content: |
+              # The precondition this test exists to exercise: confirm serviceMonitor.enabled=false
+              # really did leave the Service with no metrics port, so a later pass can't be
+              # explained by the Service happening to expose one anyway.
+              if kubectl get service router -n "$NAMESPACE" -o jsonpath='{.spec.ports[*].name}' | grep -qw metrics; then
+                echo "precondition failed: Service already has a 'metrics' port - serviceMonitor.enabled=false didn't prevent it, or the chart's behavior changed" >&2
+                exit 1
+              fi
+              echo "confirmed: Service has no metrics port"
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        # Available only guarantees the chart's default readinessProbe (health_check, :8088)
+        # responded, not that the prometheus exporter (:9090) is serving yet - see
+        # wait_for_metrics.sh's own comment. Polls the pod IP directly, same path the tool
+        # itself uses, so this is also an independent confirmation the pod serves metrics
+        # with no Service involved at all.
+        - script:
+            timeout: 210s
+            content: |
+              ../scripts/wait_for_metrics.sh "$NAMESPACE"
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - script:
+            timeout: 120s
+            content: |
+              ../scripts/verify_metrics_no_servicemonitor.sh "$NAMESPACE" \
+                ../../../router-diagnostics-chart ../../../router-diagnostics-collect/collect.sh
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
