@@ -24,7 +24,7 @@ Go to [Data Collected](./data-collected) for the full per-signal breakdown—wha
 
 And it does this without touching Apollo's systems. You generate and store the bundle entirely within infrastructure you control, locally on disk or in a bucket you own. Apollo only sees it if and when you choose.
 
-The support tool is built on top of [troubleshoot.sh](https://troubleshoot.sh/), the open-source Kubernetes support-bundle framework, so collection and redaction are handled by their engine. The GraphOS Router Support Tool adds everything around it: what to collect, how the spec reaches your cluster, how you trigger a collection, and where the resulting bundle goes. We have also built custom redactors that ensure tokens, credentials, connection strings, and IP addresses are stripped automatically, along with router-specific values like JWT/auth configuration.
+The support tool is built on top of [troubleshoot.sh](https://troubleshoot.sh/), the open-source Kubernetes support-bundle framework, so collection and redaction are handled by their engine. The GraphOS Router Support Tool adds everything around it: what to collect, how the spec reaches your cluster, how you trigger a collection, and where the resulting bundle goes. We have also built custom redactors that ensure tokens, credentials, and connection strings are stripped automatically, along with router-specific values like JWT/auth configuration.
 
 A few things we built in deliberately:
 

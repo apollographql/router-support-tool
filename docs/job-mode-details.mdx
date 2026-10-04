@@ -23,7 +23,7 @@ The image bundles a pinned version of troubleshoot's `support-bundle` binary as 
 | Value | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `job.image.repository` | No | `apollograph/router-diagnostics` | The Job's container image, published by Apollo. Override only to pin an older version or point at a private mirror. |
-| `job.image.tag` | No | v1.0.0 | Tagged to match this chart's own release version—the troubleshoot.sh version it bundles is a separate, independently-pinned detail, recorded in a collected bundle's `meta.json` rather than in this tag. Override only to pin an older release or point at a private mirror. |
+| `job.image.tag` | No | Matches this chart's release version | The troubleshoot.sh version it bundles is a separate, independently-pinned detail, recorded in a collected bundle's `meta.json`. Override only to pin an older release or point at a private mirror. |
 | `job.image.pullPolicy` | No | `IfNotPresent` | Standard Kubernetes image pull policy |
 | `job.collectNodeMetrics` | No | `true` | Set `false` to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding entirely and decline `nodeMetrics` data up front. For more information, go to [Collecting Metrics → If Prometheus isn't set up yet](./collecting-metrics#if-prometheus-isnt-set-up-yet) |
 | `job.podAnnotations` | No | `{sidecar.istio.io/inject: "false", linkerd.io/inject: disabled}` | Annotations merged onto the Job's pod template—customer values win over these defaults. For more information, go to [Job Mode → Service mesh environments](./getting-started/job-mode#service-mesh-environments) |
