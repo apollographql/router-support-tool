@@ -57,6 +57,8 @@ Run it again any time you want another bundle.
 
 ![Terminal output during collect.sh](../resources/collect-local-mode.png)
 
+Note: `collect.sh` prints a JSON summary like `{"analyzerResults": [], "archivePath": "support-bundle-<timestamp>.tar.gz"}` when it finishes. An empty `analyzerResults` array is expected be because this tool ships no analyzers.
+
 The bundle lands in your current directory as `support-bundle-<timestamp>.tar.gz`. Inspect it, keep it, or attach it to a support ticket.
 
 ## Cleaning up
