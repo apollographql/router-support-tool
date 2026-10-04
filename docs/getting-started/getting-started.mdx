@@ -3,8 +3,9 @@ title: Getting Started
 subtitle: Choose how you'll run the GraphOS Router Support Tool
 description: Pick between mode local and mode job, and confirm what your Helm values need to supply based on how you deployed the router.
 ---
+This guide steps through generating your own on-demand support bundle collection from any Kubernetes-hosted router deployment.
 
-Getting a spec into the cluster is done through a single Helm chart, `router-diagnostics-chart`, with a `mode` value controlling how collection runs. Both modes collect the same spec with the same collectors and redactors. Who runs it, where it runs, and what it needs from you differ.
+Getting a troubleshoot.sh SupportBundle spec into the cluster is done through a single Helm chart, `router-diagnostics-chart`, with a `mode` value controlling how collection runs. Both modes collect the same spec with the same collectors and redactors. Who runs it, where it runs, and what it needs from you differ.
 
 There are two independent things you need to determine before installing anything:
 
