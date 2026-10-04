@@ -58,7 +58,7 @@ data:
             name: meta.json
             data: |
               {
-                "spec_version": "1",
+                "version": "{{ .Chart.Version }}",
                 "mode": "{{ .Values.mode }}",
                 "namespace": "{{ .Values.namespace }}",
                 {{- if eq .Values.mode "job" }}

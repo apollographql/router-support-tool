@@ -43,6 +43,8 @@ fail() {
 META="$DIR/meta.json"
 [ "$(jq -r '.mode' "$META")" = "local" ] || fail "meta.json mode != local"
 [ "$(jq -r '.namespace' "$META")" = "$NAMESPACE" ] || fail "meta.json namespace != $NAMESPACE"
+EXPECTED_VERSION=$(grep -m1 '^version:' "$CHART_PATH/Chart.yaml" | awk '{print $2}')
+[ "$(jq -r '.version' "$META")" = "$EXPECTED_VERSION" ] || fail "meta.json version != $CHART_PATH/Chart.yaml's version ($EXPECTED_VERSION)"
 
 # Check router-metrics (run host collector): one .txt per pod via outputDir
 EXPECTED_METRICS_DIR="$DIR/host-collectors/run-host/router-metrics/pods"
