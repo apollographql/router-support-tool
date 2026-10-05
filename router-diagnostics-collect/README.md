@@ -14,10 +14,6 @@ back from the chart release so it only needs `kubectl` and `curl` on `PATH` and 
    `--namespace` so a second `router-diagnostics` release elsewhere can't get its spec
    picked up instead.
 
-No pod found, or a pod's port-forward never becomes ready? Collection still runs and
-`router-metrics` fails with an attributable connection error rather than the run failing
-outright, and `nodeMetrics` remains available as a fallback.
-
 ## Usage
 
 ```bash

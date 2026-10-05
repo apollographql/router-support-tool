@@ -21,9 +21,7 @@ commit and overwrites the GitHub Release's notes with it.
 
 ## How to cut a release
 
-There's no `dev`/`main` split here — everything lives on `main`, unlike `apollographql/operator`'s
-`dev` → `main` release flow this is modeled on. "Prepare" and "Finalize" below are both against
-`main` directly.
+"Prepare" and "Finalize" below are both against `main` directly.
 
 1. **Verify CI is green on `main`** for the commit being released. This includes
    `run-rtf-test-plan.yaml`'s `build_job_image` job, which on every push to `main` builds the Job

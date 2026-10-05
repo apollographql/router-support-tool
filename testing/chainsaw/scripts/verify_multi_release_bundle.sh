@@ -8,6 +8,8 @@
 # chainsaw-test.yaml, which runs this with the test's own directory as its working directory.
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/assert_host_collector_diagnostics_redacted.sh"
+
 NAMESPACE=$1
 CHART_PATH=$2
 COLLECT_SCRIPT=$3
@@ -29,6 +31,10 @@ helm install "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
 BUNDLE=$(ls -t support-bundle-*.tar.gz | head -1)
 DIR="${BUNDLE%.tar.gz}"
 tar xzf "$BUNDLE"
+
+# host-collector diagnostic sidecar: present and fully redacted even though no real pod
+# matches the selector here (specs/collection/data_sanitization/host_collector_diagnostics.md
+assert_host_collector_diagnostics_redacted "$DIR"
 
 CONFIG_DIR="$DIR/configmaps/$NAMESPACE"
 ALPHA="$CONFIG_DIR/router-alpha.json"

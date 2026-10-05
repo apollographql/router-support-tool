@@ -21,7 +21,7 @@ jobs:
       - name: "Checkout code"
         uses: actions/checkout@v4
 
-      - name: "Publish chart to apollo-private-helm"
+      - name: "Publish chart to Apollo's internal Helm registry"
         uses: apollographql/release-tooling/release-helm-internal@6ab89bdcf9cd1a86ecaa85925b75e003405e5edc
         with:
           chart_path: router-diagnostics-chart
