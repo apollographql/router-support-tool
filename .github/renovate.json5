@@ -20,7 +20,7 @@
       managerFilePatterns: [
         '/^router-diagnostics-collect/collect\\.sh$/',
         '/^router-diagnostics-job-image/Dockerfile$/',
-        '/^router-diagnostics/templates/base-spec-configmap\\.yaml$/',
+        '/^router-diagnostics-chart/templates/base-spec-configmap\\.yaml$/',
       ],
       matchStrings: [
         'SUPPORT_BUNDLE_VERSION="(?<currentValue>.*?)"',
