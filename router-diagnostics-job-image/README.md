@@ -21,5 +21,9 @@ helm upgrade --install router-diagnostics router-diagnostics-chart \
   --set mode=job \
   --set job.image.repository=router-diagnostics-job-image \
   --set job.image.tag=dev \
-  --set job.image.pullPolicy=IfNotPresent
+  --set job.image.pullPolicy=IfNotPresent \
+  --set job.storage.provider=url \
+  --set job.storage.url.endpoint=<your-upload-endpoint>
 ```
+
+`job.storage.provider` is required for `mode: job`. `url` is the simplest option for a local test loop since it needs no cloud credentials, just an HTTP(S) endpoint to receive the upload. Go to `specs/storage/object_storage.md` for details.
