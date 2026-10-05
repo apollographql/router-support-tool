@@ -6,6 +6,8 @@ Bundles stay in customer infrastructure. Sensitive data is redacted automaticall
 
 Built on [troubleshoot.sh](https://troubleshoot.sh): this repository contains the SupportBundle spec defining what is collected, custom redactors for router-specific sensitive data, and the Helm chart that renders the spec into a cluster.
 
+This project is source-available under the Elastic License 2.0. Please refer to the `LICENSE` file in the root of the repo for further information.
+
 ## Documentation
 
 Design specifications live in [`specs/`](./specs). Start with [`specs/architecture.md`](./specs/architecture.md) — it defines the layer model the rest of the directory follows.
@@ -24,11 +26,16 @@ Deployment — where collection runs, what permissions it needs, and how the cus
 specs/
 ├── architecture.md          # Layer model — start here
 ├── user_experience.md       # Customer-facing flows and invocation
-├── collection/              # What is collected and how it is sanitized
-├── trigger/                 # What causes collection to happen
-├── storage/                 # Where bundles land
-└── deployment/              # Execution location, RBAC, deployment tiers
+├── artifact-distribution.md # How the chart/image/collect script are built and published
+├── release-process.md       # Versioning across those artifacts, and how to cut a release
+├── versions/                # What each version ships, and what it deliberately does not
+├── collection/               # What is collected and how it is sanitized
+├── trigger/                  # What causes collection to happen
+├── storage/                  # Where bundles land
+└── deployment/               # Execution location, RBAC, deployment tiers
 ```
+
+**`specs/versions/`** is the authority on what's actually shipped in a given release — the layer specs above describe the design across versions, including parts that may not exist yet. Check the relevant version file (for example, `specs/versions/v1.md`) before assuming a capability is present.
 
 ## How specs work
 
@@ -47,7 +54,31 @@ mise install
 mise exec -- lefthook install
 ```
 
-`git commit` then runs the fast, local-only checks (`check-ghafmt`, `generate-helm-docs`, `helm-lint`) against whatever you changed, and `git push` additionally runs `spec-lint`, which needs the network (it downloads real `support-bundle` releases). CI runs all of them regardless, as the backstop for a skipped or bypassed hook.
+`git commit` then runs the fast, local-only checks (`check-ghafmt`, `generate-helm-docs`, `helm-lint`, `test-storage-credentials`) against whatever you changed, and `git push` additionally runs `spec-lint`. CI runs all checks regardless, as the backstop for a skipped or bypassed hook, go to `.github/workflows/static-checks.yaml` for the full set. Run `mise tasks` to see every available task with a description.
+
+## Running the Chainsaw integration tests
+
+See [`testing/README.md`](./testing/README.md) for what lives in each subdirectory of `testing/`.
+
+[Chainsaw](https://kyverno.github.io/chainsaw/) installs `router-diagnostics-chart` against a real Kubernetes cluster (`testing/chainsaw/official-chart`, `official-chart-metrics-no-servicemonitor`, `raw-manifest`, `multi-release`) and asserts on the actual collected bundle. This is what exercises collection, redaction, and the host-collector diagnostics sidecar end-to-end.
+
+These tests only cover `mode: local`, against a local [KinD](https://kind.sigs.k8s.io) cluster. `mode: job` is covered separately via [RTF](https://github.com/apollographql/runtime-testing-framework) (`testing/data/`, `testing/test-plan.yaml`).
+
+`mise install` already provides everything these tests need (`chainsaw`, `kind`, `helm`, `kubectl`). To run them:
+
+```bash
+mise run kind-up        # creates a local KinD cluster named router-support-tool-test
+mise run e2e-chainsaw   # runs every tier against it
+mise run kind-down      # tear it down when you're done
+```
+
+Scope a run to one tier with `CHAINSAW_TEST_DIRS`:
+
+```bash
+CHAINSAW_TEST_DIRS=testing/chainsaw/raw-manifest mise run e2e-chainsaw
+```
+
+`mise run kind-up` reuses an existing cluster of the same name if one is already up — run `mise run kind-down` first if you want a clean one.
 
 ## Helm chart documentation
 
