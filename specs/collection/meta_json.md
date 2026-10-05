@@ -21,7 +21,7 @@ We generate this content **before** collection runs. The consequence is the cent
 
 | Field | Source | Why it matters |
 | --- | --- | --- |
-| `spec_version` | Chart / Operator | Which version of the spec produced this bundle. |
+| `version` | `.Chart.Version` | Which release of router-support-tool rendered this spec — the same `vX.Y.Z` published across the image, chart, and collect script. |
 | `mode` | Chart value | `local` or `job`. Establishes where collection ran |
 | `namespace` | Chart value | The namespace collection was scoped to |
 | `sidecar_injection_disabled` | Chart, `mode: job` only | Records that the Job ran outside the mesh.|
@@ -37,7 +37,7 @@ Every field this file actually specifies, for a `mode: job` install:
 
 ```json
 {
-  "spec_version": "1",
+  "version": "0.4.0",
   "mode": "job",
   "namespace": "production",
   "sidecar_injection_disabled": true,

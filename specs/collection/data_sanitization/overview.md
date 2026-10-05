@@ -135,7 +135,7 @@ Every mechanism here fails silently, so verification needs a way to tell a rule 
 
 ## Choosing a mechanism
 
-The `helm` collector never captures the router's configuration values — only release metadata (name, chart, version, revision history), since `collectValues` is never set to `true` (see `specs/collection/base_spec.md` → `router.yaml` capture). So `helm/*.json` never carries a router secret to redact in the first place, and every `router.yaml`-scoped redactor in this directory has exactly one surface and one mechanism to reach for:
+Every `router.yaml`-scoped redactor in this directory has exactly one surface and one mechanism to reach for:
 
 | Surface | Shape | Mechanism |
 | --- | --- | --- |

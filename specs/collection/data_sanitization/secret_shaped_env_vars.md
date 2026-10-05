@@ -42,4 +42,4 @@ This masks the value of **any** env var whose name ends in `KEY` or `_KEY`, not 
 
 ## What's deliberately left visible
 
-`APOLLO_GRAPH_REF` and `APOLLO_ROUTER_OFFICIAL_HELM_CHART`, the other env vars this repo's base spec table calls out — neither is a credential, both are useful for bundle tagging and deployment-tier detection (`specs/collection/base_spec.md`).
+`APOLLO_GRAPH_REF` and `APOLLO_ROUTER_OFFICIAL_HELM_CHART`, the other env vars this repo's base spec table calls out — neither is a credential, both are useful for diagnosis and deployment-tier detection (`specs/collection/base_spec.md`).
