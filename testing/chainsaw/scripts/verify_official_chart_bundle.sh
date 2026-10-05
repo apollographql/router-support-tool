@@ -146,9 +146,10 @@ jq -e '.data["configuration.yaml"] | contains("listen: 0.0.0.0:9090")' "$CONFIG"
 jq -e '.data["configuration.yaml"] | contains("path: /metrics")' "$CONFIG" > /dev/null \
   || fail "collected config: telemetry.exporters.metrics.prometheus.path != /metrics"
 
-# --- <release>-supergraph ConfigMap (templates/supergraph-cm.yaml), via clusterResources -
-# the chart's own supergraph ConfigMap isn't collected by our configMap collector, which
-# only targets the rendered router config.
+# --- <release>-supergraph ConfigMap (templates/supergraph-cm.yaml) -
+# also collected a second time by the configMap collector (configmaps/$NAMESPACE/router-supergraph.json),
+# since it carries the same app.kubernetes.io/name=router label the main config does - checked here via
+# the clusterResources copy, which is always present regardless of mode/selector.
 SCHEMA_CONFIG="$DIR/cluster-resources/configmaps/$NAMESPACE.json"
 
 # --- Redaction tests: every sentinel value planted in the fixtures is named SENTINEL_* -

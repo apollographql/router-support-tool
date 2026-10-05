@@ -13,7 +13,7 @@
       { … }
 ```
 
-We generate this content **before** collection runs. The consequence is the central design constraint here: **`meta.json` can only contain facts known when the spec is rendered** — by the Helm chart at install time, or by the Operator when it writes the spec. It cannot contain anything discovered during collection such as `router_version`, `graph_ref`, or a collection timestamp.
+We generate this content **before** collection runs. The consequence is the central design constraint here: **`meta.json` can only contain facts known when the spec is rendered** by the Helm chart at install time. It cannot contain anything discovered during collection such as `router_version`, `graph_ref`, or a collection timestamp.
 
 ## Contents
 
