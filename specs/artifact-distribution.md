@@ -38,9 +38,8 @@ curl -sSLo collect.sh https://router.apollo.dev/router-diagnostics-collect/lates
 **Source:** `router-diagnostics-chart/`
 
 **Internal build:** `.github/workflows/build-chart.yaml`, on every PR and every push to `main`,
-unconditionally. Publishes to Apollo's internal registry
-(`oci://us-central1-docker.pkg.dev/platform-cross-environment/apollo-private-helm`), keyed by
-commit SHA (`0.0.0+<sha>`) on merge to main.
+unconditionally. Publishes to Apollo's internal Helm registry, keyed by commit SHA
+(`0.0.0+<sha>`) on merge to main.
 
 **External publish:** to `oci://registry-1.docker.io/apollograph/router-diagnostics-chart`.
 Packaged fresh from the release tag's source, not re-published from the internal build.
