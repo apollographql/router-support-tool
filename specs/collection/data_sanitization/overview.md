@@ -117,7 +117,7 @@ The `configmaps` surfaces are bounded well under the cap by Kubernetes' ~1MiB Co
 
 ### A reported error means the bundle is not safe to share
 
-This should be included in our customer facing docs.
+This is included in customer-facing docs — see `docs/data-collected.mdx` and `docs/bundle-storage.mdx`, "Before you share a bundle".
 
 | What the customer sees | What it means |
 | --- | --- |
