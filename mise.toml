@@ -1,6 +1,6 @@
 [tools]
 helm = "3.17.3"
-kubectl = "1.37.0"
+kubectl = "1.37.1"
 kind = "0.31.0"
 yq = "4.45.4"
 jq = "1.7.1"
