@@ -1,0 +1,105 @@
+---
+title: "mode: local Reference"
+subtitle: "Full chart values, script mechanics, and permissions for mode: local"
+description: Complete reference for running the GraphOS Router Support Tool as mode local — every chart value, what the router-diagnostics collect script does, and exactly what RBAC it needs.
+---
+
+import ChartValuesCommon from './resources/chart-values-common.mdx';
+import ConfirmingRBAC from './resources/confirming-rbac.mdx';
+
+This page is the complete reference for `mode: local`. For the shortest path to a first bundle, go to [Local Mode](./getting-started/local-mode) in the Getting Started guide instead.
+
+## The `router-diagnostics` collect script
+
+Collection for `mode: local` runs through a standalone script:
+
+```bash
+curl -sSLo collect.sh https://router.apollo.dev/router-diagnostics-collect/latest
+chmod +x collect.sh
+```
+
+This gives you a `./collect.sh` command, which caches a pinned `support-bundle` binary locally, keyed by version—a pin bump downloads a fresh binary rather than reusing a stale one. Apollo controls this version, the same way `mode: job`'s image tag does.
+
+**`--namespace` is a plain, required flag**. It must match wherever you actually installed the chart: both the `helm install --namespace` value and the chart's own `--set namespace=<router_namespace>` value (typically the same namespace in practice). `collect.sh` uses it directly for its `kubectl` calls and for `support-bundle --load-cluster-specs --namespace`, which is what discovers the rendered spec ConfigMap.
+
+## Chart values
+
+<ChartValuesCommon />
+
+## Kubernetes RBAC
+
+Installing the chart requires permission to create a ConfigMap in the target namespace, which is the same level of access needed to install the router itself.
+
+Running `./collect.sh` uses **your own existing kubectl credentials**; no additional ServiceAccount is created for this step. Reaching the metrics collector additionally needs `create` on the `pods/portforward` subresource in the router's namespace. For more information, go to [Collecting Metrics](./collecting-metrics#mode-local). Declining this doesn't fail collection; it only means that section comes back empty.
+
+**`pods/exec` isn't required**: nothing this tool does runs inside your router container.
+
+<ConfirmingRBAC />
+
+## Cluster footprint
+
+Spec ConfigMap plus Helm release metadata is left behind after install. Once installed, subsequent collections are just `./collect.sh --namespace <namespace>` again, with no reinstall needed. If you'd rather leave nothing behind:
+
+```bash
+helm uninstall router-diagnostics --namespace <namespace>
+```
+
+## Bundle output shape
+
+Extracting `support-bundle-<timestamp>.tar.gz` yields one top-level directory. `version.yaml`, `analysis.json`, `cluster-info/`, and `execution-data/summary.txt` always land in it, written unconditionally by the engine itself regardless of what the spec declares; `meta.json` is ours. `execution-data/summary.txt` is worth a look if something seems off — it's a human-readable per-collector success/failure/timing report.
+
+Worked example, for a `mode: local` collection against `production`:
+
+```
+support-bundle-2026-08-11T14_23_00/
+├── version.yaml
+├── analysis.json
+├── meta.json
+├── cluster-info/
+│   └── cluster_version.json
+├── execution-data/
+│   └── summary.txt
+├── host-collectors/
+│   └── run-host/
+│       ├── router-metrics-info.json                               # masked wholesale — see Collecting Metrics
+│       ├── router-metrics.txt                                     # the engine's own stdout capture
+│       └── router-metrics/
+│           └── pods/
+│               ├── <pod-name>.txt
+│               └── <pod-2-name>.txt
+├── router-logs/
+│   └── <router-pod-name>/
+│       └── router.log -> ../../cluster-resources/pods/logs/production/<router-pod-name>/router.log
+├── cluster-resources/
+│   ├── pods/
+│   │   ├── production.json
+│   │   └── logs/production/<router-pod-name>/router.log         # the real file behind the symlink above
+│   ├── configmaps/production.json
+│   ├── events/production.json
+│   ├── nodes.json
+│   └── ...
+├── node-metrics/
+│   └── <node-name>.json
+└── configmaps/
+    └── production/
+        └── <release-name>.json
+```
+
+- **`host-collectors/run-host/router-metrics/pods/`** — one `<pod-name>.txt` per router pod matching `selector`, written by the `router-metrics` host collector's script. This nested path (not a top-level `router-metrics/`) is how troubleshoot.sh lays out a `hostCollectors.run` collector's output, go to [Collecting Metrics](./collecting-metrics#mode-local) for the mechanics.
+- **`host-collectors/run-host/router-metrics-info.json`** — a diagnostic sidecar troubleshoot.sh writes for every `hostCollectors.run` collector. Its contents are masked wholesale. For more details, go to [Collecting Metrics](./collecting-metrics#mode-local).
+- **`host-collectors/run-host/router-metrics.txt`** — the engine's own stdout capture for the collector as a whole, separate from the per-pod files under `pods/`. Our script only writes to stdout when no pod responds.
+- If more than one router release matched the label selector in `production`, `configmaps/production/` becomes multiple files, one per release:
+
+  ```
+  configmaps/
+  └── production/
+      ├── <release-1-name>.json
+      └── <release-2-name>.json
+  ```
+- `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace. `configmaps/production/<release-name>.json` is the dedicated `configMap` collector's own output.
+
+<Note>
+
+`keyExists: false` in `configmaps/<namespace>/<release-name>.json` doesn't mean the config is missing. This is a troubleshoot.sh quirk: the `configMap` collector's `keyExists` field is only ever set `true` when the collector is configured with a specific key to look for. Our spec uses `includeAllData: true` with no key set, so `keyExists` is always `false` in this output, regardless of whether the config was actually captured. Check for the config data in that same file, rather than reading `keyExists` as a success/failure signal.
+
+</Note>

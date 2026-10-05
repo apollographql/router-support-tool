@@ -3,14 +3,14 @@ ARG GCLOUD_VERSION=584.0.0
 
 FROM gcr.io/google.com/cloudsdktool/google-cloud-cli:${GCLOUD_VERSION}-alpine AS gcloud-sdk
 
-FROM alpine:3.22
+FROM alpine:3.24
 
-# renovate: datasource=repology depName=alpine_3_22/ca-certificates versioning=loose
+# renovate: datasource=repology depName=alpine_3_24/ca-certificates versioning=loose
 ARG CA_CERTIFICATES_VERSION="20260909-r0"
-# renovate: datasource=repology depName=alpine_3_22/aws-cli versioning=loose
-ARG AWS_CLI_VERSION="2.27.25-r0"
-# renovate: datasource=repology depName=alpine_3_22/curl versioning=loose
-ARG CURL_VERSION="8.14.1-r3"
+# renovate: datasource=repology depName=alpine_3_24/aws-cli versioning=loose
+ARG AWS_CLI_VERSION="2.34.63-r0"
+# renovate: datasource=repology depName=alpine_3_24/curl versioning=loose
+ARG CURL_VERSION="8.22.0-r0"
 RUN apk add --no-cache \
     ca-certificates="${CA_CERTIFICATES_VERSION}" \
     aws-cli="${AWS_CLI_VERSION}" \
