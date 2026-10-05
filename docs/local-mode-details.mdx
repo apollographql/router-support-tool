@@ -43,7 +43,7 @@ helm uninstall router-diagnostics --namespace <namespace>
 
 ## Bundle output shape
 
-Extracting `support-bundle-<timestamp>.tar.gz` yields one top-level directory. `version.yaml` and `analysis.json` always land at its root, written by the engine itself; `meta.json` is ours.
+Extracting `support-bundle-<timestamp>.tar.gz` yields one top-level directory. `version.yaml`, `analysis.json`, `cluster-info/`, and `execution-data/summary.txt` always land in it, written unconditionally by the engine itself regardless of what the spec declares; `meta.json` is ours. `execution-data/summary.txt` is worth a look if something seems off — it's a human-readable per-collector success/failure/timing report.
 
 Worked example, for a `mode: local` collection against `production`:
 
@@ -52,8 +52,14 @@ support-bundle-2026-08-11T14_23_00/
 ├── version.yaml
 ├── analysis.json
 ├── meta.json
+├── cluster-info/
+│   └── cluster_version.json
+├── execution-data/
+│   └── summary.txt
 ├── host-collectors/
 │   └── run-host/
+│       ├── router-metrics-info.json                               # masked wholesale — see Collecting Metrics
+│       ├── router-metrics.txt                                     # the engine's own stdout capture
 │       └── router-metrics/
 │           └── pods/
 │               ├── <pod-name>.txt
@@ -77,6 +83,8 @@ support-bundle-2026-08-11T14_23_00/
 ```
 
 - **`host-collectors/run-host/router-metrics/pods/`** — one `<pod-name>.txt` per router pod matching `selector`, written by the `router-metrics` host collector's script. This nested path (not a top-level `router-metrics/`) is how troubleshoot.sh lays out a `hostCollectors.run` collector's output, go to [Collecting Metrics](./collecting-metrics#mode-local) for the mechanics.
+- **`host-collectors/run-host/router-metrics-info.json`** — a diagnostic sidecar troubleshoot.sh writes for every `hostCollectors.run` collector. Its contents are masked wholesale. For more details, go to [Collecting Metrics](./collecting-metrics#mode-local).
+- **`host-collectors/run-host/router-metrics.txt`** — the engine's own stdout capture for the collector as a whole, separate from the per-pod files under `pods/`. Our script only writes to stdout when no pod responds.
 - If more than one router release matched the label selector in `production`, `configmaps/production/` becomes multiple files, one per release:
 
   ```

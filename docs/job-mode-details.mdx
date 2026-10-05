@@ -64,7 +64,7 @@ helm uninstall router-diagnostics --namespace <namespace>
 
 ## Bundle output shape
 
-Extracting `support-bundle-<timestamp>.tar.gz` yields one top-level directory. `version.yaml` and `analysis.json` always land at its root, written by the engine itself; `meta.json` is ours.
+Extracting `support-bundle-<timestamp>.tar.gz` yields one top-level directory. `version.yaml`, `analysis.json`, `cluster-info/`, and `execution-data/summary.txt` always land in it, written unconditionally by the engine itself regardless of what the spec declares; `meta.json` is ours. `execution-data/summary.txt` is worth a look if something seems off — it's a human-readable per-collector success/failure/timing report.
 
 Worked example, for a `mode: job` install in the `production` namespace:
 
@@ -73,6 +73,10 @@ support-bundle-2026-08-11T14_23_00/
 ├── version.yaml
 ├── analysis.json
 ├── meta.json
+├── cluster-info/
+│   └── cluster_version.json
+├── execution-data/
+│   └── summary.txt
 ├── router-metrics-<pod-name>/
 │   └── result.json
 ├── router-logs/

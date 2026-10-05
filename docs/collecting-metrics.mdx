@@ -39,6 +39,7 @@ Each pod's scrape lands in its own `<pod-name>.txt` file, but **not** under a to
 
 ```
 host-collectors/run-host/
+├── router-metrics-info.json
 └── router-metrics/
     └── pods/
         ├── <pod-name>.txt
@@ -46,6 +47,8 @@ host-collectors/run-host/
 ```
 
 This is different from `mode: job`'s layout, where each pod gets its own top-level `router-metrics-<pod-name>/result.json` instead — worth knowing if you're scripting against bundle contents. This needs `create` on the `pods/portforward` subresource in the router's namespace; declining it doesn't fail collection, but no pod will respond and this section stays empty. If no pod responds, the script writes a plain explanation into the output instead of leaving it silently empty.
+
+A second file, `*-info.json`, is also written under `mode: local` and it's fully masked. troubleshoot.sh writes this diagnostic sidecar for every `hostCollectors.run` collector and it records the full exec invocation, including the process environment of the machine `collect.sh` ran on. Two things limit what ends up in your bundle: the chart sets `ignoreParentEnvs: true`, which narrows that captured environment down to just `PATH`/`KUBECONFIG`/`PWD` before the file is even written and a redactor masks the entire file's contents.
 
 ## If Prometheus isn't set up yet
 
