@@ -28,7 +28,7 @@ underlying artifact location, not what we point customers at directly.
 **Customers install through Orbiter:**
 
 ```bash
-curl -sSLo collect.sh https://rover.apollo.dev/<path-TODO>/router-diagnostics-collect/latest
+curl -sSLo collect.sh https://router.apollo.dev/router-diagnostics-collect/latest
 ```
 
 ---

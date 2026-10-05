@@ -65,7 +65,7 @@ See [Permissions for on-demand collection](#permissions-for-on-demand-collection
 Download the collect script onto the machine you'll collect from, and make it executable.
 
 ```bash
-curl -sSLo collect.sh https://storage.googleapis.com/<bucket>/router-diagnostics-collect.sh
+curl -sSLo collect.sh https://router.apollo.dev/router-diagnostics-collect/latest
 chmod +x collect.sh
 ```
 
