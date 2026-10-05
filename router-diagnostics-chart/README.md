@@ -1,6 +1,6 @@
 # router-diagnostics-chart
 
-![Version: 0.4.0](https://img.shields.io/badge/Version-0.4.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1](https://img.shields.io/badge/AppVersion-1-informational?style=flat-square)
+![Version: 0.5.0](https://img.shields.io/badge/Version-0.5.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1](https://img.shields.io/badge/AppVersion-1-informational?style=flat-square)
 
 On-demand troubleshoot.sh support-bundle collection for Apollo Router.
 
@@ -9,7 +9,7 @@ On-demand troubleshoot.sh support-bundle collection for Apollo Router.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | configMapName | string | `""` | Raw-manifest / custom deployments only. Name of the ConfigMap holding the router's rendered config. Defaults to label-based discovery (via `selector`). Leave unset when the router was deployed via the official Apollo Helm chart. |
-| job | object | `{"collectNodeMetrics":true,"image":{"pullPolicy":"IfNotPresent","repository":"apollograph/router-diagnostics","tag":"v0.4.0"},"imagePullSecrets":[],"podAnnotations":{},"podLabels":{},"serviceAccount":{"annotations":{}},"storage":{"bucket":"","existingSecret":"","gcs":{"credentialsJson":"","project":""},"prefix":"","provider":"","s3":{"accessKeyId":"","endpoint":"","forcePathStyle":false,"region":"","secretAccessKey":""},"url":{"endpoint":"","headers":{},"method":"PUT"}},"ttlSecondsAfterFinished":3600}` | mode: job only |
+| job | object | `{"collectNodeMetrics":true,"image":{"pullPolicy":"IfNotPresent","repository":"apollograph/router-diagnostics","tag":"v0.5.0"},"imagePullSecrets":[],"podAnnotations":{},"podLabels":{},"serviceAccount":{"annotations":{}},"storage":{"bucket":"","existingSecret":"","gcs":{"credentialsJson":"","project":""},"prefix":"","provider":"","s3":{"accessKeyId":"","endpoint":"","forcePathStyle":false,"region":"","secretAccessKey":""},"url":{"endpoint":"","headers":{},"method":"PUT"}},"ttlSecondsAfterFinished":3600}` | mode: job only |
 | job.collectNodeMetrics | bool | `true` | Optional. Set false to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding that grants the nodeMetrics collector its nodes/nodes-proxy/nodes-stats access and to decline that collector's data entirely up front. Prometheus is the preferred alternative. Defaults to true. |
 | job.image.repository | string | `"apollograph/router-diagnostics"` | The image bundling the support-bundle binary Apollo publishes, tagged to match this chart's own release version. The troubleshoot.sh version it bundles is a separate, independently-pinned detail — see a collected bundle's meta.json find out which one. Override only to pin an older release or point at a private mirror. |
 | job.imagePullSecrets | list | `[]` | Optional. Names of existing image pull secrets to attach to the Job's pod, in the standard Kubernetes `imagePullSecrets` shape (e.g. `[{name: my-registry-secret}]`). Only needed if you've overridden `job.image.repository` to point at a private mirror. |
