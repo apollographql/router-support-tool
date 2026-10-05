@@ -2,7 +2,7 @@
 helm = "3.17.3"
 kubectl = "1.37.1"
 kind = "0.31.0"
-yq = "4.45.4"
+yq = "4.54.1"
 jq = "1.7.1"
 kubeconform = "0.8.0"
 lefthook = "2.1.15"
