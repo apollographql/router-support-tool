@@ -6,6 +6,8 @@ Bundles stay in customer infrastructure. Sensitive data is redacted automaticall
 
 Built on [troubleshoot.sh](https://troubleshoot.sh): this repository contains the SupportBundle spec defining what is collected, custom redactors for router-specific sensitive data, and the Helm chart that renders the spec into a cluster.
 
+This project is source-available under the Elastic License 2.0. Please refer to the `LICENSE` file in the root of the repo for further information.
+
 ## Documentation
 
 Design specifications live in [`specs/`](./specs). Start with [`specs/architecture.md`](./specs/architecture.md) — it defines the layer model the rest of the directory follows.
