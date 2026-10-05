@@ -1,28 +1,60 @@
 name: Test with RTF
 
+# Builds the Job image and runs RTF against it
 on:
-  workflow_run:
-    types: [completed]
-    workflows: ["Build Job Image"]
+  pull_request: {}
+  push:
+    branches:
+      - main
 
 jobs:
+  build_job_image:
+    name: "Build router-diagnostics Job image"
+    permissions:
+      contents: read
+      id-token: write
+    uses: apollographql/release-tooling/.github/workflows/build_and_publish.yml@6ab89bdcf9cd1a86ecaa85925b75e003405e5edc
+    with:
+      image_name: router-diagnostics
+      image_description: "Collection binary and object-storage upload tooling for the router support tool's job mode."
+      platforms: '[{"platform":"linux/amd64","runner":"ubuntu-latest"},{"platform":"linux/arm64","runner":"ubuntu-24.04-arm"}]'
+      context: router-diagnostics-job-image
+      dockerfile_location: router-diagnostics-job-image/Dockerfile
+    secrets: inherit
+
+  scan_job_image:
+    name: "Scan router-diagnostics Job image"
+    needs: [build_job_image]
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/scan-job-image.yaml
+    with:
+      tag_to_test: ${{ github.ref_name == github.event.repository.default_branch && github.sha || github.event.pull_request.head.sha }}
+    secrets: inherit
+
   run_rtf_test_plan:
     name: Run RTF Test Plan
-    # workflow_run fires for every conclusion (success, failure, cancelled) of the upstream
-    # run, not just success - only proceed once it actually succeeded.
-    if: github.event.workflow_run.conclusion == 'success'
+    needs: [build_job_image]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
+      - name: "Resolve commit SHA"
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
         with:
-          # On a workflow_run trigger, github.sha is the tip of the default branch right now,
-          # not the commit "Build Job Image" actually built. head_sha is that exact commit.
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ steps.resolve.outputs.sha }}
 
       - uses: apollographql/release-tooling/rtf-orchestrator-run-known@0164abcc44f36be7659ce0be5bc984e4f44614d1
         with:
-          git_ref: ${{ github.event.workflow_run.head_sha }}
+          git_ref: ${{ steps.resolve.outputs.sha }}
           test_plan_id: d92be985-ca2a-457c-9fc8-d692256782ae

@@ -1,0 +1,258 @@
+# This ConfigMap is not mounted anywhere and has no effect on the running router, it exists
+# solely as a target for the router-support-tool's own configMap collector to discover and
+# collect during this test and for us to test custom redaction.
+# The router itself is actually configured via file_providers (see base-router-config.yaml,
+# which this ConfigMap's router.yaml key must stay in sync with byte-for-byte).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: router-config
+  labels:
+    app: router
+data:
+  router.yaml: |
+    supergraph:
+      listen: 0.0.0.0:4000
+
+    health_check:
+      listen: 0.0.0.0:8088
+      enabled: true
+
+    telemetry:
+      exporters:
+        metrics:
+          prometheus:
+            enabled: true
+            listen: 0.0.0.0:9090
+            path: /metrics
+      instrumentation:
+        events:
+          supergraph:
+            request: info
+            response: info
+
+    apq:
+      router:
+        cache:
+          redis:
+            urls:
+              - "redis://localhost:6391"
+            username: SENTINEL_REDIS_USERNAME
+            password: SENTINEL_REDIS_PASSWORD
+            required_to_start: false
+
+    authentication:
+      router:
+        jwt:
+          jwks:
+            - url: http://localhost:9090/jwks-not-found
+              issuers:
+                - "https://issuer.example.com"
+              algorithms:
+                - RS256
+              headers:
+                - name: x-vault-token
+                  value: "SENTINEL_JWKS_HEADER_VALUE"
+      subgraph:
+        all:
+          aws_sig_v4:
+            hardcoded:
+              access_key_id: SENTINEL_AWS_ACCESS_KEY_ID
+              secret_access_key: SENTINEL_AWS_SECRET_ACCESS_KEY
+              region: us-east-1
+              service_name: vpc-lattice-svcs
+
+    tls:
+      supergraph:
+        certificate: |
+          -----BEGIN CERTIFICATE-----
+          MIIBgTCCASegAwIBAgIUekJsIs9C1ZtolJXebnaYJsfLtxgwCgYIKoZIzj0EAwIw
+          FjEUMBIGA1UEAwwLcm91dGVyLnRlc3QwHhcNMjYwOTE3MTgxNDI5WhcNMzYwOTE0
+          MTgxNDI5WjAWMRQwEgYDVQQDDAtyb3V0ZXIudGVzdDBZMBMGByqGSM49AgEGCCqG
+          SM49AwEHA0IABBGOhC/TFU3UGGlm/VD9eBRSMN9CXzoXPw49jBmPyEwzWep4Y4Yi
+          APuqRGQKeRF2YfQNuwSnIB6zUlxLSj7VgbSjUzBRMB0GA1UdDgQWBBQmCYkI7Aj2
+          64ItWhykR6AZCr5WJDAfBgNVHSMEGDAWgBQmCYkI7Aj264ItWhykR6AZCr5WJDAP
+          BgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0gAMEUCIQD5k6F3ABm5lxPTFulz
+          PaWHFMM0PXdLRcGdBtw/Zyba5QIgaayUclmeo408Yr/mCb7ZZfJS1vjj3Rtq4/Yg
+          TU/XGqo=
+          -----END CERTIFICATE-----
+        key: |
+          -----BEGIN EC PRIVATE KEY-----
+          MHcCAQEEIAVoZMBkcnizlfy10FJb+iXKFvKaWL2pHoVrb2PtxvGcoAoGCCqGSM49
+          AwEHoUQDQgAEEY6EL9MVTdQYaWb9UP14FFIw30JfOhc/Dj2MGY/ITDNZ6nhjhiIA
+          +6pEZAp5EXZh9A27BKcgHrNSXEtKPtWBtA==
+          -----END EC PRIVATE KEY-----
+        certificate_chain: |
+          -----BEGIN CERTIFICATE-----
+          MIIBgTCCASegAwIBAgIUekJsIs9C1ZtolJXebnaYJsfLtxgwCgYIKoZIzj0EAwIw
+          FjEUMBIGA1UEAwwLcm91dGVyLnRlc3QwHhcNMjYwOTE3MTgxNDI5WhcNMzYwOTE0
+          MTgxNDI5WjAWMRQwEgYDVQQDDAtyb3V0ZXIudGVzdDBZMBMGByqGSM49AgEGCCqG
+          SM49AwEHA0IABBGOhC/TFU3UGGlm/VD9eBRSMN9CXzoXPw49jBmPyEwzWep4Y4Yi
+          APuqRGQKeRF2YfQNuwSnIB6zUlxLSj7VgbSjUzBRMB0GA1UdDgQWBBQmCYkI7Aj2
+          64ItWhykR6AZCr5WJDAfBgNVHSMEGDAWgBQmCYkI7Aj264ItWhykR6AZCr5WJDAP
+          BgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0gAMEUCIQD5k6F3ABm5lxPTFulz
+          PaWHFMM0PXdLRcGdBtw/Zyba5QIgaayUclmeo408Yr/mCb7ZZfJS1vjj3Rtq4/Yg
+          TU/XGqo=
+          -----END CERTIFICATE-----
+      subgraph:
+        all:
+          client_authentication:
+            certificate_chain: |
+              -----BEGIN CERTIFICATE-----
+              MIIBkzCCATmgAwIBAgIUNLZFU9S8R9w1EPX2QjC3VMRp4JUwCgYIKoZIzj0EAwIw
+              HzEdMBsGA1UEAwwUc3ViZ3JhcGgtY2xpZW50LnRlc3QwHhcNMjYwOTE3MTgxNDI5
+              WhcNMzYwOTE0MTgxNDI5WjAfMR0wGwYDVQQDDBRzdWJncmFwaC1jbGllbnQudGVz
+              dDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJDXq0xDTcRSyY1zevSBtyilRLPF
+              p5bU+rBf/G2ERYemknU55Bl9K2Dkd24EqBzP7mwSXQYAMvbcf1dCRFMhi/mjUzBR
+              MB0GA1UdDgQWBBRnTYrhVOJnBe/4KeswivuFwDH77DAfBgNVHSMEGDAWgBRnTYrh
+              VOJnBe/4KeswivuFwDH77DAPBgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0gA
+              MEUCIQD2Oz1cs+qureSKoopOLq4tbMZM1UiI5M3vGXGuM7V84gIgP4YTIjYYmibz
+              zMTuNP5Zv2G0gSkMz2wvBA8RJJ29VEQ=
+              -----END CERTIFICATE-----
+            key: |
+              -----BEGIN EC PRIVATE KEY-----
+              MHcCAQEEIBNWKJI+2L6hGCXDV/TrRM6tScIOnXdTw34PdYkHDGvWoAoGCCqGSM49
+              AwEHoUQDQgAEkNerTENNxFLJjXN69IG3KKVEs8WnltT6sF/8bYRFh6aSdTnkGX0r
+              YOR3bgSoHM/ubBJdBgAy9tx/V0JEUyGL+Q==
+              -----END EC PRIVATE KEY-----
+      connector:
+        all:
+          client_authentication:
+            certificate_chain: |
+              -----BEGIN CERTIFICATE-----
+              MIIBlDCCATugAwIBAgIUKkfoiBYLSaYEsPH09yo14F/3fo0wCgYIKoZIzj0EAwIw
+              IDEeMBwGA1UEAwwVY29ubmVjdG9yLWNsaWVudC50ZXN0MB4XDTI2MDkxNzE4MTQy
+              OVoXDTM2MDkxNDE4MTQyOVowIDEeMBwGA1UEAwwVY29ubmVjdG9yLWNsaWVudC50
+              ZXN0MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEw8FPJfapEzz15DXvrZLGz8Et
+              fIFFFYg2Mju/bQRLolpRGyUox4ryLW2szQ5JrqWFfha50aEkzDpQEQuwlmGnwqNT
+              MFEwHQYDVR0OBBYEFDxRmM6ekBvXbOIMkEAafrJsUcZ2MB8GA1UdIwQYMBaAFDxR
+              mM6ekBvXbOIMkEAafrJsUcZ2MA8GA1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwID
+              RwAwRAIgXZbg45A76gye+uMJec/9xM6YCK7eibSo3N7HTCscma8CIBabbfWsnziq
+              cwn1uKPZBEVm4rCxrcruyUDEf3WT+WKG
+              -----END CERTIFICATE-----
+            key: |
+              -----BEGIN EC PRIVATE KEY-----
+              MHcCAQEEILKPwQVyeMfux+nXAigxk/pd+ZtWpTTkmZG+2q3aDv4BoAoGCCqGSM49
+              AwEHoUQDQgAEw8FPJfapEzz15DXvrZLGz8EtfIFFFYg2Mju/bQRLolpRGyUox4ry
+              LW2szQ5JrqWFfha50aEkzDpQEQuwlmGnwg==
+              -----END EC PRIVATE KEY-----
+
+    override_subgraph_url:
+      accounts: "https://accounts.internal.svc.cluster.local:4001/graphql"
+      inventory: https://svc-user:SENTINEL_SUBGRAPH_URL_PASSWORD@inventory.internal.svc.cluster.local:4001/graphql
+  supergraph.graphql: |
+    schema
+        @link(url: "https://specs.apollo.dev/link/v1.0")
+        @link(url: "https://specs.apollo.dev/join/v0.3", for: EXECUTION) {
+        query: Query
+    }
+
+    directive @join__enumValue(graph: join__Graph!) repeatable on ENUM_VALUE
+
+    directive @join__field(
+        graph: join__Graph
+        requires: join__FieldSet
+        provides: join__FieldSet
+        type: String
+        external: Boolean
+        override: String
+        usedOverridden: Boolean
+    ) repeatable on FIELD_DEFINITION | INPUT_FIELD_DEFINITION
+
+    directive @join__graph(name: String!, url: String!) on ENUM_VALUE
+
+    directive @join__implements(
+        graph: join__Graph!
+        interface: String!
+    ) repeatable on OBJECT | INTERFACE
+
+    directive @join__type(
+        graph: join__Graph!
+        key: join__FieldSet
+        extension: Boolean! = false
+        resolvable: Boolean! = true
+        isInterfaceObject: Boolean! = false
+    ) repeatable on OBJECT | INTERFACE | UNION | ENUM | INPUT_OBJECT | SCALAR
+
+    directive @join__unionMember(
+        graph: join__Graph!
+        member: String!
+    ) repeatable on UNION
+
+    directive @link(
+        url: String
+        as: String
+        for: link__Purpose
+        import: [link__Import]
+    ) repeatable on SCHEMA
+
+    scalar join__FieldSet
+
+    enum join__Graph {
+        ACCOUNTS @join__graph(name: "accounts", url: "http://0.0.0.0:4200/accounts")
+        INVENTORY @join__graph(name: "inventory", url: "http://0.0.0.0:4200/inventory")
+        PRODUCTS @join__graph(name: "products", url: "http://0.0.0.0:4200/products")
+        REVIEWS @join__graph(name: "reviews", url: "http://0.0.0.0:4200/reviews")
+    }
+
+    scalar link__Import
+
+    enum link__Purpose {
+        """
+        `SECURITY` features provide metadata necessary to securely resolve fields.
+        """
+        SECURITY
+
+        """
+        `EXECUTION` features provide metadata necessary for operation execution.
+        """
+        EXECUTION
+    }
+
+    type Product
+        @join__type(graph: INVENTORY, key: "upc")
+        @join__type(graph: PRODUCTS, key: "upc")
+        @join__type(graph: REVIEWS, key: "upc") {
+        upc: String!
+        weight: Int
+            @join__field(graph: INVENTORY, external: true)
+            @join__field(graph: PRODUCTS)
+        price: Int
+            @join__field(graph: INVENTORY, external: true)
+            @join__field(graph: PRODUCTS)
+        inStock: Boolean @join__field(graph: INVENTORY)
+        shippingEstimate: Int
+            @join__field(graph: INVENTORY, requires: "price weight")
+        name: String @join__field(graph: PRODUCTS)
+        reviews: [Review] @join__field(graph: REVIEWS)
+    }
+
+    type Query
+        @join__type(graph: ACCOUNTS)
+        @join__type(graph: INVENTORY)
+        @join__type(graph: PRODUCTS)
+        @join__type(graph: REVIEWS) {
+        me: User @join__field(graph: ACCOUNTS)
+        user(id: ID!): User @join__field(graph: ACCOUNTS)
+        users: [User] @join__field(graph: ACCOUNTS)
+        topProducts(first: Int = 5): [Product] @join__field(graph: PRODUCTS)
+    }
+
+    type Review @join__type(graph: REVIEWS, key: "id") {
+        id: ID!
+        body: String
+        product: Product
+        author: User @join__field(graph: REVIEWS, provides: "username")
+    }
+
+    type User
+        @join__type(graph: ACCOUNTS, key: "id")
+        @join__type(graph: REVIEWS, key: "id") {
+        id: ID!
+        name: String @join__field(graph: ACCOUNTS)
+        username: String
+            @join__field(graph: ACCOUNTS)
+            @join__field(graph: REVIEWS, external: true)
+        birthday: Int @join__field(graph: ACCOUNTS)
+        reviews: [Review] @join__field(graph: REVIEWS)
+    }

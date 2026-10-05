@@ -8,9 +8,7 @@ on:
     # Each of these fires this trigger independently the moment that one workflow completes,
     # it does not wait for all of them. The "every required check succeeded" gate is done
     # explicitly in the finalize job below instead.
-    workflows: [
-        "Official Chart Collect Script Integration Test"
-      ]
+    workflows: ["Collect Script Integration Test"]
 
 jobs:
   finalize:
@@ -46,7 +44,7 @@ jobs:
         run: |
           SHA="${{ github.event.workflow_run.head_sha }}"
           READY=true
-          for WORKFLOW in "Static Checks" "Test with RTF" "Official Chart Collect Script Integration Test" "Raw-Manifest Collect Script Integration Test"; do
+          for WORKFLOW in "Static Checks" "Test with RTF" "Collect Script Integration Test"; do
             # gh api's --jq takes a single filter expression, not extra jq flags like --arg —
             # inlining WORKFLOW here is safe since it only ever comes from the fixed literal
             # list above, never from external input.

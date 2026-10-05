@@ -1,0 +1,113 @@
+supergraph:
+  listen: 0.0.0.0:4000
+
+health_check:
+  listen: 0.0.0.0:8088
+  enabled: true
+
+telemetry:
+  exporters:
+    metrics:
+      prometheus:
+        enabled: true
+        listen: 0.0.0.0:9090
+        path: /metrics
+  instrumentation:
+    events:
+      supergraph:
+        request: info
+        response: info
+
+apq:
+  router:
+    cache:
+      redis:
+        urls:
+          - "redis://localhost:6391"
+        username: ***HIDDEN***
+        password: ***HIDDEN***
+        required_to_start: false
+
+authentication:
+  router:
+    jwt:
+      jwks:
+        - url: http://localhost:9090/jwks-not-found
+          issuers:
+            - "https://issuer.example.com"
+          algorithms:
+            - RS256
+          headers:
+            - name: x-vault-token
+              value: "***HIDDEN***"
+  subgraph:
+    all:
+      aws_sig_v4:
+        hardcoded:
+          access_key_id: ***HIDDEN***
+          secret_access_key: ***HIDDEN***
+          region: us-east-1
+          service_name: vpc-lattice-svcs
+
+tls:
+  supergraph:
+    certificate: |
+      -----BEGIN CERTIFICATE-----
+      MIIBgTCCASegAwIBAgIUekJsIs9C1ZtolJXebnaYJsfLtxgwCgYIKoZIzj0EAwIw
+      FjEUMBIGA1UEAwwLcm91dGVyLnRlc3QwHhcNMjYwOTE3MTgxNDI5WhcNMzYwOTE0
+      MTgxNDI5WjAWMRQwEgYDVQQDDAtyb3V0ZXIudGVzdDBZMBMGByqGSM49AgEGCCqG
+      SM49AwEHA0IABBGOhC/TFU3UGGlm/VD9eBRSMN9CXzoXPw49jBmPyEwzWep4Y4Yi
+      APuqRGQKeRF2YfQNuwSnIB6zUlxLSj7VgbSjUzBRMB0GA1UdDgQWBBQmCYkI7Aj2
+      64ItWhykR6AZCr5WJDAfBgNVHSMEGDAWgBQmCYkI7Aj264ItWhykR6AZCr5WJDAP
+      BgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0gAMEUCIQD5k6F3ABm5lxPTFulz
+      PaWHFMM0PXdLRcGdBtw/Zyba5QIgaayUclmeo408Yr/mCb7ZZfJS1vjj3Rtq4/Yg
+      TU/XGqo=
+      -----END CERTIFICATE-----
+    key: |
+      -----BEGIN EC PRIVATE KEY-----***HIDDEN***-----END EC PRIVATE KEY-----
+    certificate_chain: |
+      -----BEGIN CERTIFICATE-----
+      MIIBgTCCASegAwIBAgIUekJsIs9C1ZtolJXebnaYJsfLtxgwCgYIKoZIzj0EAwIw
+      FjEUMBIGA1UEAwwLcm91dGVyLnRlc3QwHhcNMjYwOTE3MTgxNDI5WhcNMzYwOTE0
+      MTgxNDI5WjAWMRQwEgYDVQQDDAtyb3V0ZXIudGVzdDBZMBMGByqGSM49AgEGCCqG
+      SM49AwEHA0IABBGOhC/TFU3UGGlm/VD9eBRSMN9CXzoXPw49jBmPyEwzWep4Y4Yi
+      APuqRGQKeRF2YfQNuwSnIB6zUlxLSj7VgbSjUzBRMB0GA1UdDgQWBBQmCYkI7Aj2
+      64ItWhykR6AZCr5WJDAfBgNVHSMEGDAWgBQmCYkI7Aj264ItWhykR6AZCr5WJDAP
+      BgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0gAMEUCIQD5k6F3ABm5lxPTFulz
+      PaWHFMM0PXdLRcGdBtw/Zyba5QIgaayUclmeo408Yr/mCb7ZZfJS1vjj3Rtq4/Yg
+      TU/XGqo=
+      -----END CERTIFICATE-----
+  subgraph:
+    all:
+      client_authentication:
+        certificate_chain: |
+          -----BEGIN CERTIFICATE-----
+          MIIBkzCCATmgAwIBAgIUNLZFU9S8R9w1EPX2QjC3VMRp4JUwCgYIKoZIzj0EAwIw
+          HzEdMBsGA1UEAwwUc3ViZ3JhcGgtY2xpZW50LnRlc3QwHhcNMjYwOTE3MTgxNDI5
+          WhcNMzYwOTE0MTgxNDI5WjAfMR0wGwYDVQQDDBRzdWJncmFwaC1jbGllbnQudGVz
+          dDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJDXq0xDTcRSyY1zevSBtyilRLPF
+          p5bU+rBf/G2ERYemknU55Bl9K2Dkd24EqBzP7mwSXQYAMvbcf1dCRFMhi/mjUzBR
+          MB0GA1UdDgQWBBRnTYrhVOJnBe/4KeswivuFwDH77DAfBgNVHSMEGDAWgBRnTYrh
+          VOJnBe/4KeswivuFwDH77DAPBgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0gA
+          MEUCIQD2Oz1cs+qureSKoopOLq4tbMZM1UiI5M3vGXGuM7V84gIgP4YTIjYYmibz
+          zMTuNP5Zv2G0gSkMz2wvBA8RJJ29VEQ=
+          -----END CERTIFICATE-----
+        key: |
+          -----BEGIN EC PRIVATE KEY-----***HIDDEN***-----END EC PRIVATE KEY-----
+  connector:
+    all:
+      client_authentication:
+        certificate_chain: |
+          -----BEGIN CERTIFICATE-----
+          MIIBlDCCATugAwIBAgIUKkfoiBYLSaYEsPH09yo14F/3fo0wCgYIKoZIzj0EAwIw
+          IDEeMBwGA1UEAwwVY29ubmVjdG9yLWNsaWVudC50ZXN0MB4XDTI2MDkxNzE4MTQy
+          OVoXDTM2MDkxNDE4MTQyOVowIDEeMBwGA1UEAwwVY29ubmVjdG9yLWNsaWVudC50
+          ZXN0MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEw8FPJfapEzz15DXvrZLGz8Et
+          fIFFFYg2Mju/bQRLolpRGyUox4ryLW2szQ5JrqWFfha50aEkzDpQEQuwlmGnwqNT
+          MFEwHQYDVR0OBBYEFDxRmM6ekBvXbOIMkEAafrJsUcZ2MB8GA1UdIwQYMBaAFDxR
+          mM6ekBvXbOIMkEAafrJsUcZ2MA8GA1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwID
+          RwAwRAIgXZbg45A76gye+uMJec/9xM6YCK7eibSo3N7HTCscma8CIBabbfWsnziq
+          cwn1uKPZBEVm4rCxrcruyUDEf3WT+WKG
+          -----END CERTIFICATE-----
+        key: |
+          -----BEGIN EC PRIVATE KEY-----***HIDDEN***-----END EC PRIVATE KEY-----

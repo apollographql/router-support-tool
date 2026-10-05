@@ -9,6 +9,8 @@
 # chainsaw-test.yaml, which runs this with the test's own directory as its working directory.
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/assert_host_collector_diagnostics_redacted.sh"
+
 NAMESPACE=$1
 CHART_PATH=$2
 COLLECT_SCRIPT=$3
@@ -16,32 +18,48 @@ EXPECTED_GRAPH_REF=$4
 
 RELEASE_NAME="router-diagnostics"
 
-helm install "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
-  --set namespace="$NAMESPACE" \
-  --set mode=local
-
-# Default selector/metricsPort match what was installed above (unset -> official chart's
-# own label / port 9090) - collect.sh takes these directly, it doesn't read the release.
-"$COLLECT_SCRIPT" --namespace "$NAMESPACE"
-
-BUNDLE=$(ls -t support-bundle-*.tar.gz | head -1)
-DIR="${BUNDLE%.tar.gz}"
-tar xzf "$BUNDLE"
-
 fail() {
   echo "FAIL: $1" >&2
   exit 1
 }
 
+helm install "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
+  --set namespace="$NAMESPACE" \
+  --set mode=local
+
+"$COLLECT_SCRIPT" --namespace "$NAMESPACE"
+
+# --- collect.sh caches the pinned support-bundle binary on first use ---
+# This CI runner starts with no pre-existing cache, so the call above just exercised the
+# real download-from-GitHub path.
+PINNED_VERSION=$(grep -m1 '^SUPPORT_BUNDLE_VERSION=' "$COLLECT_SCRIPT" | sed -E 's/^SUPPORT_BUNDLE_VERSION="(.*)"$/\1/')
+[ -n "$PINNED_VERSION" ] || fail "couldn't extract SUPPORT_BUNDLE_VERSION from $COLLECT_SCRIPT"
+CACHED_BIN="$HOME/.router-diagnostics/bin/support-bundle-v${PINNED_VERSION}"
+[ -x "$CACHED_BIN" ] || fail "collect.sh didn't cache the pinned binary at $CACHED_BIN"
+
+BUNDLE=$(ls -t support-bundle-*.tar.gz | head -1)
+DIR="${BUNDLE%.tar.gz}"
+tar xzf "$BUNDLE"
+
 # --- meta.json: render-time facts (specs/collection/meta_json.md) ---
 META="$DIR/meta.json"
 [ "$(jq -r '.mode' "$META")" = "local" ] || fail "meta.json mode != local"
 [ "$(jq -r '.namespace' "$META")" = "$NAMESPACE" ] || fail "meta.json namespace != $NAMESPACE"
+EXPECTED_VERSION=$(grep -m1 '^version:' "$CHART_PATH/Chart.yaml" | awk '{print $2}')
+[ "$(jq -r '.version' "$META")" = "$EXPECTED_VERSION" ] || fail "meta.json version != $CHART_PATH/Chart.yaml's version ($EXPECTED_VERSION)"
 
-# --- router-metrics/result.json (http collector): a real Prometheus scrape ---
-RESULT="$DIR/router-metrics/result.json"
-[ "$(jq -r '.response.status' "$RESULT")" = "200" ] || fail "router-metrics: response.status != 200"
-grep -q "apollo_router_" <<< "$(jq -r '.response.body' "$RESULT")" || fail "router-metrics: body doesn't contain real router metrics"
+# --- router-metrics (run host collector): one .txt per pod via outputDir ---
+EXPECTED_METRICS_DIR="$DIR/host-collectors/run-host/router-metrics/pods"
+[ -d "$EXPECTED_METRICS_DIR" ] || fail "router-metrics: expected directory $EXPECTED_METRICS_DIR not found - did the troubleshoot.sh version change where a host run collector's outputDir lands?"
+FOUND=false
+while IFS= read -r f; do
+  grep -q "apollo_router_" "$f" && FOUND=true && break
+done < <(find "$EXPECTED_METRICS_DIR" -maxdepth 1 -name "*.txt" -type f 2>/dev/null)
+[ "$FOUND" = true ] || fail "router-metrics: no per-pod metrics file contains apollo_router_ metrics"
+
+# --- host-collector diagnostic sidecar: present and fully redacted (see
+# specs/collection/data_sanitization/host_collector_diagnostics.md) ---
+assert_host_collector_diagnostics_redacted "$DIR"
 
 # --- clusterResources: pod is Running, zero restarts, expected resources ---
 # No image check here (unlike raw-manifest) - the official chart pins its own image tag,
@@ -128,9 +146,10 @@ jq -e '.data["configuration.yaml"] | contains("listen: 0.0.0.0:9090")' "$CONFIG"
 jq -e '.data["configuration.yaml"] | contains("path: /metrics")' "$CONFIG" > /dev/null \
   || fail "collected config: telemetry.exporters.metrics.prometheus.path != /metrics"
 
-# --- <release>-supergraph ConfigMap (templates/supergraph-cm.yaml), via clusterResources -
-# the chart's own supergraph ConfigMap isn't collected by our configMap collector, which
-# only targets the rendered router config.
+# --- <release>-supergraph ConfigMap (templates/supergraph-cm.yaml) -
+# also collected a second time by the configMap collector (configmaps/$NAMESPACE/router-supergraph.json),
+# since it carries the same app.kubernetes.io/name=router label the main config does - checked here via
+# the clusterResources copy, which is always present regardless of mode/selector.
 SCHEMA_CONFIG="$DIR/cluster-resources/configmaps/$NAMESPACE.json"
 
 # --- Redaction tests: every sentinel value planted in the fixtures is named SENTINEL_* -

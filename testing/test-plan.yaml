@@ -6,8 +6,29 @@ description: >
 matrix:
   variant_names: "${condition}_${router_version}"
   dimensions:
-    condition: [healthy, some-metrics-misconfigured, all-metrics-misconfigured]
-    router_version: ["v2.17.0"] # latest Apollo Router release as of 2026-09-15
+    condition: [healthy, some-metrics-misconfigured, all-metrics-misconfigured, router-recently-restarted]
+  compound:
+    router_version_and_redaction:
+      - router_version: "v2.4.0"
+        redaction: base
+        router_config_path: data/base-router-config.yaml
+        router_config_configmap_path: data/router-config-configmap-base.yaml
+        expected_redacted_router_config_path: data/base-expected-redacted-router-config.yaml
+      - router_version: "v2.10.1"
+        redaction: base
+        router_config_path: data/base-router-config.yaml
+        router_config_configmap_path: data/router-config-configmap-base.yaml
+        expected_redacted_router_config_path: data/base-expected-redacted-router-config.yaml
+      - router_version: "v2.13.0"
+        redaction: base
+        router_config_path: data/base-router-config.yaml
+        router_config_configmap_path: data/router-config-configmap-base.yaml
+        expected_redacted_router_config_path: data/base-expected-redacted-router-config.yaml
+      - router_version: "v2.17.0" # latest Apollo Router release as of 2026-09-15
+        redaction: full
+        router_config_path: data/redaction-testing-router-config.yaml
+        router_config_configmap_path: data/router-config-configmap-full.yaml
+        expected_redacted_router_config_path: data/expected-redacted-router-config.yaml
 
 environment:
   inline:
@@ -17,6 +38,8 @@ environment:
     variable_definitions:
       - name: router_version
         description: "The Apollo Router image tag to deploy"
+      - name: router_config_path
+        description: "Relative path to the router-config fixture this variant deploys. See the compound matrix in test-plan.yaml."
 
     env_vars:
       ROUTER_VERSION: "{{ router_version }}"
@@ -38,7 +61,7 @@ environment:
       - name: router-config.yaml
         env_var: ROUTER_CONFIG
         kind: relative_path
-        path: data/base-router-config.yaml
+        path: "{{ router_config_path }}"
 
       - name: supergraph.graphql
         env_var: SUPERGRAPH_SCHEMA
@@ -65,6 +88,14 @@ scenario:
         description: "The router condition env_setup.sh should set up before a support bundle is collected."
       - name: router_version
         description: "The Apollo Router image tag deployed - used to assert clusterResources actually captured it."
+      - name: redaction
+        description: "base or full - which redaction assertions scenario.sh runs for this variant."
+      - name: router_config_path
+        description: "Relative path to the router-config fixture this variant deploys. See the compound matrix in test-plan.yaml."
+      - name: router_config_configmap_path
+        description: "Relative path to the router-config ConfigMap manifest this variant applies. See the compound matrix in test-plan.yaml."
+      - name: expected_redacted_router_config_path
+        description: "Relative path to the fixture this variant's byte-diff check uses. See the compound matrix in test-plan.yaml."
 
     docker:
       image: us-central1-docker.pkg.dev/platform-cross-environment/apollo-private-docker/rtf-toolbox
@@ -74,6 +105,7 @@ scenario:
     env_vars:
       CONDITION: "{{ condition }}"
       ROUTER_VERSION: "{{ router_version }}"
+      REDACTION: "{{ redaction }}"
 
     file_providers:
       - name: env_setup.sh
@@ -89,12 +121,19 @@ scenario:
       - name: router-config.yaml
         env_var: ROUTER_CONFIG
         kind: relative_path
-        path: data/base-router-config.yaml
+        path: "{{ router_config_path }}"
+
+      # The ConfigMap the configMap collector actually captures (decoupled from the router's own
+      # boot config, see that file's own header comment).
+      - name: router-config-configmap.yaml
+        env_var: ROUTER_CONFIG_CONFIGMAP
+        kind: relative_path
+        path: "{{ router_config_configmap_path }}"
 
       - name: expected-redacted-router-config.yaml
         env_var: EXPECTED_REDACTED_ROUTER_CONFIG
         kind: relative_path
-        path: data/expected-redacted-router-config.yaml
+        path: "{{ expected_redacted_router_config_path }}"
 
       - name: router-diagnostics-chart
         env_var: CHART_DIR

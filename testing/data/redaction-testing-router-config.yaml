@@ -1,0 +1,176 @@
+supergraph:
+  listen: 0.0.0.0:4000
+  # Tests specs/collection/data_sanitization/redis_credentials.md - URL-embedded credentials
+  # plus two more shapes as comments. These are commented out because the router's
+  # Redis client rejects a `urls` list with inconsistent usernames across entries, and
+  # rejects combining URL-embedded creds with explicit username/password on one cache.
+  # Redaction is plain text matching, so a commented-out line is still good data
+  # for the redactor even though the router itself never parses it.
+  # Pathless form (no username, a normal pre-ACL Redis idiom):
+  #   - "redis://:SENTINEL_REDIS_PATHLESS_PASSWORD@localhost:6392"
+  # Separate username/password fields, quoted (apq's below are the unquoted form):
+  #   username: "SENTINEL_REDIS_USERNAME_QUOTED"
+  #   password: "SENTINEL_REDIS_PASSWORD_QUOTED"
+  query_planning:
+    cache:
+      redis:
+        urls:
+          - "redis://redisuser:SENTINEL_REDIS_URL_PASSWORD@localhost:6390"
+        required_to_start: false
+
+health_check:
+  listen: 0.0.0.0:8088
+  enabled: true
+
+telemetry:
+  exporters:
+    metrics:
+      prometheus:
+        enabled: true
+        listen: 0.0.0.0:9090
+        path: /metrics
+  # specs/collection/data_sanitization/operation_bodies.md
+  instrumentation:
+    events:
+      supergraph:
+        request: info
+        response: info
+
+# Tests specs/collection/data_sanitization/redis_credentials.md,
+# username/password as separate fields
+apq:
+  router:
+    cache:
+      redis:
+        urls:
+          - "redis://localhost:6391"
+        username: SENTINEL_REDIS_USERNAME
+        password: SENTINEL_REDIS_PASSWORD
+        required_to_start: false
+
+# Tests specs/collection/data_sanitization/header_values.md
+headers:
+  all:
+    request:
+      operations:
+        - insert:
+            name: x-sentinel-static
+            value: SENTINEL_HEADER_INSERT_VALUE
+        - insert:
+            name: x-sentinel-frombody
+            path: "$.doesNotExist"
+            default: SENTINEL_HEADER_INSERT_DEFAULT
+        - propagate:
+            named: x-sentinel-source-header
+            default: SENTINEL_HEADER_PROPAGATE_DEFAULT
+
+# Tests specs/collection/data_sanitization/tls_private_keys.md
+tls:
+  supergraph:
+    certificate: |
+      -----BEGIN CERTIFICATE-----
+      MIIBgTCCASegAwIBAgIUekJsIs9C1ZtolJXebnaYJsfLtxgwCgYIKoZIzj0EAwIw
+      FjEUMBIGA1UEAwwLcm91dGVyLnRlc3QwHhcNMjYwOTE3MTgxNDI5WhcNMzYwOTE0
+      MTgxNDI5WjAWMRQwEgYDVQQDDAtyb3V0ZXIudGVzdDBZMBMGByqGSM49AgEGCCqG
+      SM49AwEHA0IABBGOhC/TFU3UGGlm/VD9eBRSMN9CXzoXPw49jBmPyEwzWep4Y4Yi
+      APuqRGQKeRF2YfQNuwSnIB6zUlxLSj7VgbSjUzBRMB0GA1UdDgQWBBQmCYkI7Aj2
+      64ItWhykR6AZCr5WJDAfBgNVHSMEGDAWgBQmCYkI7Aj264ItWhykR6AZCr5WJDAP
+      BgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0gAMEUCIQD5k6F3ABm5lxPTFulz
+      PaWHFMM0PXdLRcGdBtw/Zyba5QIgaayUclmeo408Yr/mCb7ZZfJS1vjj3Rtq4/Yg
+      TU/XGqo=
+      -----END CERTIFICATE-----
+    key: |
+      -----BEGIN EC PRIVATE KEY-----
+      MHcCAQEEIAVoZMBkcnizlfy10FJb+iXKFvKaWL2pHoVrb2PtxvGcoAoGCCqGSM49
+      AwEHoUQDQgAEEY6EL9MVTdQYaWb9UP14FFIw30JfOhc/Dj2MGY/ITDNZ6nhjhiIA
+      +6pEZAp5EXZh9A27BKcgHrNSXEtKPtWBtA==
+      -----END EC PRIVATE KEY-----
+    certificate_chain: |
+      -----BEGIN CERTIFICATE-----
+      MIIBgTCCASegAwIBAgIUekJsIs9C1ZtolJXebnaYJsfLtxgwCgYIKoZIzj0EAwIw
+      FjEUMBIGA1UEAwwLcm91dGVyLnRlc3QwHhcNMjYwOTE3MTgxNDI5WhcNMzYwOTE0
+      MTgxNDI5WjAWMRQwEgYDVQQDDAtyb3V0ZXIudGVzdDBZMBMGByqGSM49AgEGCCqG
+      SM49AwEHA0IABBGOhC/TFU3UGGlm/VD9eBRSMN9CXzoXPw49jBmPyEwzWep4Y4Yi
+      APuqRGQKeRF2YfQNuwSnIB6zUlxLSj7VgbSjUzBRMB0GA1UdDgQWBBQmCYkI7Aj2
+      64ItWhykR6AZCr5WJDAfBgNVHSMEGDAWgBQmCYkI7Aj264ItWhykR6AZCr5WJDAP
+      BgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0gAMEUCIQD5k6F3ABm5lxPTFulz
+      PaWHFMM0PXdLRcGdBtw/Zyba5QIgaayUclmeo408Yr/mCb7ZZfJS1vjj3Rtq4/Yg
+      TU/XGqo=
+      -----END CERTIFICATE-----
+  subgraph:
+    all:
+      client_authentication:
+        certificate_chain: |
+          -----BEGIN CERTIFICATE-----
+          MIIBkzCCATmgAwIBAgIUNLZFU9S8R9w1EPX2QjC3VMRp4JUwCgYIKoZIzj0EAwIw
+          HzEdMBsGA1UEAwwUc3ViZ3JhcGgtY2xpZW50LnRlc3QwHhcNMjYwOTE3MTgxNDI5
+          WhcNMzYwOTE0MTgxNDI5WjAfMR0wGwYDVQQDDBRzdWJncmFwaC1jbGllbnQudGVz
+          dDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJDXq0xDTcRSyY1zevSBtyilRLPF
+          p5bU+rBf/G2ERYemknU55Bl9K2Dkd24EqBzP7mwSXQYAMvbcf1dCRFMhi/mjUzBR
+          MB0GA1UdDgQWBBRnTYrhVOJnBe/4KeswivuFwDH77DAfBgNVHSMEGDAWgBRnTYrh
+          VOJnBe/4KeswivuFwDH77DAPBgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0gA
+          MEUCIQD2Oz1cs+qureSKoopOLq4tbMZM1UiI5M3vGXGuM7V84gIgP4YTIjYYmibz
+          zMTuNP5Zv2G0gSkMz2wvBA8RJJ29VEQ=
+          -----END CERTIFICATE-----
+        key: |
+          -----BEGIN EC PRIVATE KEY-----
+          MHcCAQEEIBNWKJI+2L6hGCXDV/TrRM6tScIOnXdTw34PdYkHDGvWoAoGCCqGSM49
+          AwEHoUQDQgAEkNerTENNxFLJjXN69IG3KKVEs8WnltT6sF/8bYRFh6aSdTnkGX0r
+          YOR3bgSoHM/ubBJdBgAy9tx/V0JEUyGL+Q==
+          -----END EC PRIVATE KEY-----
+  connector:
+    all:
+      client_authentication:
+        certificate_chain: |
+          -----BEGIN CERTIFICATE-----
+          MIIBlDCCATugAwIBAgIUKkfoiBYLSaYEsPH09yo14F/3fo0wCgYIKoZIzj0EAwIw
+          IDEeMBwGA1UEAwwVY29ubmVjdG9yLWNsaWVudC50ZXN0MB4XDTI2MDkxNzE4MTQy
+          OVoXDTM2MDkxNDE4MTQyOVowIDEeMBwGA1UEAwwVY29ubmVjdG9yLWNsaWVudC50
+          ZXN0MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEw8FPJfapEzz15DXvrZLGz8Et
+          fIFFFYg2Mju/bQRLolpRGyUox4ryLW2szQ5JrqWFfha50aEkzDpQEQuwlmGnwqNT
+          MFEwHQYDVR0OBBYEFDxRmM6ekBvXbOIMkEAafrJsUcZ2MB8GA1UdIwQYMBaAFDxR
+          mM6ekBvXbOIMkEAafrJsUcZ2MA8GA1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwID
+          RwAwRAIgXZbg45A76gye+uMJec/9xM6YCK7eibSo3N7HTCscma8CIBabbfWsnziq
+          cwn1uKPZBEVm4rCxrcruyUDEf3WT+WKG
+          -----END CERTIFICATE-----
+        key: |
+          -----BEGIN EC PRIVATE KEY-----
+          MHcCAQEEILKPwQVyeMfux+nXAigxk/pd+ZtWpTTkmZG+2q3aDv4BoAoGCCqGSM49
+          AwEHoUQDQgAEw8FPJfapEzz15DXvrZLGz8EtfIFFFYg2Mju/bQRLolpRGyUox4ry
+          LW2szQ5JrqWFfha50aEkzDpQEQuwlmGnwg==
+          -----END EC PRIVATE KEY-----
+
+# Tests specs/collection/data_sanitization/subgraph_urls.md.
+#
+# `authentication` follows immediately so its secrets sit where the
+# built-in's known over-redaction would land if unbounded. 
+# Everything from here on is excluded from the byte-diff and checked
+# by sentinel instead.
+override_subgraph_url:
+  accounts: "https://accounts.internal.svc.cluster.local:4001/graphql"
+  inventory: https://svc-user:SENTINEL_SUBGRAPH_URL_PASSWORD@inventory.internal.svc.cluster.local:4001/graphql
+
+authentication:
+  router:
+    jwt:
+      jwks:
+        - url: http://localhost:9090/jwks-not-found
+          issuers:
+            - "https://issuer.example.com"
+          algorithms:
+            - RS256
+          headers:
+            - name: x-vault-token
+              value: "SENTINEL_JWKS_HEADER_VALUE"
+        - url: http://localhost:9090/jwks-not-found-flow
+          headers: [{ name: x-api-key-flow, value: SENTINEL_JWKS_FLOW_HEADER_SINGLE }]
+        - url: http://localhost:9090/jwks-not-found-flow-multi
+          headers: [{ name: x-flow-multi-a, value: SENTINEL_JWKS_FLOW_MULTI_FIRST }, { name: x-flow-multi-b, value: SENTINEL_JWKS_FLOW_MULTI_SECOND }]
+  subgraph:
+    all:
+      aws_sig_v4:
+        hardcoded:
+          access_key_id: SENTINEL_AWS_ACCESS_KEY_ID
+          secret_access_key: SENTINEL_AWS_SECRET_ACCESS_KEY
+          region: us-east-1
+          service_name: vpc-lattice-svcs

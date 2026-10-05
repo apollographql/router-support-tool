@@ -34,23 +34,11 @@ data:
               {{- end }}
             {{- end }}
 
-        - http:
-            name: router-metrics
-            get:
-              {{- if eq .Values.mode "local" }}
-              # Local mode runs the support-bundle on the invoking user's own machine,
-              # which can't resolve the router's in-cluster Service DNS name so it
-              # targets a `localhost`port-forward instead.
-              url: http://localhost:{{ .Values.metricsPort | default 9090 }}/metrics
-              {{- else if .Values.selector }}
-              # Selector set (raw-manifest tier). No fixed label to resolve a host
-              # from so find the Service that matched `selector` instead.
-              url: http://{{ include "router-diagnostics-chart.metricsTargetHost" . | default "<router-metrics-host-not-found>" }}:{{ .Values.metricsPort | default 9090 }}/metrics
-              {{- else }}
-              # Selector unset (official chart tier)
-              # Resolve the Service by its fixed label.
-              url: http://{{ include "router-diagnostics-chart.routerServiceName" . | default "<router-metrics-host-not-found>" }}.{{ .Values.namespace }}.svc.cluster.local:{{ .Values.metricsPort | default 9090 }}/metrics
-              {{- end }}
+        # Metrics collection differs by mode because pod IPs are only reachable in-cluster.
+        # Job mode — support-bundle runs inside a Kubernetes Job and can reach pod IPs directly
+        {{- if ne .Values.mode "local" }}
+        {{- include "router-diagnostics-chart.routerMetricsCollectors" . | trim | nindent 8 }}
+        {{- end }}
 
         - configMap:
             collectorName: router-config-rendered
@@ -70,7 +58,7 @@ data:
             name: meta.json
             data: |
               {
-                "spec_version": "1",
+                "version": "{{ .Chart.Version }}",
                 "mode": "{{ .Values.mode }}",
                 "namespace": "{{ .Values.namespace }}",
                 {{- if eq .Values.mode "job" }}
@@ -78,6 +66,22 @@ data:
                 {{- end }}
                 "troubleshoot_version": "0.134.1"
               }
+    # mode: local — support-bundle runs on the user's machine where pod IPs are not
+    # reachable, so a hostCollectors.run script handles all port-forwards at collection time.
+{{- if eq .Values.mode "local" }}
+      hostCollectors:
+        - run:
+            collectorName: router-metrics
+            # troubleshoot.sh nests outputDir under a directory named for collectorName, so
+            # giving this a distinct name avoids a redundant bundle path.
+            outputDir: pods
+            ignoreParentEnvs: true
+            command: sh
+            args:
+              - -c
+              - |
+                {{- tpl (.Files.Get "files/local-metrics-collect.sh") . | nindent 16 }}
+{{- end }}
   redactor-spec: |
     apiVersion: troubleshoot.sh/v1beta2
     kind: Redactor
@@ -153,7 +157,7 @@ data:
               - "configmaps/*/*.json"
           removals:
             regex:
-              - redactor: '(override_subgraph_url:)(?P<mask>(?:\\n\s+(?:[^\\]|\\")+)+)'
+              - redactor: '(override_subgraph_url:)(?P<mask>(?:\\n\s+[\w.-]+:\s*(?:\\"[^"\\]*\\"|[^\\@"]+))+)'
         - name: router-subgraph-url-schema
           fileSelector:
             files:
@@ -166,10 +170,6 @@ data:
 
         # specs/collection/data_sanitization/redis_credentials.md
         - name: router-redis-url-embedded-credentials
-          fileSelector:
-            files:
-              - "cluster-resources/configmaps/*.json"
-              - "configmaps/*/*.json"
           removals:
             regex:
               - redactor: '((?:rediss?(?:-cluster|-sentinel)?):\/\/)(?P<mask>[^\/@"\\]*:[^\/@"\\]+)(@)'
@@ -185,10 +185,30 @@ data:
 
         # specs/collection/data_sanitization/tls_private_keys.md
         - name: router-tls-private-keys
-          fileSelector:
-            files:
-              - "cluster-resources/configmaps/*.json"
-              - "configmaps/*/*.json"
           removals:
             regex:
               - redactor: '(-----BEGIN (?:RSA |EC |ENCRYPTED )?PRIVATE KEY-----)(?P<mask>.+?)(-----END (?:RSA |EC |ENCRYPTED )?PRIVATE KEY-----)'
+
+        # specs/collection/data_sanitization/secret_shaped_env_vars.md
+        - name: router-key-named-env-var
+          removals:
+            regex:
+              - selector: '"name":\s*"(?:[A-Z0-9_]*_)?KEY"'
+                redactor: '("value":\s*")(?P<mask>[^"]*)(")'
+              - redactor: '(\\"name\\":\\"(?:[A-Z0-9_]*_)?KEY\\",\\"value\\":\\")(?P<mask>[^\\"]*)(\\")'
+        - name: router-pass-named-env-var
+          removals:
+            regex:
+              - selector: '"name":\s*"(?:[A-Z0-9_]*_)?PASS"'
+                redactor: '("value":\s*")(?P<mask>[^"]*)(")'
+              - redactor: '(\\"name\\":\\"(?:[A-Z0-9_]*_)?PASS\\",\\"value\\":\\")(?P<mask>[^\\"]*)(\\")'
+
+        # specs/collection/data_sanitization/host_collector_diagnostics.md
+        - name: router-host-collector-run-diagnostics
+          fileSelector:
+            files:
+              - "host-collectors/run-host/*-info.json"
+              - "router-metrics/*-info.json"
+          removals:
+            regex:
+              - redactor: '(?P<mask>.+)'

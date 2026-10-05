@@ -8,5 +8,5 @@
 __pycache__/
 *.pyc
 
-# Created when we run `helm router-diagnostics collect` when a Chainsaw test runs locally
+# Created when we run the collect script when a Chainsaw test runs locally
 support-bundle-*

@@ -1,0 +1,34 @@
+name: Scan Job Image
+
+on:
+  workflow_call:
+    inputs:
+      tag_to_test:
+        description: "The tag of the router-diagnostics Job image to be scanned"
+        type: string
+
+jobs:
+  run_security_scan:
+    name: "Run Wiz Security Scan"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    defaults:
+      run:
+        shell: sh
+    steps:
+      - name: "Checkout Code"
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Pull Job Image
+        id: pull_job_image
+        uses: apollographql/release-tooling/pull-image@6ab89bdcf9cd1a86ecaa85925b75e003405e5edc
+        with:
+          image_name: 'router-diagnostics'
+          tag: ${{ inputs.tag_to_test }}
+
+      - name: Scan Image
+        uses: docker://public-registry.wiz.io/wiz-app/wizcli:1.48.0@sha256:1b4b201b26fab4710e6dae43a1fed275d12e7cbaa5847c7cd9e09a88bf82cbac
+        with:
+          args: scan container-image ${{ steps.pull_job_image.outputs.image_reference }} --dockerfile router-diagnostics-job-image/Dockerfile --policies "Apollo-Default-Vulnerabilities-Policy" --sbom-format spdx-json --sbom-output-file sbom.json --timeout "0h5m0s" --client-id ${{ secrets.WIZ_CLIENT_ID_V1 }} --client-secret ${{ secrets.WIZ_CLIENT_SECRET_V1 }}

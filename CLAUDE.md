@@ -86,8 +86,8 @@ When a design question arises that the specs do not answer, propose a spec chang
 
 These are load-bearing. Violating any of them is a correctness problem, not a style preference.
 
-- **`APOLLO_KEY` is never collected.** Not redacted — never read. It is structurally isolated in a separate Kubernetes Secret from the ConfigMap the tool reads. No redaction rule should be load-bearing for it.
-- **Empty is not failure.** A collector whose target does not exist (Prometheus disabled, no matching ConfigMap, no locatable Helm release) returns empty and the run continues. Collection degrades gracefully; `meta.json` records which absences are *expected* (it is static, baked in at render time — it cannot report what actually ran) so an empty section is explainable rather than mysterious.
+- **`APOLLO_KEY` is never collected, when it is Secret-backed**. A literal env value (no `secretKeyRef`) isn't covered by that isolation and is covered by a tested redaction safety net that masks any `*_KEY`-named env var. Not a structural guarantee, and not total coverage — see `specs/collection/data_sanitization/secret_shaped_env_vars.md` for what's covered and what's a known gap.
+- **Empty is not failure.** A collector whose target does not exist (Prometheus disabled, no matching ConfigMap) returns empty and the run continues. Collection degrades gracefully; `meta.json` records which absences are *expected* (it is static, baked in at render time — it cannot report what actually ran) so an empty section is explainable rather than mysterious.
 - **The tool must be safe to run against a degraded router.** Collection gathers signal externally wherever possible — k8s API, cAdvisor, external HTTP endpoints. Anything that runs *inside* the router container consumes its cgroup allocation and needs justification.
 - **`exec` collectors only run against one pod.** troubleshoot.sh's `exec` collector executes in a single arbitrarily-selected pod when a selector matches several. It is not fleet-wide; `logs` does not have this limitation.
 - **Bundles never go to Apollo.** Storage is customer-owned. Apollo has access only when a customer explicitly shares a bundle during a support engagement.
@@ -124,7 +124,7 @@ Scenarios to validate against. Not exhaustive — add cases as failure modes are
   - When absence *is* expected, `meta.json` is what records it — which is why the accuracy requirement below is load-bearing rather than cosmetic.
 - **Redaction ran.** Inspect the bundle contents. Redaction is the promise with the worst failure mode — a leak is unrecoverable once shared — and it is the one thing a customer cannot check on our behalf before sending.
 - **`meta.json` is accurate.** It is what makes an empty section explainable instead of mysterious, and what makes healthy-versus-incident bundle comparison possible. Wrong metadata is worse than absent metadata.
-- **`APOLLO_KEY` is absent.** Every scenario, every tier.
+- **`APOLLO_KEY` is absent.** Every scenario, every tier — including, now, the literal-env-value case covered only by a redaction safety net rather than structural isolation. A test fixture that only ever sets `APOLLO_KEY` via Secret/`secretKeyRef` never exercises that safety net and will pass whether or not it actually works — see `specs/collection/data_sanitization/secret_shaped_env_vars.md` → "Required before this is considered done".
 
 ### troubleshoot.sh support-bundle version
 

@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+#MISE description="Verify collect.sh always runs its own cached, version-pinned support-bundle binary, never a customer's own troubleshoot install on PATH"
+#
+# collect.sh never invokes a bare `support-bundle` command - it always calls its own cached
+# binary by full path ("$BIN" ..., keyed by SUPPORT_BUNDLE_VERSION). This test proves this,
+# with no real cluster or network call involved. Steps:
+#
+#   1. Read the pinned troubleshoot.sh version straight out of collect.sh itself.
+#   2. Set up two fake binaries: one "correct" support-bundle, pre-placed exactly where
+#      collect.sh's own cache lookup expects it and one "old" support-bundle, placed on PATH
+#      instead, standing in for whatever a customer might already have installed locally.
+#      Each just writes its own marker file when run, so we can tell which one fired.
+#   3. Stub kubectl too, so collect.sh can run start-to-finish with no real cluster.
+#   4. Run collect.sh for real, pointed at our fake cache dir and with the fake PATH first.
+#   5. Check the marker files: the "correct" one must exist, the "old" one must not.
+set -euo pipefail
+
+# --- Step 1: read the pinned version ---------------------------------------------------
+
+SCRIPT="router-diagnostics-collect/collect.sh"
+PINNED_VERSION=$(grep -m1 '^SUPPORT_BUNDLE_VERSION=' "$SCRIPT" | sed -E 's/^SUPPORT_BUNDLE_VERSION="(.*)"$/\1/')
+if [ -z "$PINNED_VERSION" ]; then
+  echo "Couldn't extract SUPPORT_BUNDLE_VERSION from $SCRIPT" >&2
+  exit 1
+fi
+
+WORKDIR=$(mktemp -d)
+trap 'rm -rf "$WORKDIR"' EXIT
+
+CACHE_DIR="$WORKDIR/cache"
+FAKE_PATH_DIR="$WORKDIR/fake-path"
+mkdir -p "$CACHE_DIR/bin" "$FAKE_PATH_DIR"
+
+# --- Step 2: the two fake support-bundle binaries ---------------------------------------
+
+# The "correct" one. Placed at the exact path collect.sh's own cache lookup checks
+# (`$CACHE_DIR/bin/support-bundle-v<version>`), so collect.sh finds it already there and
+# skips its download-from-GitHub step entirely - no real network call needed for this test.
+REAL_BIN="$CACHE_DIR/bin/support-bundle-v${PINNED_VERSION}"
+cat > "$REAL_BIN" <<EOF
+#!/bin/sh
+touch "$WORKDIR/real-binary-invoked"
+exit 0
+EOF
+chmod +x "$REAL_BIN"
+
+# The "old" one. Placed on PATH, standing in for whatever a customer might already have
+# installed locally. If collect.sh ever fell back to a bare `support-bundle` command
+# instead of calling its own cached binary by full path, this is what would run instead.
+cat > "$FAKE_PATH_DIR/support-bundle" <<EOF
+#!/bin/sh
+touch "$WORKDIR/old-binary-invoked"
+exit 0
+EOF
+chmod +x "$FAKE_PATH_DIR/support-bundle"
+
+# --- Step 3: stub kubectl, so no real cluster is needed ---------------------------------
+
+# collect.sh calls `kubectl get svc -o jsonpath='{.items[0].metadata.name}'` to find the
+# router's Service. Without some kubectl on PATH it would fail immediately.
+# This stub only needs to produce *something* collect.sh's own check can use without erroring
+# Printing nothing simulates "no Service found", which is an already-handled case in collect.sh.
+cat > "$FAKE_PATH_DIR/kubectl" <<'EOF'
+#!/bin/sh
+case "$1" in
+  get)
+    printf ''
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+EOF
+chmod +x "$FAKE_PATH_DIR/kubectl"
+
+# --- Step 4: run collect.sh for real -----------------------------------------------------
+
+# Fake dir goes first on PATH, so if collect.sh ever did fall back to a bare lookup for
+# either binary, these fakes are exactly what it would find.
+export PATH="$FAKE_PATH_DIR:$PATH"
+export ROUTER_DIAGNOSTICS_CACHE_DIR="$CACHE_DIR"
+
+if ! "$SCRIPT" --namespace test-ns; then
+  echo "collect.sh exited non-zero - see output above" >&2
+  exit 1
+fi
+
+# --- Step 5: check which binary actually ran ---------------------------------------------
+
+FAILED=0
+
+if [ ! -f "$WORKDIR/real-binary-invoked" ]; then
+  echo "collect.sh never ran its own cached, version-pinned binary ($REAL_BIN)" >&2
+  FAILED=1
+fi
+
+if [ -f "$WORKDIR/old-binary-invoked" ]; then
+  echo "collect.sh ran the PATH-shadowed 'old' support-bundle instead of its own cached binary" >&2
+  FAILED=1
+fi
+
+if [ "$FAILED" -ne 0 ]; then
+  exit 1
+fi
+
+echo "collect.sh correctly used its own cached support-bundle v${PINNED_VERSION}, ignoring PATH"

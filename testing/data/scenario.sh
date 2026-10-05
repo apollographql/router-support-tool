@@ -5,6 +5,9 @@ sh "$ENV_SETUP_SCRIPT"
 
 NAMESPACE="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
 
+# Decoupled from the router's own boot config and applied explicitly here
+kubectl apply -n "$NAMESPACE" -f "$ROUTER_CONFIG_CONFIGMAP"
+
 # Generates the log line the operation bodies' redactor needs to be tested against.
 # router.yaml logs raw request/response bodies, but only if an operation actually runs. 
 # The sentinel value travels in via a variable and is asserted redacted below.
@@ -62,6 +65,8 @@ test -f "$BUNDLE_DIR/meta.json"
 grep -q '"mode": *"job"' "$BUNDLE_DIR/meta.json"
 grep -q "\"namespace\": *\"$NAMESPACE\"" "$BUNDLE_DIR/meta.json"
 grep -q '"sidecar_injection_disabled": *true' "$BUNDLE_DIR/meta.json"
+EXPECTED_VERSION=$(grep -m1 '^version:' "$CHART_DIR/Chart.yaml" | awk '{print $2}')
+grep -q "\"version\": *\"$EXPECTED_VERSION\"" "$BUNDLE_DIR/meta.json"
 
 # Every section below should have data to collect. An empty one here is an error.
 find "$BUNDLE_DIR/router-logs" -name '*.log' -size +0 | grep -q .               # router container logs
@@ -73,9 +78,20 @@ jq -e --arg version "$ROUTER_VERSION" '
 ' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
 
 # clusterResources collector: pod status and restart counts.
-# Every router pod should be Running with zero restarts by this point.
+# Every router pod should be Running by this point regardless of condition - env_setup.sh
+# always waits for Ready before returning control here.
 jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.phase] | all(. == "Running")' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
-jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.containerStatuses[0].restartCount] | all(. == 0)' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+
+case "$CONDITION" in
+  router-recently-restarted)
+    # Exactly one router pod was restarted in place by env_setup.sh - assert exactly one
+    # has a nonzero restart count.
+    jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.containerStatuses[0].restartCount | select(. > 0)] | length == 1' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+    ;;
+  *)
+    jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.containerStatuses[0].restartCount] | all(. == 0)' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+    ;;
+esac
 
 # clusterResources collector: configured resource requests/limits are captured - set on
 # the router container in router-manifest.yaml purely so this has a real value to check.
@@ -92,81 +108,131 @@ jq -e '
 grep -qi "forbidden" "$BUNDLE_DIR/cluster-resources/nodes-errors.json"
 
 # configMap collector: assert the collected router.yaml matches the expected config byte
-# for byte. $EXPECTED_REDACTED_ROUTER_CONFIG is base-router-config.yaml with the redactors'
-# masking already applied.
+# for byte, up through (not including) override_subgraph_url. $EXPECTED_REDACTED_ROUTER_CONFIG
+# is the fixture with the redactors' masking already applied, and deliberately ends right
+# before that section.
 jq -j '.data["router.yaml"]' "$BUNDLE_DIR/configmaps/$NAMESPACE/router-config.json" > /tmp/collected-router-config.yaml
-diff "$EXPECTED_REDACTED_ROUTER_CONFIG" /tmp/collected-router-config.yaml
+# Command substitution strips the trailing blank line left behind by cutting right
+# before override_subgraph_url, so this matches $EXPECTED_REDACTED_ROUTER_CONFIG's own
+# clean ending exactly.
+TRUNCATED_COLLECTED_CONFIG=$(sed '/^override_subgraph_url:/,$d' /tmp/collected-router-config.yaml)
+printf '%s\n' "$TRUNCATED_COLLECTED_CONFIG" > /tmp/collected-router-config-truncated.yaml
+diff "$EXPECTED_REDACTED_ROUTER_CONFIG" /tmp/collected-router-config-truncated.yaml
 
-# Guard against the bug if the Service selector doesn't match,
-# the collector never reaches a router at all and returns an error.
-if grep -q 'router-metrics-host-not-found' "$BUNDLE_DIR/router-metrics/result.json"; then
-  echo "router-metrics collector never resolved the router Service - selector/label mismatch?" >&2
-  exit 1
-fi
+# job mode emits one http collector per pod: router-metrics-<pod-name>/result.json.
+# If no files exist the selector didn't match any pods at render time.
+METRICS_FILES=$(find "$BUNDLE_DIR" -path "*/router-metrics-*/result.json" -type f 2>/dev/null)
+[ -n "$METRICS_FILES" ] || { echo "router-metrics: no per-pod result files found — selector/label mismatch at render time?" >&2; exit 1; }
 
 case "$CONDITION" in
   all-metrics-misconfigured)
-    # Every router has prometheus.enabled=false, so the scrape should genuinely fail -
-    # no metrics text anywhere in the result.
-    ! grep -q '# HELP' "$BUNDLE_DIR/router-metrics/result.json"
+    # Every router has prometheus.enabled=false, so every scrape should fail —
+    # no # HELP line in any result.
+    UNEXPECTED=false
+    while IFS= read -r f; do
+      if jq -r '.response.body' "$f" | grep -q '# HELP'; then
+        echo "router-metrics: unexpected # HELP in $f" >&2
+        UNEXPECTED=true
+      fi
+    done <<METRICS_EOF
+$METRICS_FILES
+METRICS_EOF
+    [ "$UNEXPECTED" = false ] || exit 1
     ;;
   healthy)
-    # The scrape should return real metrics text.
-    grep -q '# HELP' "$BUNDLE_DIR/router-metrics/result.json"
+    # At least one pod's scrape should return real metrics text.
+    FOUND=false
+    while IFS= read -r f; do
+      if jq -r '.response.body' "$f" | grep -q '# HELP'; then
+        FOUND=true
+        break
+      fi
+    done <<METRICS_EOF
+$METRICS_FILES
+METRICS_EOF
+    [ "$FOUND" = true ] || { echo "router-metrics: no result file contains # HELP" >&2; exit 1; }
     ;;
 esac
 
-# --- APOLLO_KEY must never be collected ---
-if grep -rq "APOLLO_KEY" "$BUNDLE_DIR"; then
-  echo "APOLLO_KEY found in bundle contents - this must never happen" >&2
+# --- Router recently restarted: the logs collector's previous-container capture ---
+if [ "$CONDITION" = "router-recently-restarted" ]; then
+  # troubleshoot.sh always requests the previous container's log when one exists,
+  # see specs/collection/base_spec.md, written as <name>-previous.log.
+  PREVIOUS_LOG=$(find "$BUNDLE_DIR/router-logs" -name '*-previous.log')
+  test -n "$PREVIOUS_LOG"
+  test -s "$PREVIOUS_LOG"
+  grep -q '"message":"state machine transitioned"' "$PREVIOUS_LOG"
+  grep -q '"state":"Startup"' "$PREVIOUS_LOG"
+
+  # The current (post-restart) container's own log must also show a fresh startup.
+  CURRENT_LOG="$(dirname "$PREVIOUS_LOG")/router.log"
+  test -f "$CURRENT_LOG"
+  grep -q '"message":"state machine transitioned"' "$CURRENT_LOG"
+  grep -q '"state":"Startup"' "$CURRENT_LOG"
+fi
+
+# --- APOLLO_KEY literal-env-value redaction (specs/collection/data_sanitization/secret_shaped_env_vars.md) ---
+PODS_JSON="$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+if ! grep -q '"name": "APOLLO_KEY"' "$PODS_JSON"; then
+  echo "APOLLO_KEY env var name not found in $PODS_JSON - positive control failed, the redaction check below would be meaningless" >&2
+  exit 1
+fi
+if ! grep -q '"value": "\*\*\*HIDDEN\*\*\*"' "$PODS_JSON"; then
+  echo "APOLLO_KEY env var in $PODS_JSON was not masked" >&2
+  exit 1
+fi
+if grep -rq "SENTINELAPOLLOKEYTESTING123" "$BUNDLE_DIR"; then
+  echo "APOLLO_KEY literal value found unredacted in bundle contents - this must never happen" >&2
   exit 1
 fi
 
 # --- Redaction tests: The sentinel value must be gone and something structurally
 # adjacent must survive, so an empty/absent section can't be mistaken for a rule that fired.
+#
+# base-router-config.yaml is a subset of redaction-testing-router-config.yaml's coverage,
+# so everything below runs for every variant.
 CONFIGMAP_JSON=$(find "$BUNDLE_DIR/configmaps" -name 'router-config.json')
 test -n "$CONFIGMAP_JSON"
 
-# JWT and auth config redaction tests - JWKS-fetch headers,
-# block-style, single-entry flow, and two-entry flow all redacted.
+# JWT and auth config redaction tests - JWKS-fetch header, block-style entry.
 # url/issuers/algorithms are untouched.
-if grep -qE "SENTINEL_JWKS_HEADER_VALUE|SENTINEL_JWKS_FLOW_HEADER_SINGLE|SENTINEL_JWKS_FLOW_MULTI_FIRST|SENTINEL_JWKS_FLOW_MULTI_SECOND" "$CONFIGMAP_JSON"; then
+#
+# In the full config, this and the aws_sig_v4 block below sit right after
+# override_subgraph_url, so these checks also cover the known over-redaction
+# risk there: a key name may be lost, never real content.
+if grep -qE "SENTINEL_JWKS_HEADER_VALUE" "$CONFIGMAP_JSON"; then
   echo "JWKS-fetch header sentinel found unredacted in bundle" >&2
   exit 1
 fi
 grep -q "x-vault-token" "$CONFIGMAP_JSON"      # header name untouched
 grep -q "issuer.example.com" "$CONFIGMAP_JSON" # issuers/algorithms/url are not secret
-grep -q "RS256" "$CONFIGMAP_JSON"
-grep -q "jwks-not-found" "$CONFIGMAP_JSON"
-grep -q "x-flow-multi-a" "$CONFIGMAP_JSON"     # both flow-list header names are untouched
-grep -q "x-flow-multi-b" "$CONFIGMAP_JSON"
 
-# The pathless-URL and quoted-username/password sentinels here live in a commented-out
-# fixture in router.yaml. Redaction is plain text matching so a
-# commented-out line is still real input to it.
-if grep -qE "SENTINEL_REDIS_URL_PASSWORD|SENTINEL_REDIS_PATHLESS_PASSWORD|SENTINEL_REDIS_USERNAME|SENTINEL_REDIS_PASSWORD" "$CONFIGMAP_JSON"; then
+if grep -qE "SENTINEL_REDIS_USERNAME|SENTINEL_REDIS_PASSWORD" "$CONFIGMAP_JSON"; then
   echo "Redis credential sentinel found unredacted in bundle" >&2
   exit 1
 fi
 grep -q "required_to_start" "$CONFIGMAP_JSON" # non-secret redis field survives
+
 if grep -qE "SENTINEL_AWS_ACCESS_KEY_ID|SENTINEL_AWS_SECRET_ACCESS_KEY" "$CONFIGMAP_JSON"; then
   echo "AWS SigV4 hardcoded credential sentinel found unredacted in bundle" >&2
   exit 1
 fi
 grep -q "service_name: vpc-lattice-svcs" "$CONFIGMAP_JSON" # non-secret sibling field survives
 
-# Header values redaction tests
-if grep -qE "SENTINEL_HEADER_INSERT_VALUE|SENTINEL_HEADER_INSERT_DEFAULT|SENTINEL_HEADER_PROPAGATE_DEFAULT" "$CONFIGMAP_JSON"; then
-  echo "Header plugin literal value sentinel found unredacted in bundle" >&2
+# Subgraph urls redaction tests. Two entries, checked by sentinel absence rather than
+# an exact diff (see the truncated-diff comment above) - accounts (bare, quoted) is
+# deterministically masked by our own redactor; inventory (credentialed, unquoted) is
+# left to a troubleshoot.sh built-in, which still must not leak the credential or host.
+if grep -q "accounts.internal.svc.cluster.local" "$CONFIGMAP_JSON"; then
+  echo "override_subgraph_url bare hostname (accounts) found unredacted in bundle" >&2
   exit 1
 fi
-grep -q "x-sentinel-static" "$CONFIGMAP_JSON"       # header names survive
-grep -q "x-sentinel-frombody" "$CONFIGMAP_JSON"
-grep -q "x-sentinel-source-header" "$CONFIGMAP_JSON"
-
-# Subgraph urls redaction tests
 if grep -q "SENTINEL_SUBGRAPH_URL_PASSWORD" "$CONFIGMAP_JSON"; then
-  echo "override_subgraph_url sentinel found unredacted in bundle" >&2
+  echo "override_subgraph_url credential (inventory) found unredacted in bundle" >&2
+  exit 1
+fi
+if grep -q "inventory.internal.svc.cluster.local" "$CONFIGMAP_JSON"; then
+  echo "override_subgraph_url hostname (inventory) found unredacted in bundle" >&2
   exit 1
 fi
 
@@ -179,8 +245,7 @@ grep -qF 'name: \"accounts\"' "$CONFIGMAP_JSON"
 # @link pins the federation spec version, not a customer host - stays unredacted
 grep -qF 'specs.apollo.dev/link' "$CONFIGMAP_JSON"
 
-# TLS private keys - all three key locations masked,
-# certificates/chains untouched.
+# TLS private keys - all three key locations masked, certificates/chains untouched.
 KEY_COUNT=$(grep -o -- '-----BEGIN EC PRIVATE KEY-----[^-]*-----END EC PRIVATE KEY-----' "$CONFIGMAP_JSON" | grep -c '\*\*\*HIDDEN\*\*\*')
 test "$KEY_COUNT" -eq 3
 grep -q -- "-----BEGIN CERTIFICATE-----" "$CONFIGMAP_JSON"
@@ -195,8 +260,6 @@ if grep -q "SENTINEL_OPERATION_BODY_VALUE" $ROUTER_LOG; then
 fi
 grep -q '"kind":"supergraph.request"' $ROUTER_LOG
 grep -q '"kind":"supergraph.response"' $ROUTER_LOG
-grep -q '"http.request.body":"\*\*\*HIDDEN\*\*\*"' $ROUTER_LOG
-grep -q '"http.response.body":"\*\*\*HIDDEN\*\*\*"' $ROUTER_LOG
 
 # Surrounding fields stay - the redaction must be scoped to the body value only.
 grep -q '"level":"INFO"' $ROUTER_LOG
@@ -209,6 +272,37 @@ grep -q '"target":"apollo_router::plugins::telemetry::config_new::events"' $ROUT
 # field order for headers vs. body isn't guaranteed across versions.)
 grep -ohE '"http\.request\.body":"[^"]*"' $ROUTER_LOG | grep -qxF '"http.request.body":"***HIDDEN***"'
 grep -ohE '"http\.response\.body":"[^"]*"' $ROUTER_LOG | grep -qxF '"http.response.body":"***HIDDEN***"'
+
+if [ "$REDACTION" = "full" ]; then
+  # Extra JWKS shapes (single-entry and two-entry flow-style) that only
+  # redaction-testing-router-config.yaml carries.
+  if grep -qE "SENTINEL_JWKS_FLOW_HEADER_SINGLE|SENTINEL_JWKS_FLOW_MULTI_FIRST|SENTINEL_JWKS_FLOW_MULTI_SECOND" "$CONFIGMAP_JSON"; then
+    echo "JWKS-fetch header sentinel found unredacted in bundle" >&2
+    exit 1
+  fi
+  grep -q "RS256" "$CONFIGMAP_JSON"
+  grep -q "jwks-not-found" "$CONFIGMAP_JSON"
+  grep -q "x-flow-multi-a" "$CONFIGMAP_JSON"     # both flow-list header names are untouched
+  grep -q "x-flow-multi-b" "$CONFIGMAP_JSON"
+
+  # Extra Redis shapes (embedded-URL, pathless, quoted) that live in a commented-out
+  # fixture only redaction-testing-router-config.yaml carries. Redaction is plain text
+  # matching so a commented-out line is still real input to it.
+  if grep -qE "SENTINEL_REDIS_URL_PASSWORD|SENTINEL_REDIS_PATHLESS_PASSWORD" "$CONFIGMAP_JSON"; then
+    echo "Redis credential sentinel found unredacted in bundle" >&2
+    exit 1
+  fi
+
+  # Header values redaction tests - only redaction-testing-router-config.yaml carries these
+  # (see base-router-config.yaml for why: this schema changed incompatibly across versions).
+  if grep -qE "SENTINEL_HEADER_INSERT_VALUE|SENTINEL_HEADER_INSERT_DEFAULT|SENTINEL_HEADER_PROPAGATE_DEFAULT" "$CONFIGMAP_JSON"; then
+    echo "Header plugin literal value sentinel found unredacted in bundle" >&2
+    exit 1
+  fi
+  grep -q "x-sentinel-static" "$CONFIGMAP_JSON"       # header names survive
+  grep -q "x-sentinel-frombody" "$CONFIGMAP_JSON"
+  grep -q "x-sentinel-source-header" "$CONFIGMAP_JSON"
+fi
 
 tar tzf /tmp/bundle.tar.gz > /tmp/bundle-contents.txt
 {

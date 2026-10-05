@@ -32,8 +32,12 @@ job:
     # independently-pinned detail — see a collected bundle's meta.json find out which one.
     # Override only to pin an older release or point at a private mirror.
     repository: "apollograph/router-diagnostics"
-    tag: "v0.1.0"
+    tag: "v0.4.0"
     pullPolicy: IfNotPresent
+  # -- Optional. Names of existing image pull secrets to attach to the Job's pod, in the
+  # standard Kubernetes `imagePullSecrets` shape (e.g. `[{name: my-registry-secret}]`).
+  # Only needed if you've overridden `job.image.repository` to point at a private mirror.
+  imagePullSecrets: []
   # -- Optional. Set false to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding
   # that grants the nodeMetrics collector its nodes/nodes-proxy/nodes-stats access and to
   # decline that collector's data entirely up front.
@@ -55,9 +59,9 @@ job:
     # no Secret. See specs/storage/object_storage.md -> Credentials.
     annotations: {}
   storage:
-    # -- Optional. `s3`, `gcs`, or `url`. Leave unset (the default) to render the Job
-    # exactly as it would without this section: no upload step, bundle stays local to the
-    # completed pod until it's garbage-collected. See specs/storage/object_storage.md.
+    # -- Required for `mode: job`. `s3` (AWS S3 or an S3-compatible store, e.g. MinIO/Ceph
+    # RGW, via `job.storage.s3`), `gcs`, or `url` (a plain HTTP(S) PUT/POST to an endpoint
+    # you control).
     provider: ""
     # -- Required for `provider: s3`/`gcs`. Destination bucket for the uploaded bundle.
     bucket: ""

@@ -1,0 +1,5 @@
+# release: beta - distinguishes this release's config from router-a.yaml's, so the
+# verify script can confirm the configMap collector kept the two releases' data
+# separate rather than merging or swapping them.
+supergraph:
+  listen: 0.0.0.0:4001

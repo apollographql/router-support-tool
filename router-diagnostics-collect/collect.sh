@@ -1,26 +1,18 @@
 #!/bin/sh
 # Collects a router-diagnostics support bundle for mode: local. Caches a pinned
-# support-bundle binary locally, resolves the router's Service, bridges its metrics port
-# with a temporary kubectl port-forward, then runs support-bundle against the cluster's
+# support-bundle binary locally, then runs support-bundle against the cluster's
 # discoverable specs.
-#
-# Usage: collect.sh --namespace <namespace> [--selector <selector>] [--metrics-port <port>]
-# Takes the same values you passed to `helm install`.
+
+# Usage: collect.sh --namespace <namespace>
 set -eu
 
 # renovate: datasource=github-releases depName=replicatedhq/troubleshoot
 SUPPORT_BUNDLE_VERSION="0.134.1"
 
 NAMESPACE=""
-# Matches the official chart's own label; raw-manifest/custom deployments should pass
-# --selector explicitly, the same value given to `helm install --set selector=...`.
-SELECTOR="app.kubernetes.io/name=router"
-# Matches the chart's own default; pass --metrics-port to match a non-default
-# `--set metricsPort=...` given at install time.
-METRICS_PORT="9090"
 
 usage() {
-  echo "usage: collect.sh --namespace <namespace> [--selector <selector>] [--metrics-port <port>]" >&2
+  echo "usage: collect.sh --namespace <namespace>" >&2
 }
 
 while [ $# -gt 0 ]; do
@@ -31,22 +23,6 @@ while [ $# -gt 0 ]; do
       ;;
     --namespace=*)
       NAMESPACE="${1#*=}"
-      shift
-      ;;
-    --selector)
-      SELECTOR="$2"
-      shift 2
-      ;;
-    --selector=*)
-      SELECTOR="${1#*=}"
-      shift
-      ;;
-    --metrics-port)
-      METRICS_PORT="$2"
-      shift 2
-      ;;
-    --metrics-port=*)
-      METRICS_PORT="${1#*=}"
       shift
       ;;
     -h|--help)
@@ -106,43 +82,4 @@ if [ ! -x "$BIN" ]; then
   echo "router-diagnostics: cached support-bundle v${SUPPORT_BUNDLE_VERSION}" >&2
 fi
 
-SVC_ERR=$(mktemp)
-PF_LOG=$(mktemp)
-PF_PID=""
-cleanup() {
-  if [ -n "$PF_PID" ]; then
-    kill "$PF_PID" 2>/dev/null || true
-    wait "$PF_PID" 2>/dev/null || true
-  fi
-  rm -f "$SVC_ERR" "$PF_LOG"
-}
-trap cleanup EXIT INT TERM
-
-if ! SERVICE=$(kubectl get svc -n "$NAMESPACE" -l "$SELECTOR" -o jsonpath='{.items[0].metadata.name}' 2>"$SVC_ERR"); then
-  echo "error: kubectl get svc failed: $(cat "$SVC_ERR")" >&2
-  exit 1
-fi
-
-if [ -z "$SERVICE" ]; then
-  echo "warning: no Service labeled $SELECTOR found in namespace $NAMESPACE, router-metrics will fail with a connection error." >&2
-else
-  kubectl port-forward -n "$NAMESPACE" "svc/$SERVICE" "$METRICS_PORT:$METRICS_PORT" >"$PF_LOG" 2>&1 &
-  PF_PID=$!
-
-  READY=0
-  for _ in $(seq 1 30); do
-    if grep -q "Forwarding from" "$PF_LOG" 2>/dev/null; then
-      READY=1
-      break
-    fi
-    sleep 0.5
-  done
-
-  if [ "$READY" -ne 1 ]; then
-    echo "warning: port-forward to $SERVICE:$METRICS_PORT never became ready, router-metrics collector will fail with a connection error" >&2
-    echo "--- kubectl port-forward output ---" >&2
-    cat "$PF_LOG" >&2
-  fi
-fi
-
-"$BIN" --load-cluster-specs --namespace "$NAMESPACE" --auto-update=false
+"$BIN" --load-cluster-specs --namespace "$NAMESPACE" --auto-update=false --interactive=false

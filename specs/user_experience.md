@@ -8,7 +8,7 @@ Customer wants to collect data
     - They want to collect a "healthy" snapshot
         │
         ▼
-User (or platform team) triggers collection — via the chart, or with the Apollo Operator
+User (or platform team) triggers collection
         │
         ▼
 .tar.gz support bundle produced, redacted automatically
@@ -40,7 +40,6 @@ The tool supports three deployment tiers in v1:
 
 | Deployment | Support in v1 | What you supply |
 | --- | --- | --- |
-| **Apollo Operator** | Full support, zero config once enabled | Nothing |
 | **Official Apollo router Helm chart** | Full support | `namespace` only |
 | **Raw manifests / custom deployment** | Supported | `namespace`, `selector`, `configMapName` |
 
@@ -66,11 +65,11 @@ See [Permissions for on-demand collection](#permissions-for-on-demand-collection
 Download the collect script onto the machine you'll collect from, and make it executable.
 
 ```bash
-curl -sSLo collect.sh https://storage.googleapis.com/<bucket>/router-diagnostics-collect.sh
+curl -sSLo collect.sh https://router.apollo.dev/router-diagnostics-collect/latest
 chmod +x collect.sh
 ```
 
-This gives you a single `./collect.sh` command for collecting a support bundle, see [Step two](#step-two-install-the-helm-chart) below. The script also caches its own pinned copy of the troubleshoot.sh `support-bundle` binary locally, and, if your router's metrics are enabled, it sets up and tears down the port-forward `router-metrics` needs to reach them. See [Metrics require the Prometheus endpoint to be enabled](#metrics-require-the-prometheus-endpoint-to-be-enabled) below.
+This gives you a single `./collect.sh` command for collecting a support bundle, see [Step two](#step-two-install-the-helm-chart) below.
 
 ### Step two: install the Helm chart
 
@@ -83,7 +82,7 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --set mode=local
 ```
 
-`namespace` is the only value you need to supply. The chart's collectors target your router by its standard `app.kubernetes.io/name=router` label — no release name, selector, or ConfigMap name is needed **for the official chart.**
+`namespace` is the only value you need to supply. The chart's collectors target your router by its standard `app.kubernetes.io/name=router` label.
 
 **If you use a raw-manifest or custom deployment:**
 
@@ -104,12 +103,6 @@ Since none of the official chart's conventions apply to your deployment, supply 
 ./collect.sh --namespace production
 ```
 
-`collect.sh` takes the same values you passed to `helm install`. **If you're on a raw-manifest or custom deployment**, pass the same `selector` (and `metricsPort`, if you set one) here too:
-
-```bash
-./collect.sh --namespace production --selector "app=my-router"
-```
-
 ## Job mode
 
 If you don't have kubectl access to production, use the same chart with `mode: job`. A platform team member with cluster access installs it:
@@ -127,21 +120,11 @@ The Job runs the collection automatically using a namespace-scoped ServiceAccoun
 
 **If your cluster runs a service mesh, the Job's pod doesn't join it by default.** Sidecar injection is disabled automatically so the Job reliably reaches `Completed` instead of getting stuck in `Running` waiting on a long-lived sidecar. If your platform team's policy requires every pod to be in the mesh, this can be overridden. See `specs/deployment/v1/v1.md` → Service mesh environments for how to override it.
 
-## Apollo Operator customers
-
-Zero configuration. The Operator writes the spec into a cluster ConfigMap directly, filling in its values from the deployment conventions it already knows. It is the same spec every other tier runs — only the values come from the Operator instead of from you. Run:
-
-```bash
-kubectl support-bundle --load-cluster-specs
-```
-
-No chart install and no values to supply — the `support-bundle` plugin from step one is the only thing you set up.
-
 ---
 
 ## What you get, whichever path you used
 
-The rest of this section applies to **every** path — `mode: local`, `mode: job`, and the Apollo Operator. Only where a path differs is it called out.
+The rest of this section applies to both `mode: local` and `mode: job`. Only where a path differs is it called out.
 
 ### Support tool output
 
@@ -149,9 +132,10 @@ Collection produces a support bundle — a `support-bundle-<timestamp>.tar.gz` a
 
 - **`mode: local`** — the file appears in your current directory.
 - **`mode: job`** — the Job writes it in-cluster and your platform team retrieves it. See `specs/storage/`
-- **Apollo Operator** - see `specs/deployment/v1/operator.md`
 
 It includes router version, sanitized configuration, recent logs, metrics (if you've enabled the Prometheus endpoint), and pod status. Your Redis configuration and any Redis errors in the router logs are captured, so support can still see how Redis is configured and whether the router is failing against it. See `specs/collection/output.md` for exactly what the extracted archive looks like, including a worked directory-tree example.
+
+**A populated configuration section means a `router.yaml` matching the expected ConfigMap was found, it does not confirm that's the config your router process actually has loaded.** If your router reads its config from somewhere other than the ConfigMap this tool looks for, a file on a volume, for example, the config section may be empty, or may contain something that looks plausible but has since diverged from what's actually running.
 
 Sensitive data is redacted automatically before the output bundle is created — see [Redaction](#redaction) below. You can inspect the bundle contents before sharing. Nothing persists in the cluster after collection completes, though the chart itself remains installed unless you remove it — see [Cluster footprint](#cluster-footprint) below.
 
@@ -166,17 +150,19 @@ Note that the **router chart's** `serviceMonitor.enabled` value (not `router-dia
 
 If the exporter is off, or bound somewhere the collector can't reach, that section of the bundle will simply be empty — the rest of the bundle is unaffected.
 
-**Under `mode: local`, reaching this port also requires bridging your machine to the cluster network**, since the router's Service DNS name doesn't resolve outside it. `collect.sh` handles this for you — for the official chart and for raw-manifest / custom deployments alike, as long as `selector`/`metricsPort` are set correctly for your deployment.
+**Under `mode: local`, reaching this port also requires bridging your machine to the cluster network** because pod IPs aren't reachable directly from outside the cluster. This is handled automatically by our chart's own script, run as the `router-metrics` collector. It resolves matching pods and port-forwards each one in turn.
 
-**If you're on a raw-manifest or custom deployment**, the `selector` you already set to locate your router is also what enables metrics collection under `mode: job` — this tier has no fixed label to resolve a host from otherwise, so leaving `selector` unset means no host to try, and this section stays empty. If your exporter listens on a port other than `9090`, also set `metricsPort`. Under `mode: local`, the collector always targets `localhost:<metricsPort>` (default `9090`) and `collect.sh` bridges that for you the same way it does for the official chart. Only if you run `support-bundle` directly, bypassing the script, do you need to set up that port-forward yourself.
-
-**If you're on the Apollo Operator**, see the Operator's own documentation for whether metrics are collected — the port is set by the Operator rather than by you, so it isn't something you configure.
+**If you're on a raw-manifest or custom deployment**, the `selector` you already set to locate your router is also what enables metrics collection under `mode: job`. This tier has no fixed label to resolve pods from otherwise, so leaving `selector` unset means no pods to try, and this section stays empty. If your exporter listens on a port other than `9090`, also set `metricsPort`. Under `mode: local`, the collector always targets `localhost:<metricsPort>` (default `9090`) once a pod is bridged.
 
 **A service mesh enforcing strict mTLS can also empty this section**, even with the exporter correctly configured above — this applies to `mode: local` and `mode: job` alike, since collection runs from outside the mesh either way. See `specs/deployment/v1/v1.md` → Running outside the mesh doesn't have to mean losing metrics.
 
 ### Redaction
 
-Redaction runs automatically with no configuration needed. JWT/auth config, header values, operation bodies in logs, subgraph URLs are redacted automatically. `APOLLO_KEY` is never collected under any circumstances.
+Redaction runs automatically with no configuration needed. JWT/auth config, header values, operation bodies in logs, subgraph URLs are redacted automatically.
+
+`APOLLO_KEY` is never collected **as long as it's stored in a Kubernetes Secret and referenced via `secretKeyRef`**, the recommended setup, and what the official Apollo router Helm chart produces. In that case the key is structurally isolated from everything this tool reads.
+
+That guarantee does not extend to a customer who sets `APOLLO_KEY`, or any other secret, as a literal env value. For this case there is a redaction safety net, not structural isolation. **If your deployment sets secrets as literal env values rather than through Kubernetes Secrets, inspect your bundle before sharing it**, the same way you would for any other config you're not certain is fully covered.
 
 ### Cluster footprint
 
@@ -190,7 +176,7 @@ If you expect to run diagnostics more than once, you may prefer to leave it inst
 
 ### Permissions for on-demand collection
 
-Installing with `mode: local` requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself. `collect.sh` then runs using your existing kubectl credentials; no additional ServiceAccount is created for that step. Reaching `router-metrics` also needs `create` on the `pods/portforward` subresource in the router's namespace — port-forwarding to a Service resolves to one of its pods under the hood, and `collect.sh` does this on your behalf. Declining it doesn't fail collection, it only means `router-metrics` throws an error.
+Installing with `mode: local` requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself. `collect.sh` then runs using your existing kubectl credentials; no additional ServiceAccount is created for that step. Reaching `router-metrics` also needs `create` on the `pods/portforward` subresource in the router's namespace because `router-metrics` port-forwards directly to each matching pod under the hood as part of running `support-bundle` itself. Declining it doesn't fail collection, it only means `router-metrics` throws an error.
 
 Installing with `mode: job` requires more: creating a Job, a ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
 

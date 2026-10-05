@@ -1,6 +1,9 @@
 # Only rendered for mode: job. Runs collection in-cluster using the namespace-scoped
 # ServiceAccount from job-rbac.yaml.
 {{- if eq .Values.mode "job" }}
+{{- if not .Values.job.storage.provider }}
+{{- fail "job.storage.provider is required for mode: job. Set job.storage.provider to s3, gcs, or url." }}
+{{- end }}
 {{- $secretName := include "router-diagnostics-chart.storageSecretName" . }}
 {{- $useS3Secret := and $secretName (eq .Values.job.storage.provider "s3") }}
 {{- $useGCSSecret := and $secretName (eq .Values.job.storage.provider "gcs") }}
@@ -23,6 +26,10 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
+      {{- with .Values.job.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       serviceAccountName: router-diagnostics-job
       restartPolicy: Never
       containers:

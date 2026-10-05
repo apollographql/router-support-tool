@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+#MISE description="Verify the mode: local metrics collector emits a friendly message when no pod responds on the metrics port"
+#
+# When prometheus is disabled or the metrics port doesn't match, no pod returns data and the
+# router-metrics section in the bundle is empty. The hostCollectors.run script should write a
+# plain explanation to stdout (recorded as router-metrics/output by troubleshoot.sh) instead
+# of leaving the section silently empty.
+set -euo pipefail
+
+CHART_PATH="router-diagnostics-chart"
+
+# --- Step 1: extract the hostCollectors.run script from the rendered spec -----------------
+
+RENDERED=$(helm template ci-test "$CHART_PATH" \
+  --set namespace=ci-test --set mode=local \
+  --show-only templates/base-spec-configmap.yaml)
+
+SPEC_DOC=$(echo "$RENDERED" | yq '.data["support-bundle-spec"]')
+SCRIPT=$(echo "$SPEC_DOC" | yq '.spec.hostCollectors[0].run.args[1]')
+
+if [ -z "$SCRIPT" ]; then
+  echo "could not extract hostCollectors.run script from rendered spec" >&2
+  exit 1
+fi
+
+WORKDIR=$(mktemp -d)
+trap 'rm -rf "$WORKDIR"' EXIT
+
+TS_OUTPUT_DIR="$WORKDIR/output"
+STUB_DIR="$WORKDIR/stubs"
+mkdir -p "$TS_OUTPUT_DIR" "$STUB_DIR"
+
+# --- Step 2: stubs -------------------------------------------------------------------------
+
+# kubectl: returns one fake pod name for 'get pods' and no-op for everything else
+cat > "$STUB_DIR/kubectl" <<'EOF'
+#!/bin/sh
+if [ "$1" = "get" ] && [ "$2" = "pods" ]; then
+  echo "fake-router-pod-abc"
+fi
+EOF
+chmod +x "$STUB_DIR/kubectl"
+
+# curl: always fails — simulates no listener on the metrics port
+cat > "$STUB_DIR/curl" <<'EOF'
+#!/bin/sh
+exit 1
+EOF
+chmod +x "$STUB_DIR/curl"
+
+# sleep: no-op so the 30-retry loop completes instantly
+cat > "$STUB_DIR/sleep" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "$STUB_DIR/sleep"
+
+# --- Step 3: run the script ----------------------------------------------------------------
+
+OUTPUT=$(PATH="$STUB_DIR:$PATH" TS_OUTPUT_DIR="$TS_OUTPUT_DIR" sh -c "$SCRIPT" 2>/dev/null)
+
+# --- Step 4: assert the fallback message appears -------------------------------------------
+
+if echo "$OUTPUT" | grep -q "metrics not collected"; then
+  echo "test-metrics-fallback: PASS"
+else
+  echo "test-metrics-fallback: FAIL — expected 'metrics not collected' in script stdout" >&2
+  echo "Script output was: $OUTPUT" >&2
+  exit 1
+fi

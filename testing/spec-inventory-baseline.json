@@ -16,11 +16,6 @@
   },
   {
     "kind": "collector",
-    "type": "http",
-    "name": "router-metrics"
-  },
-  {
-    "kind": "collector",
     "type": "logs",
     "name": "router-logs"
   },
@@ -28,6 +23,11 @@
     "kind": "collector",
     "type": "nodeMetrics",
     "name": "router-resource-usage"
+  },
+  {
+    "kind": "hostCollector",
+    "type": "run",
+    "name": "router-metrics"
   },
   {
     "kind": "redactor",
@@ -42,7 +42,17 @@
   {
     "kind": "redactor",
     "type": "redactor",
+    "name": "router-host-collector-run-diagnostics"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
     "name": "router-jwt-jwks-fetch-headers"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
+    "name": "router-key-named-env-var"
   },
   {
     "kind": "redactor",
@@ -53,6 +63,11 @@
     "kind": "redactor",
     "type": "redactor",
     "name": "router-log-response-body"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
+    "name": "router-pass-named-env-var"
   },
   {
     "kind": "redactor",

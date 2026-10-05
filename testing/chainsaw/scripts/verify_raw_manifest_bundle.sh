@@ -10,6 +10,8 @@
 # directory.
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/assert_host_collector_diagnostics_redacted.sh"
+
 NAMESPACE=$1
 RESOURCE_FILE=$2
 CHART_PATH=$3
@@ -26,10 +28,7 @@ helm install "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
   --set mode=local \
   --set metricsPort=9091
 
-# Default selector matches what was installed above (unset -> official chart's own
-# label); --metrics-port must match --set metricsPort=9091 above - collect.sh takes
-# these directly, it doesn't read the release.
-"$COLLECT_SCRIPT" --namespace "$NAMESPACE" --metrics-port 9091
+"$COLLECT_SCRIPT" --namespace "$NAMESPACE"
 
 BUNDLE=$(ls -t support-bundle-*.tar.gz | head -1)
 DIR="${BUNDLE%.tar.gz}"
@@ -44,11 +43,21 @@ fail() {
 META="$DIR/meta.json"
 [ "$(jq -r '.mode' "$META")" = "local" ] || fail "meta.json mode != local"
 [ "$(jq -r '.namespace' "$META")" = "$NAMESPACE" ] || fail "meta.json namespace != $NAMESPACE"
+EXPECTED_VERSION=$(grep -m1 '^version:' "$CHART_PATH/Chart.yaml" | awk '{print $2}')
+[ "$(jq -r '.version' "$META")" = "$EXPECTED_VERSION" ] || fail "meta.json version != $CHART_PATH/Chart.yaml's version ($EXPECTED_VERSION)"
 
-# Check router-metrics/result.json (collected via the http collector): make sure we got a real Prometheus scrape
-RESULT="$DIR/router-metrics/result.json"
-[ "$(jq -r '.response.status' "$RESULT")" = "200" ] || fail "router-metrics: response.status != 200"
-grep -q "apollo_router_" <<< "$(jq -r '.response.body' "$RESULT")" || fail "router-metrics: body doesn't contain real router metrics"
+# Check router-metrics (run host collector): one .txt per pod via outputDir
+EXPECTED_METRICS_DIR="$DIR/host-collectors/run-host/router-metrics/pods"
+[ -d "$EXPECTED_METRICS_DIR" ] || fail "router-metrics: expected directory $EXPECTED_METRICS_DIR not found - did the troubleshoot.sh version change where a host run collector's outputDir lands?"
+FOUND=false
+while IFS= read -r f; do
+  grep -q "apollo_router_" "$f" && FOUND=true && break
+done < <(find "$EXPECTED_METRICS_DIR" -maxdepth 1 -name "*.txt" -type f 2>/dev/null)
+[ "$FOUND" = true ] || fail "router-metrics: no per-pod metrics file contains apollo_router_ metrics"
+
+# Check host-collector diagnostic sidecar: present and fully redacted (see
+# specs/collection/data_sanitization/host_collector_diagnostics.md)
+assert_host_collector_diagnostics_redacted "$DIR"
 
 # Check clusterResources collector: pod is Running, zero restarts, expected image + resources are in the support bundle
 PODS="$DIR/cluster-resources/pods/$NAMESPACE.json"
@@ -108,9 +117,26 @@ for log in "$DIR"/router-logs/*/router.log; do
 done
 [ "$FOUND_TARGET" = true ] || fail "no router.log contained the expected startup target"
 
-# APOLLO_KEY must never appear anywhere in the bundle
-if grep -rq "APOLLO_KEY" "$DIR"; then
-  fail "APOLLO_KEY found in bundle contents - this must never happen"
+# --- APOLLO_KEY literal-env-value redaction (specs/collection/data_sanitization/secret_shaped_env_vars.md) ---
+for kind in deployments pods replicasets; do
+  F="$DIR/cluster-resources/$kind/$NAMESPACE.json"
+  [ -e "$F" ] || fail "expected cluster-resources file missing: $F"
+  grep -q '"name": "APOLLO_KEY"' "$F" || fail "APOLLO_KEY env var name not found in $F - positive control failed, the redaction check below would be meaningless"
+  grep -q '"value": "\*\*\*HIDDEN\*\*\*"' "$F" || fail "APOLLO_KEY env var in $F was not masked"
+done
+
+if grep -rq "SENTINELAPOLLOKEYTESTING123" "$DIR"; then
+  fail "APOLLO_KEY literal value found unredacted in bundle contents - this must never happen"
+fi
+
+# --- Redis URL-embedded credential in a pod-spec env var (specs/collection/data_sanitization/redis_credentials.md) ---
+for kind in deployments pods replicasets; do
+  F="$DIR/cluster-resources/$kind/$NAMESPACE.json"
+  grep -q '"name": "REDIS_URL"' "$F" || fail "REDIS_URL env var not found in $F - positive control failed, the redaction check below would be meaningless"
+  grep -q ":6379/" "$F" || fail "REDIS_URL env var in $F appears fully masked, not just its credential - expected the port/db to survive"
+done
+if grep -rq "SENTINELREDISPODENVPASSWORD" "$DIR"; then
+  fail "REDIS_URL pod-spec credential found unredacted in bundle contents"
 fi
 
 CONFIG="$DIR/configmaps/$NAMESPACE/router-config.json"

@@ -31,7 +31,7 @@ support-bundle-2026-08-11T14_23_00/
 ├── version.yaml
 ├── analysis.json
 ├── meta.json
-├── router-metrics/
+├── router-metrics-<pod-name>/
 │   └── result.json
 ├── router-logs/
 │   └── <router-pod-name>/
@@ -46,8 +46,6 @@ support-bundle-2026-08-11T14_23_00/
 │   └── ...
 ├── node-metrics/
 │   └── <node-name>.json
-├── helm/
-│   └── production.json
 └── configmaps/
     └── production/
         └── <release-name>.json
@@ -58,3 +56,21 @@ Notes:
 
 - `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace (schema is found here). `configmaps/production/<release-name>.json` is the dedicated `configMap` collector's own output, one file per matched release.
 
+## Bundle layout differs by mode for `router-metrics`
+
+The example above is `mode: job`, where `router-metrics` is one `http` collector per pod (`specs/collection/base_spec.md` → Per-pod metrics collection). troubleshoot.sh writes each `http` collector's result at a top-level `<collector-name>/result.json`, so pod `router-7f8`, for example, lands at:
+
+```
+router-metrics-router-7f8/
+└── result.json
+```
+
+**`mode: local` is a `hostCollectors.run` collector instead, and troubleshoot.sh nests a host run collector's `outputDir` differently** — under `host-collectors/run-host/<collectorName>/`, not at the top level. This collector's `collectorName` is `router-metrics` and its `outputDir` is `pods`. The same per-pod metrics data lands at:
+
+```
+host-collectors/run-host/
+└── router-metrics/
+    └── pods/
+        ├── router-7f8.txt
+        └── router-9ad.txt
+```

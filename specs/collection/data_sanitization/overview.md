@@ -10,12 +10,17 @@ This directory is where Apollo's custom redactors are specified, one file per se
 | Subgraph routing URLs | `subgraph_urls.md` |
 | Redis credentials embedded in cache URLs | `redis_credentials.md` |
 | TLS private keys (`tls.supergraph`, `tls.subgraph.*`, `tls.connector.*`) | `tls_private_keys.md` |
+| `APOLLO_KEY` and GraphOS-key-shaped values in pod specs | `secret_shaped_env_vars.md` |
+| The collecting operator's own machine environment via a host-collector's diagnostic sidecar | `host_collector_diagnostics.md` |
 
-Every file here is scoped to the router's own `router.yaml` (captured per `specs/collection/base_spec.md` → `router.yaml` capture) and adjacent collected surfaces (logs, the schema ConfigMap). Generic secrets such as tokens with recognizable env-var names are already covered by troubleshoot's built-in redactors, which run unconditionally on every collected file. These docs exist because the router's own config shape has fields no generic pattern knows about.
+## The general limit: env-indirected secrets outside `router.yaml`
+
+A secret a customer keeps out of `router.yaml` via `${env.*}` indirection, and sets as a literal pod-spec env value, is only covered on that surface if it matches a redactor specifically written for it, currently `APOLLO_KEY`/any `*_KEY`-named var (`secret_shaped_env_vars.md`), Redis URL-embedded credentials (`redis_credentials.md`), and TLS private keys (`tls_private_keys.md`). Everything else this directory protects in `router.yaml` because no recognizable value format exists to mask by and no fixed env var name exists to key on.
 
 ## Built-in redactors
 
-troubleshoot.sh ships a default set of redactors that runs on every file regardless of spec content. This includes env-var-named secrets (`password`, `token`, `*_SECRET_ACCESS_KEY`, etc.), URL-embedded credentials, database connection strings, and a few Kubernetes-specific patterns (`last-applied-configuration` annotations, kURL bootstrap tokens).
+troubleshoot.sh ships a default set of redactors that runs on every file regardless of spec content. This includes env-var-named secrets (`password`, `token`, `*_SECRET_ACCESS_KEY`, etc.), URL-embedded credentials, database connection strings, and a few Kubernetes-specific patterns (`last-applied-configuration` annotations, kURL bootstrap tokens). Built-ins always run before any custom redactor in this directory, on every file, whether or not a custom rule also targets that file.
+
 
 ## How custom redaction works
 
@@ -130,13 +135,14 @@ Every mechanism here fails silently, so verification needs a way to tell a rule 
 
 ## Choosing a mechanism
 
-The `helm` collector never captures the router's configuration values — only release metadata (name, chart, version, revision history), since `collectValues` is never set to `true` (see `specs/collection/base_spec.md` → `router.yaml` capture). So `helm/*.json` never carries a router secret to redact in the first place, and every redactor in this directory has exactly one surface and one mechanism to reach for:
+Every `router.yaml`-scoped redactor in this directory has exactly one surface and one mechanism to reach for:
 
 | Surface | Shape | Mechanism |
 | --- | --- | --- |
 | `cluster-resources/configmaps/*.json`, `configmaps/*/*.json` | `router.yaml` as a JSON-escaped string — one long line | Single-line `regex`. |
+| `cluster-resources` pod-spec JSON (`pods`, `deployments`, etc.) | Genuinely structured JSON, not an embedded string | Two-line `selector`/`redactor` (env `name`/`value` on adjacent lines), or single-line `regex` for format-based rules. |
 
-`yamlPath` is documented above as a mechanism this repo's redactors can use, but none of the current rules in this directory use it — there's currently no genuinely structured surface (an array or object root, rather than an embedded string) that needs redacting.
+`yamlPath` isn't used by any current rule — nothing here needs its whole-document re-serialization.
 
 ## How the `Redactor` document is delivered
 
