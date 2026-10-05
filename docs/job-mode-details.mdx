@@ -5,6 +5,7 @@ description: Complete reference for running the GraphOS Router Support Tool as m
 ---
 
 import ChartValuesCommon from './resources/chart-values-common.mdx';
+import ConfirmingRBAC from './resources/confirming-rbac.mdx';
 
 This page is the complete reference for `mode: job`.
 
@@ -53,6 +54,8 @@ Collection itself runs using a namespace-scoped ServiceAccount the chart creates
 On top of this, three separate cluster-scoped grants apply for `nodeMetrics`, deliberately kept independent so you can decline the more sensitive ones without losing the others. Go to [Collecting Metrics → If Prometheus isn't set up yet](./collecting-metrics#if-prometheus-isnt-set-up-yet) for exactly what those three grants are and what each authorizes.
 
 **`pods/exec` is not required**: nothing this tool does runs inside your router container.
+
+<ConfirmingRBAC />
 
 ## Cluster footprint
 

@@ -5,6 +5,7 @@ description: Complete reference for running the GraphOS Router Support Tool as m
 ---
 
 import ChartValuesCommon from './resources/chart-values-common.mdx';
+import ConfirmingRBAC from './resources/confirming-rbac.mdx';
 
 This page is the complete reference for `mode: local`. For the shortest path to a first bundle, go to [Local Mode](./getting-started/local-mode) in the Getting Started guide instead.
 
@@ -32,6 +33,8 @@ Installing the chart requires permission to create a ConfigMap in the target nam
 Running `./collect.sh` uses **your own existing kubectl credentials**; no additional ServiceAccount is created for this step. Reaching the metrics collector additionally needs `create` on the `pods/portforward` subresource in the router's namespace. For more information, go to [Collecting Metrics](./collecting-metrics#mode-local). Declining this doesn't fail collection; it only means that section comes back empty.
 
 **`pods/exec` isn't required**: nothing this tool does runs inside your router container.
+
+<ConfirmingRBAC />
 
 ## Cluster footprint
 
