@@ -10,6 +10,8 @@
 # directory.
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/assert_host_collector_diagnostics_redacted.sh"
+
 NAMESPACE=$1
 RESOURCE_FILE=$2
 CHART_PATH=$3
@@ -41,6 +43,8 @@ fail() {
 META="$DIR/meta.json"
 [ "$(jq -r '.mode' "$META")" = "local" ] || fail "meta.json mode != local"
 [ "$(jq -r '.namespace' "$META")" = "$NAMESPACE" ] || fail "meta.json namespace != $NAMESPACE"
+EXPECTED_VERSION=$(grep -m1 '^version:' "$CHART_PATH/Chart.yaml" | awk '{print $2}')
+[ "$(jq -r '.version' "$META")" = "$EXPECTED_VERSION" ] || fail "meta.json version != $CHART_PATH/Chart.yaml's version ($EXPECTED_VERSION)"
 
 # Check router-metrics (run host collector): one .txt per pod via outputDir
 EXPECTED_METRICS_DIR="$DIR/host-collectors/run-host/router-metrics/pods"
@@ -50,6 +54,10 @@ while IFS= read -r f; do
   grep -q "apollo_router_" "$f" && FOUND=true && break
 done < <(find "$EXPECTED_METRICS_DIR" -maxdepth 1 -name "*.txt" -type f 2>/dev/null)
 [ "$FOUND" = true ] || fail "router-metrics: no per-pod metrics file contains apollo_router_ metrics"
+
+# Check host-collector diagnostic sidecar: present and fully redacted (see
+# specs/collection/data_sanitization/host_collector_diagnostics.md)
+assert_host_collector_diagnostics_redacted "$DIR"
 
 # Check clusterResources collector: pod is Running, zero restarts, expected image + resources are in the support bundle
 PODS="$DIR/cluster-resources/pods/$NAMESPACE.json"

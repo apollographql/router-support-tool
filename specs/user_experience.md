@@ -8,7 +8,7 @@ Customer wants to collect data
     - They want to collect a "healthy" snapshot
         │
         ▼
-User (or platform team) triggers collection — via the chart, or with the Apollo Operator
+User (or platform team) triggers collection
         │
         ▼
 .tar.gz support bundle produced, redacted automatically
@@ -40,7 +40,6 @@ The tool supports three deployment tiers in v1:
 
 | Deployment | Support in v1 | What you supply |
 | --- | --- | --- |
-| **Apollo Operator** | Full support, zero config once enabled | Nothing |
 | **Official Apollo router Helm chart** | Full support | `namespace` only |
 | **Raw manifests / custom deployment** | Supported | `namespace`, `selector`, `configMapName` |
 
@@ -66,7 +65,7 @@ See [Permissions for on-demand collection](#permissions-for-on-demand-collection
 Download the collect script onto the machine you'll collect from, and make it executable.
 
 ```bash
-curl -sSLo collect.sh https://storage.googleapis.com/<bucket>/router-diagnostics-collect.sh
+curl -sSLo collect.sh https://router.apollo.dev/router-diagnostics-collect/latest
 chmod +x collect.sh
 ```
 
@@ -121,21 +120,11 @@ The Job runs the collection automatically using a namespace-scoped ServiceAccoun
 
 **If your cluster runs a service mesh, the Job's pod doesn't join it by default.** Sidecar injection is disabled automatically so the Job reliably reaches `Completed` instead of getting stuck in `Running` waiting on a long-lived sidecar. If your platform team's policy requires every pod to be in the mesh, this can be overridden. See `specs/deployment/v1/v1.md` → Service mesh environments for how to override it.
 
-## Apollo Operator customers
-
-Zero configuration. The Operator writes the spec into a cluster ConfigMap directly, filling in its values from the deployment conventions it already knows. It is the same spec every other tier runs — only the values come from the Operator instead of from you. Run:
-
-```bash
-kubectl support-bundle --load-cluster-specs
-```
-
-No chart install and no values to supply — the `support-bundle` plugin from step one is the only thing you set up.
-
 ---
 
 ## What you get, whichever path you used
 
-The rest of this section applies to **every** path — `mode: local`, `mode: job`, and the Apollo Operator. Only where a path differs is it called out.
+The rest of this section applies to both `mode: local` and `mode: job`. Only where a path differs is it called out.
 
 ### Support tool output
 
@@ -143,7 +132,6 @@ Collection produces a support bundle — a `support-bundle-<timestamp>.tar.gz` a
 
 - **`mode: local`** — the file appears in your current directory.
 - **`mode: job`** — the Job writes it in-cluster and your platform team retrieves it. See `specs/storage/`
-- **Apollo Operator** - see `specs/deployment/v1/operator.md`
 
 It includes router version, sanitized configuration, recent logs, metrics (if you've enabled the Prometheus endpoint), and pod status. Your Redis configuration and any Redis errors in the router logs are captured, so support can still see how Redis is configured and whether the router is failing against it. See `specs/collection/output.md` for exactly what the extracted archive looks like, including a worked directory-tree example.
 
@@ -165,8 +153,6 @@ If the exporter is off, or bound somewhere the collector can't reach, that secti
 **Under `mode: local`, reaching this port also requires bridging your machine to the cluster network** because pod IPs aren't reachable directly from outside the cluster. This is handled automatically by our chart's own script, run as the `router-metrics` collector. It resolves matching pods and port-forwards each one in turn.
 
 **If you're on a raw-manifest or custom deployment**, the `selector` you already set to locate your router is also what enables metrics collection under `mode: job`. This tier has no fixed label to resolve pods from otherwise, so leaving `selector` unset means no pods to try, and this section stays empty. If your exporter listens on a port other than `9090`, also set `metricsPort`. Under `mode: local`, the collector always targets `localhost:<metricsPort>` (default `9090`) once a pod is bridged.
-
-**If you're on the Apollo Operator**, see the Operator's own documentation for whether metrics are collected — the port is set by the Operator rather than by you, so it isn't something you configure.
 
 **A service mesh enforcing strict mTLS can also empty this section**, even with the exporter correctly configured above — this applies to `mode: local` and `mode: job` alike, since collection runs from outside the mesh either way. See `specs/deployment/v1/v1.md` → Running outside the mesh doesn't have to mean losing metrics.
 

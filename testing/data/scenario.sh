@@ -65,6 +65,8 @@ test -f "$BUNDLE_DIR/meta.json"
 grep -q '"mode": *"job"' "$BUNDLE_DIR/meta.json"
 grep -q "\"namespace\": *\"$NAMESPACE\"" "$BUNDLE_DIR/meta.json"
 grep -q '"sidecar_injection_disabled": *true' "$BUNDLE_DIR/meta.json"
+EXPECTED_VERSION=$(grep -m1 '^version:' "$CHART_DIR/Chart.yaml" | awk '{print $2}')
+grep -q "\"version\": *\"$EXPECTED_VERSION\"" "$BUNDLE_DIR/meta.json"
 
 # Every section below should have data to collect. An empty one here is an error.
 find "$BUNDLE_DIR/router-logs" -name '*.log' -size +0 | grep -q .               # router container logs
