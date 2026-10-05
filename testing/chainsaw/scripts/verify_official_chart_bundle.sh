@@ -9,6 +9,8 @@
 # chainsaw-test.yaml, which runs this with the test's own directory as its working directory.
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/assert_host_collector_diagnostics_redacted.sh"
+
 NAMESPACE=$1
 CHART_PATH=$2
 COLLECT_SCRIPT=$3
@@ -43,6 +45,8 @@ tar xzf "$BUNDLE"
 META="$DIR/meta.json"
 [ "$(jq -r '.mode' "$META")" = "local" ] || fail "meta.json mode != local"
 [ "$(jq -r '.namespace' "$META")" = "$NAMESPACE" ] || fail "meta.json namespace != $NAMESPACE"
+EXPECTED_VERSION=$(grep -m1 '^version:' "$CHART_PATH/Chart.yaml" | awk '{print $2}')
+[ "$(jq -r '.version' "$META")" = "$EXPECTED_VERSION" ] || fail "meta.json version != $CHART_PATH/Chart.yaml's version ($EXPECTED_VERSION)"
 
 # --- router-metrics (run host collector): one .txt per pod via outputDir ---
 EXPECTED_METRICS_DIR="$DIR/host-collectors/run-host/router-metrics/pods"
@@ -52,6 +56,10 @@ while IFS= read -r f; do
   grep -q "apollo_router_" "$f" && FOUND=true && break
 done < <(find "$EXPECTED_METRICS_DIR" -maxdepth 1 -name "*.txt" -type f 2>/dev/null)
 [ "$FOUND" = true ] || fail "router-metrics: no per-pod metrics file contains apollo_router_ metrics"
+
+# --- host-collector diagnostic sidecar: present and fully redacted (see
+# specs/collection/data_sanitization/host_collector_diagnostics.md) ---
+assert_host_collector_diagnostics_redacted "$DIR"
 
 # --- clusterResources: pod is Running, zero restarts, expected resources ---
 # No image check here (unlike raw-manifest) - the official chart pins its own image tag,
@@ -138,9 +146,10 @@ jq -e '.data["configuration.yaml"] | contains("listen: 0.0.0.0:9090")' "$CONFIG"
 jq -e '.data["configuration.yaml"] | contains("path: /metrics")' "$CONFIG" > /dev/null \
   || fail "collected config: telemetry.exporters.metrics.prometheus.path != /metrics"
 
-# --- <release>-supergraph ConfigMap (templates/supergraph-cm.yaml), via clusterResources -
-# the chart's own supergraph ConfigMap isn't collected by our configMap collector, which
-# only targets the rendered router config.
+# --- <release>-supergraph ConfigMap (templates/supergraph-cm.yaml) -
+# also collected a second time by the configMap collector (configmaps/$NAMESPACE/router-supergraph.json),
+# since it carries the same app.kubernetes.io/name=router label the main config does - checked here via
+# the clusterResources copy, which is always present regardless of mode/selector.
 SCHEMA_CONFIG="$DIR/cluster-resources/configmaps/$NAMESPACE.json"
 
 # --- Redaction tests: every sentinel value planted in the fixtures is named SENTINEL_* -

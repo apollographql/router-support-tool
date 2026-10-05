@@ -11,6 +11,7 @@ This directory is where Apollo's custom redactors are specified, one file per se
 | Redis credentials embedded in cache URLs | `redis_credentials.md` |
 | TLS private keys (`tls.supergraph`, `tls.subgraph.*`, `tls.connector.*`) | `tls_private_keys.md` |
 | `APOLLO_KEY` and GraphOS-key-shaped values in pod specs | `secret_shaped_env_vars.md` |
+| The collecting operator's own machine environment via a host-collector's diagnostic sidecar | `host_collector_diagnostics.md` |
 
 ## The general limit: env-indirected secrets outside `router.yaml`
 
@@ -134,7 +135,7 @@ Every mechanism here fails silently, so verification needs a way to tell a rule 
 
 ## Choosing a mechanism
 
-The `helm` collector never captures the router's configuration values — only release metadata (name, chart, version, revision history), since `collectValues` is never set to `true` (see `specs/collection/base_spec.md` → `router.yaml` capture). So `helm/*.json` never carries a router secret to redact in the first place, and every `router.yaml`-scoped redactor in this directory has exactly one surface and one mechanism to reach for:
+Every `router.yaml`-scoped redactor in this directory has exactly one surface and one mechanism to reach for:
 
 | Surface | Shape | Mechanism |
 | --- | --- | --- |

@@ -74,7 +74,7 @@ Shipping capabilities as separate specs, rather than growing a single spec, is m
 
 For example, a future `enhanced-memory` spec might use the router's diagnostics plugin to profile memory via jemalloc. Because triggering a heap dump above certain memory thresholds risks worsening the pressure it is trying to diagnose, that spec ships with its own schedule and threshold rules — independent of the base spec's cadence.
 
-Collection degrades gracefully. A collector whose target does not exist — Prometheus not enabled, no matching ConfigMap, a Helm release the `helm` collector cannot find — returns empty rather than failing the run. `meta.json` records what the tool was configured to do, which helps narrow down why a section is empty, but it cannot attribute every empty section on its own — see `specs/collection/meta_json.md` for what it does and does not cover.
+Collection degrades gracefully. A collector whose target does not exist — Prometheus not enabled, no matching ConfigMap — returns empty rather than failing the run. `meta.json` records what the tool was configured to do, which helps narrow down why a section is empty, but it cannot attribute every empty section on its own — see `specs/collection/meta_json.md` for what it does and does not cover.
 
 #### base spec
 
@@ -87,7 +87,7 @@ Collection degrades gracefully. A collector whose target does not exist — Prom
 | Runtime logs (all containers in the pod) | `logs` |
 | Container CPU and memory metrics | `nodeMetrics` (kubelet Summary API) |
 | Prometheus metrics snapshot | `http` |
-| `router.yaml` configuration | `helm` + `configMap` |
+| `router.yaml` configuration | `configMap` |
 | `APOLLO_GRAPH_REF`, `APOLLO_ROUTER_OFFICIAL_HELM_CHART` (from the pod spec) | `clusterResources` |
 
 See `specs/collection/base_spec.md` for collector-level targeting details and what was considered and left out.
@@ -102,7 +102,7 @@ Redaction runs after all collectors complete and before the bundle is packaged, 
 
 Two categories:
 
-- **Built-in redactors** (troubleshoot.sh, no Apollo work) — passwords and API tokens, AWS credentials, connection strings, IP addresses, bearer tokens and Authorization headers.
+- **Built-in redactors** (troubleshoot.sh, no Apollo work) — env-var-named secrets (`password`, `token`, AWS access keys, etc.), URL-embedded credentials, database connection strings, and a few Kubernetes-specific patterns.
 - **Custom redactors** (authored by Apollo) — JWT and auth config, header values in config (keys preserved, values stripped), operation bodies in logs, subgraph URLs, graph schema/SDL.
 
 `APOLLO_KEY` is never collected in the first place **when it is Secret-backed**, the recommended configuration. In this case, it is structurally isolated in a separate Kubernetes Secret from the ConfigMap the tool reads, so no redaction rule is load-bearing for it. That guarantee does not extend to a customer who sets `APOLLO_KEY`, or any other secret, as a literal env value instead of via `secretKeyRef` — `clusterResources` collects the full pod spec regardless, literal value included. For that case there is a redaction safety net, not structural isolation. See `specs/collection/data_sanitization/secret_shaped_env_vars.md`.
