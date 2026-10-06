@@ -97,22 +97,22 @@ support-bundle-2026-08-11T14_23_00/
 │   └── <node-name>.json
 └── configmaps/
     └── production/
-        └── <release-name>.json
+        └── <configmap-name>.json
 ```
 
 - **`router-metrics-<pod-name>/`** — one directory per router pod matching `selector`, each from its own `http` collector. Go to [Collecting Metrics](./collecting-metrics#mode-job) for how pods are targeted.
-- If more than one router release matched the label selector in `production`, `configmaps/production/` becomes multiple files, one per release:
+- The file under `configmaps/production/` is named after the matched ConfigMap's own Kubernetes name, not a Helm release — on the official chart these happen to coincide, since that chart names the ConfigMap after the release, but a raw-manifest or custom deployment has no Helm release of the router at all. If more than one ConfigMap matched the label selector in `production`, `configmaps/production/` becomes multiple files, one per ConfigMap:
 
   ```
   configmaps/
   └── production/
-      ├── <release-1-name>.json
-      └── <release-2-name>.json
+      ├── <configmap-1-name>.json
+      └── <configmap-2-name>.json
   ```
-- `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace. `configmaps/production/<release-name>.json` is the dedicated `configMap` collector's own output.
+- `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace. `configmaps/production/<configmap-name>.json` is the dedicated `configMap` collector's own output.
 
 <Note>
 
-`keyExists: false` in `configmaps/<namespace>/<release-name>.json` doesn't mean the config is missing. This is a troubleshoot.sh quirk: the `configMap` collector's `keyExists` field is only ever set `true` when the collector is configured with a specific key to look for. Our spec uses `includeAllData: true` with no key set, so `keyExists` is always `false` in this output, regardless of whether the config was actually captured. Check for the config data in that same file, rather than reading `keyExists` as a success/failure signal.
+`keyExists: false` in `configmaps/<namespace>/<configmap-name>.json` doesn't mean the config is missing. This is a troubleshoot.sh quirk: the `configMap` collector's `keyExists` field is only ever set `true` when the collector is configured with a specific key to look for. Our spec uses `includeAllData: true` with no key set, so `keyExists` is always `false` in this output, regardless of whether the config was actually captured. Check for the config data in that same file, rather than reading `keyExists` as a success/failure signal.
 
 </Note>

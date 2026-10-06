@@ -48,13 +48,13 @@ support-bundle-2026-08-11T14_23_00/
 │   └── <node-name>.json
 └── configmaps/
     └── production/
-        └── <release-name>.json
+        └── <configmap-name>.json
 ```
 
 Notes: 
-- If more than one router release matched the label selector in `production`, the last entry becomes multiple files — one per release.
+- If more than one ConfigMap matched the label selector in `production`, the last entry becomes multiple files — one per ConfigMap, named after that ConfigMap's own Kubernetes name, not a Helm release (a raw-manifest or custom deployment has no Helm release of the router at all; this only coincides with a release name on the official Apollo router Helm chart).
 
-- `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace (schema is found here). `configmaps/production/<release-name>.json` is the dedicated `configMap` collector's own output, one file per matched release.
+- `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace (schema is found here). `configmaps/production/<configmap-name>.json` is the dedicated `configMap` collector's own output, one file per matched ConfigMap.
 
 ## Bundle layout differs by mode for `router-metrics`
 

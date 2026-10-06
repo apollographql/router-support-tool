@@ -82,24 +82,24 @@ support-bundle-2026-08-11T14_23_00/
 │   └── <node-name>.json
 └── configmaps/
     └── production/
-        └── <release-name>.json
+        └── <configmap-name>.json
 ```
 
 - **`host-collectors/run-host/router-metrics/pods/`** — one `<pod-name>.txt` per router pod matching `selector`, written by the `router-metrics` host collector's script. This nested path (not a top-level `router-metrics/`) is how troubleshoot.sh lays out a `hostCollectors.run` collector's output, go to [Collecting Metrics](./collecting-metrics#mode-local) for the mechanics.
 - **`host-collectors/run-host/router-metrics-info.json`** — a diagnostic sidecar troubleshoot.sh writes for every `hostCollectors.run` collector. Its contents are masked wholesale. For more details, go to [Collecting Metrics](./collecting-metrics#mode-local).
 - **`host-collectors/run-host/router-metrics.txt`** — the engine's own stdout capture for the collector as a whole, separate from the per-pod files under `pods/`. Our script only writes to stdout when no pod responds.
-- If more than one router release matched the label selector in `production`, `configmaps/production/` becomes multiple files, one per release:
+- If more than one ConfigMap in your namespace matches, `configmaps/production/` becomes multiple files, one per ConfigMap — named after that ConfigMap's own Kubernetes name, not a Helm release, which a raw-manifest or custom deployment doesn't have for its router at all:
 
   ```
   configmaps/
   └── production/
-      ├── <release-1-name>.json
-      └── <release-2-name>.json
+      ├── <configmap-1-name>.json
+      └── <configmap-2-name>.json
   ```
-- `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace. `configmaps/production/<release-name>.json` is the dedicated `configMap` collector's own output.
+- `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace. `configmaps/production/<configmap-name>.json` is the dedicated `configMap` collector's own output.
 
 <Note>
 
-`keyExists: false` in `configmaps/<namespace>/<release-name>.json` doesn't mean the config is missing. This is a troubleshoot.sh quirk: the `configMap` collector's `keyExists` field is only ever set `true` when the collector is configured with a specific key to look for. Our spec uses `includeAllData: true` with no key set, so `keyExists` is always `false` in this output, regardless of whether the config was actually captured. Check for the config data in that same file, rather than reading `keyExists` as a success/failure signal.
+`keyExists: false` in `configmaps/<namespace>/<configmap-name>.json` doesn't mean the config is missing. This is a troubleshoot.sh quirk: the `configMap` collector's `keyExists` field is only ever set `true` when the collector is configured with a specific key to look for. Our spec uses `includeAllData: true` with no key set, so `keyExists` is always `false` in this output, regardless of whether the config was actually captured. Check for the config data in that same file, rather than reading `keyExists` as a success/failure signal.
 
 </Note>
