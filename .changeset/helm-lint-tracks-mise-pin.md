@@ -17,3 +17,9 @@ actually tested.
 tier/mode combination under both major versions explicitly (via `mise exec "helm@<version>"`,
 independent of whatever `mise.toml` has pinned), rather than only ever testing whichever one
 version happens to be the current pin.
+
+Added a custom Renovate manager so both of those explicit versions actually get kept
+current automatically, rather than needing a manual bump each time either major releases:
+one regex per entry, with `packageRules` constraining each to stay within its own major
+version (`<4.0.0` for the v3 entry, `>=4.0.0 <5.0.0` for the v4 one) so Renovate never
+proposes collapsing one onto the other.
