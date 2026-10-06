@@ -29,7 +29,13 @@ jobs:
       - name: Run Chainsaw tests
         run: mise run e2e-chainsaw
         env:
-          CHAINSAW_TEST_DIRS: testing/chainsaw/raw-manifest testing/chainsaw/multi-release testing/chainsaw/official-chart testing/chainsaw/official-chart-metrics-no-servicemonitor testing/chainsaw/job-mode-rbac
+          CHAINSAW_TEST_DIRS: >-
+            testing/chainsaw/raw-manifest
+            testing/chainsaw/multi-release
+            testing/chainsaw/official-chart
+            testing/chainsaw/official-chart-metrics-no-servicemonitor
+            testing/chainsaw/job-mode-rbac
+            testing/chainsaw/job-storage-credentials
 
       - name: Upload bundle for inspection
         if: always()
@@ -66,7 +72,10 @@ jobs:
       - name: Run Chainsaw tests
         run: mise run e2e-chainsaw
         env:
-          CHAINSAW_TEST_DIRS: testing/chainsaw/official-chart testing/chainsaw/job-mode-rbac
+          CHAINSAW_TEST_DIRS: >-
+            testing/chainsaw/official-chart
+            testing/chainsaw/job-mode-rbac
+            testing/chainsaw/job-storage-credentials
           HELM_VERSION: ${{ matrix.helm_version }}
 
       - name: Upload bundle for inspection
