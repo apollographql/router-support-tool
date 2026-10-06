@@ -59,14 +59,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Install Helm
-        uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
-        with:
-          version: v3.17.3
-
-      - name: Install kubeconform
-        run: |
-          curl -sL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz -C /usr/local/bin kubeconform
+      # Installs helm and kubeconform at the versions pinned in mise.toml, rather than a
+      # separately hardcoded version — so a Renovate bump to either pin is actually
+      # exercised by this render/lint/schema-validate job, not silently untested.
+      - name: Install mise tools
+        uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
 
       - name: Render values for this tier/mode
         id: values
@@ -124,10 +121,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Install Helm
-        uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
-        with:
-          version: v3.17.3
+      # Installs helm (plus yq/jq, used below) at the versions pinned in mise.toml, rather
+      # than a separately hardcoded helm version and whatever yq/jq happen to ship on the
+      # runner image — same reasoning as the helm_lint job above.
+      - name: Install mise tools
+        uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
 
       - name: Determine pinned troubleshoot.sh version
         id: version
