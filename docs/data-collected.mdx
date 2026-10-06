@@ -38,7 +38,7 @@ That guarantee doesn't extend to a deployment that sets `APOLLO_KEY`, or any oth
 
 ### `router.yaml` capture
 
-The `configMap` collector reads the ConfigMap holding your router's rendered configuration directly. On the official Apollo router Helm chart, it's targeted by the standard `app.kubernetes.io/name=router` label. On a raw-manifest or custom deployment, supply `configMapName`/`selector` yourself (go to [Getting Started guide](/docs/router-support-tool/getting-started/getting-started)), without one of those, and without config discoverable under the standard label, this section comes back empty.
+The `configMap` collector reads the ConfigMap holding your router's rendered configuration directly. On the official Apollo router Helm chart, it's targeted by the standard `app.kubernetes.io/name=router` label. On a raw-manifest or custom deployment, supply `configMapName`/`selector` yourself (go to [Getting Started guide](/docs/router-support-tool/getting-started)), without one of those, and without config discoverable under the standard label, this section comes back empty.
 
 If more than one ConfigMap in your namespace matches, every one of them is collected, each in its own file named after that ConfigMap's own Kubernetes name — not a Helm release, which a raw-manifest or custom deployment doesn't have for its router at all.
 
