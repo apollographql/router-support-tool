@@ -22,15 +22,11 @@ Each of these scenarios will be tested per deployment tier: the official Apollo 
 |  | Scenario | What it validates |
 | --- | --- | --- |
 | 1 | **All routers healthy** | Bundle collects everything expected, redaction runs, `meta.json` is accurate. |
-| 2 | **Some routers degraded** [1] | The tool identifies and collects from the affected pods. Healthy neighbors show no behavioral impact from collection running against degraded pods. |
-| 3 | **All routers degraded** [1] | The "safe to run at any time" claim holds under genuine degradation. A bundle is still produced. |
+| 2 | **Some routers degraded** | The tool identifies and collects from the affected pods. Healthy neighbors show no behavioral impact from collection running against degraded pods. |
+| 3 | **All routers degraded** | The "safe to run at any time" claim holds under genuine degradation. A bundle is still produced. |
 | 4 | **Routers under-resourced** | The negligible-resource-consumption claim holds when collection runs against a container already near its cgroup limit. This is also where an in-container collector would do the most damage if one is ever proposed — this scenario is the standing regression check against that. |
 | 5 | **Router recently restarted** | `logs` collector's previous-container request produces `<name>-previous.log` and startup-time errors are present in the bundle. |
 | 6 | **OOM in progress**: the router container's memory usage is actively climbing toward its cgroup limit (not yet kernel-OOM-killed). | Validates that running collection **while** this is happening doesn't push it over the edge. |
-
-**[1]** We will test two degradation scenarios:
-1. The router's `/metrics` endpoint is unresponsive or returns errors while the router's main traffic port and k8s health checks are fine.
-2. The router returns errors on all client traffic.
 
 ### Collector attribution scenarios
 
@@ -75,7 +71,7 @@ Each scenario is a `K8sEnvironment` that RTF deploys. We start with all routers 
 
 - The healthy router Deployment and ConfigMap above.
 
-- **The router's own container logs labeled `rtf.io/log-collection: "true"`.** This gets RTF to pull the *raw*, pre-redaction container logs into its own `output/logs/` alongside our tool's collected (redacted) bundle in the same run — see [Redaction verification technique](#redaction-verification-technique) below for why that matters.
+- **The router Deployment labeled `rtf.io/log-collection: "true"`.** RTF pulls the raw container logs into its own `output/logs/` alongside the bundle.
 
 - A router config (`router.yaml`) that exercises every custom redactor's trigger conditions. See [Redaction](#redaction) above.
 
@@ -85,25 +81,21 @@ Everything that makes a test case *not* healthy happens after that, from the Sce
 
 The environment itself is the same across every test case, and so is the Scenario's `command`. What varies is the matrix's scenario value, passed into that same script via `env_vars` (e.g. `SCENARIO: "{{ scenario }}"`). The script branches internally on that value to put the environment into whatever shape the test case needs, then runs the actual collection/verification commands. "All routers healthy" is simply the no-op branch.
 
-- **Some vs. all degraded:** `kubectl get pods -l app=router` lists the replicas directly, and the script `patch`es a subset of them (or all, for "all degraded") into whichever of the two degradation cases that test case needs — see the router condition matrix footnote above.
-
-- **Recently restarted:** the script triggers a restart directly (e.g. `kubectl rollout restart`), timed however precisely the test needs relative to when collection runs.
-
 The environment does differ for the Routers under-resourced test case, where `resources.limits` will be set tight from the start. We can verify this by reading `node-metrics/*.json` and `router-metrics/result.json` against `resources.limits`. Note: `router-metrics/result.json` only populates if the router's Prometheus exporter is enabled in this scenario's config and its worth checking whether the router can prioritize serving `/metrics` even under memory pressure, so this signal doesn't just go dark exactly when it matters most.
 
 #### Applying the collector attribution scenarios to RTF
 
-Both are also just matrix dimension values on the same templated manifests, not separate environments:
+Both are also just matrix dimension values on the same templated manifests:
 
 - **Metrics/observability not configured** — the router manifest omits the Prometheus scrape annotations/exporter config for this dimension value.
 
-- **RBAC permission declined** — the environment's Role manifest omits a specific permission (e.g. `nodes/proxy`) for this dimension value, rather than granting the full set every other test case uses.
+- **RBAC permission declined** — the RTF environment cannot be granted the cluster-scoped permissions `nodeMetrics` needs so this will be declined across all runs.
 
 #### Redaction verification technique
 
 - Point the spec's `redactUri` at a throwaway endpoint to get troubleshoot.sh's per-redactor report. Only set this for verification runs, never in the shipped spec. Reuse the same endpoint built for [bundle retrieval](#bundle-retrieval-in-rtf) rather than standing up a second one.
 
-- Label the router service `rtf.io/log-collection: "true"` so RTF pulls its raw, pre-redaction logs alongside the redacted bundle in the same run, allowing us to search for a known secret in both the pre-redacted and redaction versions of the bundle.
+- Redaction is verified by sentinel-value absence: known secret values are placed in the router config, and verification asserts they are absent from the bundle while adjacent non-secret fields survive. The router Deployment is labeled `rtf.io/log-collection: "true"` so RTF also captures raw container logs alongside the bundle, but comparing pre- vs. post-redaction logs is not yet part of the automated check.
 
 #### Collection mode and troubleshoot.sh version coverage in RTF
 
@@ -111,7 +103,7 @@ The floor and current-release versions are two separate environment variants, di
 
 #### Bundle retrieval in RTF
 
-Use the `job.storage.provider: url` option (see `specs/storage/object_storage.md`). We will drop a plain `http.server` script into the environment via a file provider, run it reachably from the Job, and point `job.storage.url.endpoint` at it. The Job pushes the bundle there directly once collection finishes (via PUT request). This also answers how the Scenario knows the Job is done, the request arriving is the signal.
+Use the `job.storage.provider: url` option (see `specs/storage/object_storage.md`). We will drop a plain `http.server` script into the environment via a file provider, run it reachably from the Job, and point `job.storage.url.endpoint` at it. The Job pushes the bundle there directly once collection finishes (via PUT request). The Scenario knows the Job is done via `kubectl wait --for=condition=complete job/router-diagnostics-job`, then fetches the bundle from the server.
 
 ### Other CI checks
 
