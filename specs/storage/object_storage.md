@@ -77,3 +77,5 @@ Neither needs read, list, or delete on the bucket — the Job only ever writes o
 This section doesn't apply to `provider: url` — there's no cloud IAM involved, auth there is whatever the receiving endpoint enforces via the headers described above.
 
 The customer sets this up themselves, outside this tool, the same way the bucket itself is outside this tool.
+
+Note: This doesn't apply to `provider: url`, auth there is whatever the receiving endpoint enforces.
