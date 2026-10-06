@@ -53,10 +53,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # We support both Helm 3 and Helm 4 - tested explicitly here, independent of
-        # whatever single version mise.toml has pinned (that pin is what local dev/lefthook
-        # use day to day; it only needs to be one of these two, and Renovate may bump it
-        # between them). Bump these two entries by hand when a new minor of either major
+        # We support both Helm 3 and Helm 4 and test them explicitly here independent of
+        # whatever single version mise.toml has pinned.
+        # Bump these two entries by hand when a new minor of either major
         # ships, the same as any other explicitly-pinned version in this repo.
         helm_version: ["3.17.3", "4.3.0"]
         mode: [job, local]
