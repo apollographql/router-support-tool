@@ -119,24 +119,30 @@ jobs:
       - name: Run test-storage-credentials
         run: mise run test-storage-credentials
 
-  # Spec linting against the pinned troubleshoot.sh version
+  # Spec linting against the pinned troubleshoot.sh version, across both Helm major
+  # versions we support — same reasoning as the helm_lint job above.
   spec_lint:
-    name: "Spec Lint (support-bundle)"
+    name: "Spec Lint (support-bundle, helm: v${{ matrix.helm_version }})"
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        helm_version: ["3.17.3", "4.3.0"]
     steps:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      # Installs helm (plus yq/jq, used below) at the versions pinned in mise.toml, rather
-      # than a separately hardcoded helm version and whatever yq/jq happen to ship on the
-      # runner image — same reasoning as the helm_lint job above.
+      # Installs yq/jq (used below) at the versions pinned in mise.toml, rather than
+      # whatever happens to ship on the runner image. helm itself is requested
+      # per-matrix-entry below via `mise exec`, independent of mise.toml's pin — same
+      # reasoning as the helm_lint job above.
       - name: Install mise tools
         uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
 
       - name: Determine pinned troubleshoot.sh version
         id: version
         run: |
-          VERSION=$(helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
+          VERSION=$(mise exec "helm@${{ matrix.helm_version }}" -- helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
             --show-only templates/base-spec-configmap.yaml \
             | yq '.data["support-bundle-spec"]' \
             | yq '.spec.collectors[] | select(has("data")) | .data.data' \
@@ -152,13 +158,13 @@ jobs:
 
       - name: "Extract rendered spec (mode: local)"
         run: |
-          helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
+          mise exec "helm@${{ matrix.helm_version }}" -- helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
             --show-only templates/base-spec-configmap.yaml \
             | yq '.data["support-bundle-spec"]' > rendered-spec.local.yaml
 
       - name: "Extract rendered spec (mode: job)"
         run: |
-          helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=job \
+          mise exec "helm@${{ matrix.helm_version }}" -- helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=job \
             --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
             --set job.storage.provider=s3 --set job.storage.bucket=ci-test \
             --show-only templates/base-spec-configmap.yaml \
