@@ -5,4 +5,7 @@ set -euo pipefail
 # CHAINSAW_TEST_DIRS scopes this to one tier's test directory.
 # Defaults to the whole suite, for a local run against a cluster.
 read -ra TEST_DIRS <<< "${CHAINSAW_TEST_DIRS:-testing/chainsaw}"
+
+export HELM_VERSION="${HELM_VERSION:-$(mise current helm)}"
+
 chainsaw test --config .chainsaw.yaml "${TEST_DIRS[@]}"
