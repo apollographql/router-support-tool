@@ -89,8 +89,6 @@ The environment itself is the same across every test case, and so is the Scenari
 
 - **Recently restarted:** the script triggers a restart directly (e.g. `kubectl rollout restart`), timed however precisely the test needs relative to when collection runs.
 
-- **TODO: OOM in progress:** attach a sidecar container to the pod (sharing its cgroup) that continuously pushes onto a `Vec` to ramp memory usage — see `rtf-router-perf/lib/env-config/router-perf/environment.yaml` for a reference implementation of this pattern. **Note:** because the sidecar does the memory-ramping rather than the router process itself, container/pod-level kubelet metrics (`nodeMetrics`) show the pressure (same cgroup), but the router's own process-specific metric (`process_resident_memory_bytes`) won't — we also want to separately test what happens when the *router process itself* is the one under memory pressure (closer to a real customer incident), which likely needs a custom router build; not yet designed.
-
 The environment does differ for the Routers under-resourced test case, where `resources.limits` will be set tight from the start. We can verify this by reading `node-metrics/*.json` and `router-metrics/result.json` against `resources.limits`. Note: `router-metrics/result.json` only populates if the router's Prometheus exporter is enabled in this scenario's config and its worth checking whether the router can prioritize serving `/metrics` even under memory pressure, so this signal doesn't just go dark exactly when it matters most.
 
 #### Applying the collector attribution scenarios to RTF
