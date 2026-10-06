@@ -47,7 +47,8 @@ If you deployed the router with a hand-authored manifest or a custom chart that 
 
 ## Collection Modes
 
-Getting a spec into the cluster is done through a single Helm chart, `router-diagnostics-chart`, with a `mode` value controlling how collection actually runs. Both modes collect the same spec, but the shape of what runs, where, and what it needs is genuinely different:
+Getting a spec into the cluster is done through a single Helm chart, `router-diagnostics-chart`, with a `mode` value controlling how collection actually runs.
+Both paths collect the same information, only how and where the tool runs and where the bundle lands differ.
 
 | | `mode: local` | `mode: job` |
 | --- | --- | --- |

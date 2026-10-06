@@ -36,7 +36,7 @@ A few things we built in deliberately:
 
 ## How collection runs
 
-Getting the spec into your cluster is done through a single Helm chart, `router-diagnostics-chart`, with a `mode` value controlling how collection actually runs:
+Generating a support bundle is done through a single Helm chart, `router-diagnostics-chart`, with a `mode` value controlling how collection actually runs:
 
 - **`mode: local`**: You run collection yourself, from your own machine, with your own `kubectl` access.
 - **`mode: job`**: A Kubernetes Job runs collection in-cluster, for teams whose `kubectl` access to production is restricted and who need a platform team to run it on their behalf.
