@@ -1,0 +1,205 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: job-storage-credentials
+spec:
+  concurrent: false
+  steps:
+    - try:
+        - script:
+            # job.storage.provider=s3, job.storage.existingSecret: the Job must pull env
+            # from the customer's own Secret, unmodified by the chart.
+            timeout: 30s
+            content: |
+              kubectl create secret generic my-s3-secret -n "$NAMESPACE" \
+                --from-literal=AWS_ACCESS_KEY_ID=fake-access-key \
+                --from-literal=AWS_SECRET_ACCESS_KEY=fake-secret-key
+
+              mise exec "helm@$HELM_VERSION" -- helm install router-diagnostics ../../../router-diagnostics-chart \
+                -n "$NAMESPACE" --set namespace="$NAMESPACE" --set mode=job \
+                --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
+                --set job.storage.provider=s3 --set job.storage.bucket=my-test-bucket \
+                --set job.storage.existingSecret=my-s3-secret
+
+              ACTUAL=$(kubectl get job router-diagnostics-job -n "$NAMESPACE" \
+                -o jsonpath='{.spec.template.spec.containers[0].envFrom[0].secretRef.name}')
+              [ "$ACTUAL" = "my-s3-secret" ] || {
+                echo "FAIL: expected envFrom to reference my-s3-secret, got: $ACTUAL" >&2
+                exit 1
+              }
+
+              mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE"
+              kubectl delete secret my-s3-secret -n "$NAMESPACE"
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - script:
+            # job.storage.provider=s3, static accessKeyId/secretAccessKey:
+            # the chart must render its own Secret with these values
+            # baked in, and the Job must pull env from it.
+            timeout: 30s
+            content: |
+              mise exec "helm@$HELM_VERSION" -- helm install router-diagnostics ../../../router-diagnostics-chart \
+                -n "$NAMESPACE" --set namespace="$NAMESPACE" --set mode=job \
+                --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
+                --set job.storage.provider=s3 --set job.storage.bucket=my-test-bucket \
+                --set job.storage.s3.accessKeyId=my-test-access-key \
+                --set job.storage.s3.secretAccessKey=my-test-secret-key
+
+              ACTUAL_KEY=$(kubectl get secret router-diagnostics-storage-credentials -n "$NAMESPACE" \
+                -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
+              [ "$ACTUAL_KEY" = "my-test-access-key" ] || {
+                echo "FAIL: expected the chart-rendered Secret to carry the static access key, got: $ACTUAL_KEY" >&2
+                exit 1
+              }
+              ACTUAL_SECRET=$(kubectl get secret router-diagnostics-storage-credentials -n "$NAMESPACE" \
+                -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
+              [ "$ACTUAL_SECRET" = "my-test-secret-key" ] || {
+                echo "FAIL: expected the chart-rendered Secret to carry the static secret key, got: $ACTUAL_SECRET" >&2
+                exit 1
+              }
+
+              ACTUAL_REF=$(kubectl get job router-diagnostics-job -n "$NAMESPACE" \
+                -o jsonpath='{.spec.template.spec.containers[0].envFrom[0].secretRef.name}')
+              [ "$ACTUAL_REF" = "router-diagnostics-storage-credentials" ] || {
+                echo "FAIL: expected envFrom to reference the chart-rendered Secret, got: $ACTUAL_REF" >&2
+                exit 1
+              }
+
+              mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE"
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - script:
+            # job.storage.provider=gcs, job.storage.existingSecret: GCS mounts credentials
+            # as a key file volume instead of env vars. The Job must mount the customer's
+            # own Secret, unmodified, at the path GOOGLE_APPLICATION_CREDENTIALS points to.
+            timeout: 30s
+            content: |
+              kubectl create secret generic my-gcs-secret -n "$NAMESPACE" \
+                --from-literal=key.json='{"type":"service_account"}'
+
+              mise exec "helm@$HELM_VERSION" -- helm install router-diagnostics ../../../router-diagnostics-chart \
+                -n "$NAMESPACE" --set namespace="$NAMESPACE" --set mode=job \
+                --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
+                --set job.storage.provider=gcs --set job.storage.bucket=my-test-bucket \
+                --set job.storage.gcs.project=my-test-project \
+                --set job.storage.existingSecret=my-gcs-secret
+
+              ACTUAL_ENV=$(kubectl get job router-diagnostics-job -n "$NAMESPACE" \
+                -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="GOOGLE_APPLICATION_CREDENTIALS")].value}')
+              [ "$ACTUAL_ENV" = "/var/run/secrets/router-diagnostics-storage/key.json" ] || {
+                echo "FAIL: expected GOOGLE_APPLICATION_CREDENTIALS to point at the mounted key, got: $ACTUAL_ENV" >&2
+                exit 1
+              }
+              ACTUAL_VOLUME=$(kubectl get job router-diagnostics-job -n "$NAMESPACE" \
+                -o jsonpath='{.spec.template.spec.volumes[?(@.name=="storage-credentials")].secret.secretName}')
+              [ "$ACTUAL_VOLUME" = "my-gcs-secret" ] || {
+                echo "FAIL: expected the credentials volume to mount my-gcs-secret, got: $ACTUAL_VOLUME" >&2
+                exit 1
+              }
+
+              mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE"
+              kubectl delete secret my-gcs-secret -n "$NAMESPACE"
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - script:
+            # job.storage.provider=gcs, static credentialsJson (no existingSecret): the
+            # GCS equivalent of the s3 static-values scenario above.
+            timeout: 30s
+            content: |
+              mise exec "helm@$HELM_VERSION" -- helm install router-diagnostics ../../../router-diagnostics-chart \
+                -n "$NAMESPACE" --set namespace="$NAMESPACE" --set mode=job \
+                --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
+                --set job.storage.provider=gcs --set job.storage.bucket=my-test-bucket \
+                --set job.storage.gcs.credentialsJson=my-test-service-account-json
+
+              ACTUAL_KEY=$(kubectl get secret router-diagnostics-storage-credentials -n "$NAMESPACE" \
+                -o jsonpath='{.data.key\.json}' | base64 -d)
+              [ "$ACTUAL_KEY" = "my-test-service-account-json" ] || {
+                echo "FAIL: expected the chart-rendered Secret to carry the static credentials JSON, got: $ACTUAL_KEY" >&2
+                exit 1
+              }
+              ACTUAL_VOLUME=$(kubectl get job router-diagnostics-job -n "$NAMESPACE" \
+                -o jsonpath='{.spec.template.spec.volumes[?(@.name=="storage-credentials")].secret.secretName}')
+              [ "$ACTUAL_VOLUME" = "router-diagnostics-storage-credentials" ] || {
+                echo "FAIL: expected the credentials volume to mount the chart-rendered Secret, got: $ACTUAL_VOLUME" >&2
+                exit 1
+              }
+
+              mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE"
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - script:
+            # job.serviceAccount.annotations (IRSA / Workload Identity): confirms the
+            # annotations reach the live ServiceAccount unchanged.
+            timeout: 30s
+            content: |
+              mise exec "helm@$HELM_VERSION" -- helm install router-diagnostics ../../../router-diagnostics-chart \
+                -n "$NAMESPACE" --set namespace="$NAMESPACE" --set mode=job \
+                --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
+                --set job.storage.provider=s3 --set job.storage.bucket=my-test-bucket \
+                --set job.storage.s3.accessKeyId=my-test-access-key \
+                --set job.storage.s3.secretAccessKey=my-test-secret-key \
+                --set-string 'job.serviceAccount.annotations.eks\.amazonaws\.com/role-arn=arn:aws:iam::123456789012:role/test-role' \
+                --set-string 'job.serviceAccount.annotations.iam\.gke\.io/gcp-service-account=test@test-project.iam.gserviceaccount.com'
+
+              ACTUAL_ARN=$(kubectl get serviceaccount router-diagnostics-job -n "$NAMESPACE" \
+                -o jsonpath='{.metadata.annotations.eks\.amazonaws\.com/role-arn}')
+              [ "$ACTUAL_ARN" = "arn:aws:iam::123456789012:role/test-role" ] || {
+                echo "FAIL: expected eks.amazonaws.com/role-arn annotation on the live ServiceAccount, got: $ACTUAL_ARN" >&2
+                exit 1
+              }
+              ACTUAL_GSA=$(kubectl get serviceaccount router-diagnostics-job -n "$NAMESPACE" \
+                -o jsonpath='{.metadata.annotations.iam\.gke\.io/gcp-service-account}')
+              [ "$ACTUAL_GSA" = "test@test-project.iam.gserviceaccount.com" ] || {
+                echo "FAIL: expected iam.gke.io/gcp-service-account annotation on the live ServiceAccount, got: $ACTUAL_GSA" >&2
+                exit 1
+              }
+
+              mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE"
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - script:
+            # existingSecret + a static credential together must be rejected and a
+            # rejected install must leave nothing behind.
+            timeout: 30s
+            content: |
+              if mise exec "helm@$HELM_VERSION" -- helm install router-diagnostics ../../../router-diagnostics-chart \
+                -n "$NAMESPACE" --set namespace="$NAMESPACE" --set mode=job \
+                --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
+                --set job.storage.provider=s3 --set job.storage.bucket=my-test-bucket \
+                --set job.storage.existingSecret=my-s3-secret \
+                --set job.storage.s3.accessKeyId=my-test-access-key \
+                --set job.storage.s3.secretAccessKey=my-test-secret-key 2>/tmp/helm-stderr.log; then
+                echo "FAIL: expected helm install to reject existingSecret + a static s3 credential together" >&2
+                exit 1
+              fi
+              grep -q 'mutually exclusive' /tmp/helm-stderr.log || {
+                echo "FAIL: expected the mutually-exclusive error, got:" >&2
+                cat /tmp/helm-stderr.log >&2
+                exit 1
+              }
+
+              kubectl get job router-diagnostics-job -n "$NAMESPACE" 2>/dev/null && {
+                echo "FAIL: a rejected install left a Job behind" >&2
+                exit 1
+              }
+              true
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+      finally:
+        - script:
+            # Every scenario above already uninstalls itself. This
+            # catches whatever's left if an assertion failed mid-sequence.
+            timeout: 30s
+            content: |
+              mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE" || true
+              kubectl delete secret my-s3-secret my-gcs-secret -n "$NAMESPACE" --ignore-not-found
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
