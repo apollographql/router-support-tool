@@ -11,7 +11,7 @@ This page is the complete reference for `mode: job`.
 
 ## The Job image
 
-The image bundles a pinned version of troubleshoot's `support-bundle` binary as well as `aws-cli` and `gcloud` for bundle upload. For more information, go to [Support bundle storage and retrieval](./bundle-storage).
+The image bundles a pinned version of troubleshoot's `support-bundle` binary as well as `aws-cli` and `gcloud` for bundle upload. For more information, go to [Support bundle storage and retrieval](/docs/router-support-tool/bundle-storage).
 
 ## Chart values
 
@@ -26,15 +26,15 @@ The image bundles a pinned version of troubleshoot's `support-bundle` binary as 
 | `job.image.repository` | No | `apollograph/router-diagnostics` | The Job's container image, published by Apollo. Override only to pin an older version or point at a private mirror. |
 | `job.image.tag` | No | Matches this chart's release version | The troubleshoot.sh version it bundles is a separate, independently-pinned detail, recorded in a collected bundle's `meta.json`. Override only to pin an older release or point at a private mirror. |
 | `job.image.pullPolicy` | No | `IfNotPresent` | Standard Kubernetes image pull policy |
-| `job.collectNodeMetrics` | No | `true` | Set `false` to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding entirely and decline `nodeMetrics` data up front. For more information, go to [Collecting Metrics → If Prometheus isn't set up yet](./collecting-metrics#if-prometheus-isnt-set-up-yet) |
-| `job.podAnnotations` | No | `{sidecar.istio.io/inject: "false", linkerd.io/inject: disabled}` | Annotations merged onto the Job's pod template—customer values win over these defaults. For more information, go to [Job Mode → Service mesh environments](./getting-started/job-mode#service-mesh-environments) |
+| `job.collectNodeMetrics` | No | `true` | Set `false` to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding entirely and decline `nodeMetrics` data up front. For more information, go to [Collecting Metrics → If Prometheus isn't set up yet](/docs/router-support-tool/collecting-metrics#if-prometheus-isnt-set-up-yet) |
+| `job.podAnnotations` | No | `{sidecar.istio.io/inject: "false", linkerd.io/inject: disabled}` | Annotations merged onto the Job's pod template—customer values win over these defaults. For more information, go to [Job Mode → Service mesh environments](/docs/router-support-tool/getting-started/job-mode#service-mesh-environments) |
 | `job.podLabels` | No | `{}` | Arbitrary labels merged onto the Job's pod template |
 | `job.ttlSecondsAfterFinished` | No | `3600` | Maps to the Job's `ttlSecondsAfterFinished`—how long after completion Kubernetes automatically deletes the Job and its pod |
-| `job.serviceAccount.annotations` | Only if using IRSA/Workload Identity | `{}` | Merged onto the Job's ServiceAccount. Carries `eks.amazonaws.com/role-arn` (IRSA) or `iam.gke.io/gcp-service-account` (Workload Identity), whichever matches `job.storage.provider`. For more information, go to [Support bundle storage and retrieval → Credentials](./bundle-storage#credentials) |
+| `job.serviceAccount.annotations` | Only if using IRSA/Workload Identity | `{}` | Merged onto the Job's ServiceAccount. Carries `eks.amazonaws.com/role-arn` (IRSA) or `iam.gke.io/gcp-service-account` (Workload Identity), whichever matches `job.storage.provider`. For more information, go to [Support bundle storage and retrieval → Credentials](/docs/router-support-tool/bundle-storage#credentials) |
 
 ## Bundle Retrieval
 
-Storage is required for `mode: job` because there is no way to get the bundle out otherwise. The chart fails the install at render time if `mode: job` is set and `job.storage.provider` is left unset. Go to [Support bundle storage and retrieval](./bundle-storage) for the full `job.storage` reference, worked examples per provider, and how to retrieve the bundle from each destination.
+Storage is required for `mode: job` because there is no way to get the bundle out otherwise. The chart fails the install at render time if `mode: job` is set and `job.storage.provider` is left unset. Go to [Support bundle storage and retrieval](/docs/router-support-tool/bundle-storage) for the full `job.storage` reference, worked examples per provider, and how to retrieve the bundle from each destination.
 
 ## Kubernetes RBAC
 
@@ -51,7 +51,7 @@ Collection itself runs using a namespace-scoped ServiceAccount the chart creates
 - **`discovery.k8s.io`**: `endpointslices`
 - **`coordination.k8s.io`**: `leases`
 
-On top of this, three separate cluster-scoped grants apply for `nodeMetrics`, deliberately kept independent so you can decline the more sensitive ones without losing the others. Go to [Collecting Metrics → If Prometheus isn't set up yet](./collecting-metrics#if-prometheus-isnt-set-up-yet) for exactly what those three grants are and what each authorizes.
+On top of this, three separate cluster-scoped grants apply for `nodeMetrics`, deliberately kept independent so you can decline the more sensitive ones without losing the others. Go to [Collecting Metrics → If Prometheus isn't set up yet](/docs/router-support-tool/collecting-metrics#if-prometheus-isnt-set-up-yet) for exactly what those three grants are and what each authorizes.
 
 **`pods/exec` is not required**: nothing this tool does runs inside your router container.
 
@@ -100,8 +100,8 @@ support-bundle-2026-08-11T14_23_00/
         └── <configmap-name>.json
 ```
 
-- **`router-metrics-<pod-name>/`** — one directory per router pod matching `selector`, each from its own `http` collector. Go to [Collecting Metrics](./collecting-metrics#mode-job) for how pods are targeted.
-- The file under `configmaps/production/` is named after the matched ConfigMap's own Kubernetes name, not a Helm release — on the official chart these happen to coincide, since that chart names the ConfigMap after the release, but a raw-manifest or custom deployment has no Helm release of the router at all. If more than one ConfigMap matched the label selector in `production`, `configmaps/production/` becomes multiple files, one per ConfigMap:
+- **`router-metrics-<pod-name>/`** — one directory per router pod matching `selector`, each from its own `http` collector. Go to [Collecting Metrics](/docs/router-support-tool/collecting-metrics#mode-job) for how pods are targeted.
+- The file under `configmaps/production/` is named after the matched ConfigMap's own Kubernetes name, on the official chart these happen to coincide, since that chart names the ConfigMap after the release, but a raw-manifest or custom deployment has no Helm release of the router at all. If more than one ConfigMap matched the label selector in `production`, `configmaps/production/` becomes multiple files, one per ConfigMap:
 
   ```
   configmaps/

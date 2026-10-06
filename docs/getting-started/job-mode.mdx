@@ -6,7 +6,7 @@ description: Install the router-diagnostics chart with mode job so a platform te
 
 Use `mode: job` when your own `kubectl` access to production is restricted and a platform team runs collection on your behalf. A Kubernetes Job runs collection in-cluster, using a namespace-scoped ServiceAccount the chart creates for it.
 
-`job.storage` is required for this mode, and the chart fails the install if `job.storage.provider` is left unset. For the full reference, go to [Support bundle storage and retrieval](../bundle-storage).
+`job.storage` is required for this mode, and the chart fails the install if `job.storage.provider` is left unset. For the full reference, go to [Support bundle storage and retrieval](/docs/router-support-tool/bundle-storage).
 
 ## Install the chart
 
@@ -42,17 +42,17 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --set job.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=arn:aws:iam::123456789012:role/router-diagnostics-s3-writer
 ```
 
-`selector` also determines which of your router's pods get scraped for metrics. For more details, go to [Collecting Metrics](../collecting-metrics#mode-job).
+`selector` also determines which of your router's pods get scraped for metrics. For more details, go to [Collecting Metrics](/docs/router-support-tool/collecting-metrics#mode-job).
 
 The Job runs immediately on install and uploads the bundle as soon as collection finishes.
 
 ## Choosing a storage destination
 
-The previous example uploads to S3 using IRSA with no credentials to store or rotate. `job.storage` also supports GCS (Workload Identity), an S3-compatible store (MinIO, Ceph RGW, and similar, via `job.storage.s3.endpoint`), or a bare HTTP(S) endpoint (`provider: url`) for a receiver that isn't S3 or GCS at all. For the full set of `job.storage` values, credential options, and worked examples per provider, go to [Support bundle storage and retrieval](../bundle-storage).
+The previous example uploads to S3 using IRSA with no credentials to store or rotate. `job.storage` also supports GCS (Workload Identity), an S3-compatible store (MinIO, Ceph RGW, and similar, via `job.storage.s3.endpoint`), or a bare HTTP(S) endpoint (`provider: url`) for a receiver that isn't S3 or GCS at all. For the full set of `job.storage` values, credential options, and worked examples per provider, go to [Support bundle storage and retrieval](/docs/router-support-tool/bundle-storage).
 
 ## Retrieving the bundle
 
-Once the Job completes, the configured destination has the bundle. Retrieve it the way you'd retrieve anything else from that bucket or endpoint (for example, `aws s3 cp` for S3). For specifics per provider, go to [Support bundle storage and retrieval → Retrieval](../bundle-storage#retrieval). This tool doesn't manage retention on the destination.
+Once the Job completes, the configured destination has the bundle. Retrieve it the way you'd retrieve anything else from that bucket or endpoint (for example, `aws s3 cp` for S3). For specifics per provider, go to [Support bundle storage and retrieval → Retrieval](/docs/router-support-tool/bundle-storage#retrieval). This tool doesn't manage retention on the destination.
 
 ## Service mesh environments
 
@@ -71,7 +71,7 @@ linkerd.io/inject: disabled
 - **On a different mesh** — add your mesh's own opt-out annotation via `job.podAnnotations`. Helm merges your keys over the chart's defaults so this is additive.
 - **If policy requires every pod to stay in the mesh** — override the specific default back, e.g. `--set job.podAnnotations."sidecar\.istio\.io/inject"=true`.
 
-The bundle's `meta.json` records whether the chart disabled injection (`sidecar_injection_disabled`). This is separate from whether the metrics scrape itself can get through a mesh enforcing strict mTLS — see [Collecting Metrics → Running a service mesh?](../collecting-metrics#running-a-service-mesh) for that.
+The bundle's `meta.json` records whether the chart disabled injection (`sidecar_injection_disabled`). This is separate from whether the metrics scrape itself can get through a mesh enforcing strict mTLS — see [Collecting Metrics → Running a service mesh?](/docs/router-support-tool/collecting-metrics#running-a-service-mesh) for that.
 
 ## Cleaning up
 
