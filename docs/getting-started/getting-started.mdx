@@ -5,7 +5,7 @@ description: Pick between mode local and mode job, and confirm what your Helm va
 ---
 This guide steps through generating your own on-demand support bundle collection from any Kubernetes-hosted router deployment.
 
-Getting a troubleshoot.sh SupportBundle spec into the cluster is done through a single Helm chart, `router-diagnostics-chart`, with a `mode` value controlling how collection runs. Both modes collect the same spec with the same collectors and redactors. Who runs it, where it runs, and what it needs from you differ.
+Generating a support bundle is done through a single Helm chart, `router-diagnostics-chart`, with a `mode` value controlling how collection runs. Both modes collect the same information, only how and where the tool runs and where the bundle lands differ.
 
 There are two independent things you need to determine before installing anything:
 
