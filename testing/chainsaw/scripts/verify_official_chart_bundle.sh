@@ -23,7 +23,7 @@ fail() {
   exit 1
 }
 
-helm install "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
+mise exec "helm@${HELM_VERSION:?}" -- helm install "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
   --set namespace="$NAMESPACE" \
   --set mode=local
 

@@ -32,9 +32,10 @@
     },
     {
       customType: 'regex',
-      description: "static-checks.yaml's helm_lint job pins two explicit Helm versions (one v3, one v4) to test both major versions we support, independent of mise.toml's single helm pin. Both match strings share a depName/packageName (the same upstream repo), so the packageRules below are what keeps each one bumping within its own major version rather than Renovate proposing the v3 entry jump straight to a v4 release or vice versa.",
+      description: "static-checks.yaml's helm_lint/spec_lint jobs and collect-integration-test.yaml's official-chart Helm-version job each pin the same two explicit Helm versions (one v3, one v4) to test both major versions we support, independent of mise.toml's single helm pin. All four match strings share a depName/packageName (the same upstream repo), so the packageRules below are what keeps each one bumping within its own major version rather than Renovate proposing a v3 entry jump straight to a v4 release or vice versa.",
       managerFilePatterns: [
         '/^\\.github/workflows/static-checks\\.yaml$/',
+        '/^\\.github/workflows/collect-integration-test\\.yaml$/',
       ],
       matchStrings: [
         'helm_version: \\["(?<currentValue>3\\.[^"]+)",',
@@ -48,13 +49,13 @@
   ],
   packageRules: [
     {
-      description: "Keep static-checks.yaml's two explicit helm_version matrix entries each pinned within their own major version.",
-      matchFileNames: ['.github/workflows/static-checks.yaml'],
+      description: "Keep each file's explicit helm_version matrix entries each pinned within their own major version.",
+      matchFileNames: ['.github/workflows/static-checks.yaml', '.github/workflows/collect-integration-test.yaml'],
       matchCurrentValue: '/^3\\./',
       allowedVersions: '<4.0.0',
     },
     {
-      matchFileNames: ['.github/workflows/static-checks.yaml'],
+      matchFileNames: ['.github/workflows/static-checks.yaml', '.github/workflows/collect-integration-test.yaml'],
       matchCurrentValue: '/^4\\./',
       allowedVersions: '>=4.0.0 <5.0.0',
     },

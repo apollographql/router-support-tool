@@ -1,0 +1,63 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: job-mode-rbac
+spec:
+  concurrent: false
+  steps:
+    - try:
+        - script:
+            # Installs the chart twice, into two different namespaces, to prove
+            # job-rbac.yaml's own claim: its cluster-scoped
+            # ClusterRole/ClusterRoleBinding names are namespace-qualified.
+            timeout: 60s
+            content: |
+              kubectl create namespace "$SECOND_NAMESPACE"
+
+              FLAGS=(--set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0
+                     --set job.storage.provider=s3 --set job.storage.bucket=ci-test)
+
+              mise exec "helm@$HELM_VERSION" -- helm install router-diagnostics-primary ../../../router-diagnostics-chart \
+                -n "$NAMESPACE" --set namespace="$NAMESPACE" --set mode=job "${FLAGS[@]}"
+
+              mise exec "helm@$HELM_VERSION" -- helm install router-diagnostics-second ../../../router-diagnostics-chart \
+                -n "$SECOND_NAMESPACE" --set namespace="$SECOND_NAMESPACE" --set mode=job "${FLAGS[@]}"
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+              - name: SECOND_NAMESPACE
+                value: (join('-', [$namespace, 'second']))
+        - assert:
+            resource:
+              apiVersion: rbac.authorization.k8s.io/v1
+              kind: ClusterRole
+              metadata:
+                name: (join('-', ['router-diagnostics', $namespace, 'nodemetrics']))
+        - assert:
+            resource:
+              apiVersion: rbac.authorization.k8s.io/v1
+              kind: ClusterRoleBinding
+              metadata:
+                name: (join('-', ['router-diagnostics', $namespace, 'nodemetrics']))
+        - script:
+            # The second install's ClusterRole/ClusterRoleBinding names depend on
+            # SECOND_NAMESPACE. This confirms both pairs of objects exist side by side.
+            timeout: 30s
+            content: |
+              kubectl get clusterrole "router-diagnostics-${SECOND_NAMESPACE}-nodemetrics"
+              kubectl get clusterrolebinding "router-diagnostics-${SECOND_NAMESPACE}-nodemetrics"
+            env:
+              - name: SECOND_NAMESPACE
+                value: (join('-', [$namespace, 'second']))
+      finally:
+        - script:
+            timeout: 60s
+            content: |
+              mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics-primary -n "$NAMESPACE" || true
+              mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics-second -n "$SECOND_NAMESPACE" || true
+              kubectl delete namespace "$SECOND_NAMESPACE" --ignore-not-found
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+              - name: SECOND_NAMESPACE
+                value: (join('-', [$namespace, 'second']))

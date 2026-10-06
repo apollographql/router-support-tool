@@ -21,7 +21,7 @@ spec:
         - script:
             timeout: 120s
             content: |
-              helm install router oci://ghcr.io/apollographql/helm-charts/router \
+              mise exec "helm@$HELM_VERSION" -- helm install router oci://ghcr.io/apollographql/helm-charts/router \
                 --version 2.17.0 \
                 -n "$NAMESPACE" \
                 --values values.yaml \
