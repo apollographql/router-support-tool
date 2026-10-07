@@ -30,21 +30,14 @@ jobs:
           install_args: yq
 
       - name: "Validate version format"
-        run: |
-          if [[ ! "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::version must look like X.Y.Z (no leading v), got '${{ inputs.version }}'"
-            exit 1
-          fi
+        uses: skymatic/semver-validation-action@7c80b6b03a18b42884761daa9862ff5683ec8c8a # v4.0.0
+        with:
+          version: ${{ inputs.version }}
 
       - name: "Get current version"
         id: current
         run: echo "version=$(yq '.version' router-diagnostics-chart/Chart.yaml)" >> "$GITHUB_OUTPUT"
 
-      # Every published tag - the chart's own version, its OCI tag, the Job image tag, and
-      # the release/git tag - must all be bare semver (no leading v). Helm's OCI client
-      # resolves an unpinned `helm install oci://...` by sorting tags as semver; a non-semver
-      # tag like `v1.0.0` can't be parsed, which breaks that resolution entirely, not just for
-      # that one tag - see the v1.0.0 incident this comment replaced.
       - name: "Bump chart and Job image versions"
         run: |
           yq -i ".version = \"${VERSION}\"" router-diagnostics-chart/Chart.yaml

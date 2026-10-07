@@ -5,15 +5,6 @@ publishes every artifact under that same version. The release version is the sin
 that identifies "what a customer gets" across the image, the chart, and the collect script. See
 `specs/artifact-distribution.md` for what each artifact is and where it's published.
 
-**The version is always bare semver — never a leading `v`.** `oci://` Helm registries resolve
-an unpinned `helm install` (no `--version` given) by parsing every tag as semver and picking the
-highest one; a tag like `v1.0.0` isn't valid semver, so Helm can't parse *any* tag in the
-repository, not just that one — the chart becomes uninstallable without pinning an exact
-`--version` string on every single install. Confirmed directly: `v1.0.0`'s first release shipped
-tagged with a leading `v` and broke exactly this way; it was re-published as plain `1.0.0`, which
-Helm resolves correctly, matching the `apollographql/operator-chart`'s already-working
-convention.
-
 **Cutting a release means choosing the troubleshoot.sh version it pins.** The pinned
 `support-bundle` version the image and the script bundle is a deliberate choice made as part of
 cutting that release.
