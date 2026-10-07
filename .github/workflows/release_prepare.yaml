@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version / tag name (e.g. v1.2.3)"
+        description: "Release version / tag name (e.g. 1.2.3)"
         type: string
         required: true
 
@@ -30,23 +30,17 @@ jobs:
           install_args: yq
 
       - name: "Validate version format"
-        run: |
-          if [[ ! "${{ inputs.version }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::version must look like vX.Y.Z, got '${{ inputs.version }}'"
-            exit 1
-          fi
+        uses: skymatic/semver-validation-action@7c80b6b03a18b42884761daa9862ff5683ec8c8a # v4.0.0
+        with:
+          version: ${{ inputs.version }}
 
       - name: "Get current version"
         id: current
-        run: echo "version=v$(yq '.version' router-diagnostics-chart/Chart.yaml)" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(yq '.version' router-diagnostics-chart/Chart.yaml)" >> "$GITHUB_OUTPUT"
 
-      # Chart.yaml's own version field is bare semver (no `v`) — Helm's version validation
-      # expects that. job.image.tag tracks this same release version — release_dockerhub
-      # publishes the Job image under this release's tag.
       - name: "Bump chart and Job image versions"
         run: |
-          CHART_VERSION="${VERSION#v}"
-          yq -i ".version = \"${CHART_VERSION}\"" router-diagnostics-chart/Chart.yaml
+          yq -i ".version = \"${VERSION}\"" router-diagnostics-chart/Chart.yaml
           yq -i ".job.image.tag = \"${VERSION}\"" router-diagnostics-chart/values.yaml
         env:
           VERSION: ${{ inputs.version }}

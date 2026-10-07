@@ -57,7 +57,7 @@ Job mode support bundle:
 
 ![Generated support bundle including meta.json content using mode: job](./resources/job-mode-bundle.png)
 
-Every bundle also includes a `meta.json`, generated at chart-install time: `version` (the chart's own release version — the same `vX.Y.Z` published across the image, chart, and collect script), `mode` (`local` or `job`), `namespace`, and the pinned `troubleshoot_version` this run used, plus `sidecar_injection_disabled` for `mode: job`. It's a fixed snapshot of what the chart was configured to do and is useful for confirming which release or mode produced a given bundle, but it can't tell you why a section came back empty.
+Every bundle also includes a `meta.json`, generated at chart-install time: `version` (the chart's own release version — the same `X.Y.Z` published across the image, chart, and collect script), `mode` (`local` or `job`), `namespace`, and the pinned `troubleshoot_version` this run used, plus `sidecar_injection_disabled` for `mode: job`. It's a fixed snapshot of what the chart was configured to do and is useful for confirming which release or mode produced a given bundle, but it can't tell you why a section came back empty.
 
 From there, it's yours. Inspect it, keep it, or attach it to a support ticket.
 

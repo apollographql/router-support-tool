@@ -62,7 +62,7 @@ jobs:
         id: check
         if: steps.gate.outputs.ready == 'true'
         run: |
-          VERSION="v$(yq '.version' router-diagnostics-chart/Chart.yaml)"
+          VERSION="$(yq '.version' router-diagnostics-chart/Chart.yaml)"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
           if gh api "repos/${{ github.repository }}/git/ref/tags/$VERSION" >/dev/null 2>&1; then
