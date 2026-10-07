@@ -21,7 +21,7 @@ We generate this content **before** collection runs. The consequence is the cent
 
 | Field | Source | Why it matters |
 | --- | --- | --- |
-| `version` | `.Chart.Version` | Which release of router-support-tool rendered this spec — the same `vX.Y.Z` published across the image, chart, and collect script. |
+| `version` | `.Chart.Version` | Which release of router-support-tool rendered this spec — the same `X.Y.Z` published across the image, chart, and collect script. |
 | `mode` | Chart value | `local` or `job`. Establishes where collection ran |
 | `namespace` | Chart value | The namespace collection was scoped to |
 | `sidecar_injection_disabled` | Chart, `mode: job` only | Records that the Job ran outside the mesh.|

@@ -1,9 +1,18 @@
 # Release Process
 
-**One release, one version, published everywhere** — One GitHub Release, tagged `vX.Y.Z`,
+**One release, one version, published everywhere** — One GitHub Release, tagged `X.Y.Z`,
 publishes every artifact under that same version. The release version is the single number
 that identifies "what a customer gets" across the image, the chart, and the collect script. See
 `specs/artifact-distribution.md` for what each artifact is and where it's published.
+
+**The version is always bare semver — never a leading `v`.** `oci://` Helm registries resolve
+an unpinned `helm install` (no `--version` given) by parsing every tag as semver and picking the
+highest one; a tag like `v1.0.0` isn't valid semver, so Helm can't parse *any* tag in the
+repository, not just that one — the chart becomes uninstallable without pinning an exact
+`--version` string on every single install. Confirmed directly: `v1.0.0`'s first release shipped
+tagged with a leading `v` and broke exactly this way; it was re-published as plain `1.0.0`, which
+Helm resolves correctly, matching the `apollographql/operator-chart`'s already-working
+convention.
 
 **Cutting a release means choosing the troubleshoot.sh version it pins.** The pinned
 `support-bundle` version the image and the script bundle is a deliberate choice made as part of
@@ -13,7 +22,7 @@ cutting that release.
 `.changeset/<name>.md` file (`category: feat|fix|docs|ci|test` plus `breaking: true|false`
 frontmatter, enforced by CI — see `.changeset/README.md`).
 At release-cut time, `scripts/prepare_release_notes.sh` consumes every
-pending `.changeset/*.md` file into `.changeset/notes/vX.Y.Z.md` (breaking changes first,
+pending `.changeset/*.md` file into `.changeset/notes/X.Y.Z.md` (breaking changes first,
 regardless of category, then `feat` as Features, `fix` as Fixes, and `docs`/`ci`/`test` together
 under a Maintenance heading — this repo is public, so every category is customer-visible) and
 deletes the consumed files. The release workflow then reads that generated file from the tagged
@@ -30,19 +39,20 @@ commit and overwrites the GitHub Release's notes with it.
 2. **Confirm the troubleshoot.sh pin.** The Renovate-driven lock-step PR (Dockerfile ARG,
    `router-diagnostics-collect/collect.sh`'s own pin, chart's `troubleshoot_version`) should
    already be merged and tested.
-3. **Choose the release version** (`vX.Y.Z`) — ordinary semver judgment about what changed.
+3. **Choose the release version** (`X.Y.Z`, no leading `v`) — ordinary semver judgment about
+   what changed.
 4. **Run `.github/workflows/release_prepare.yaml`** via `workflow_dispatch`, passing
-   `version: vX.Y.Z`. It bumps `router-diagnostics-chart/Chart.yaml`'s `version:` field and
+   `version: X.Y.Z`. It bumps `router-diagnostics-chart/Chart.yaml`'s `version:` field and
    `router-diagnostics-chart/values.yaml`'s `job.image.tag`, regenerates Helm docs, runs
-   `scripts/prepare_release_notes.sh vX.Y.Z` to consume pending `.changeset/*.md` files into
-   `.changeset/notes/vX.Y.Z.md`, opens a **draft** GitHub Release with those notes for preview,
-   and opens a PR (`release/vX.Y.Z`, labeled `release`) with all of that committed.
+   `scripts/prepare_release_notes.sh X.Y.Z` to consume pending `.changeset/*.md` files into
+   `.changeset/notes/X.Y.Z.md`, opens a **draft** GitHub Release with those notes for preview,
+   and opens a PR (`release/X.Y.Z`, labeled `release`) with all of that committed.
 5. **Review and merge that PR normally**
 6. **`.github/workflows/release_finalize.yaml` runs automatically**
-   It publishes the draft Release, creates the `vX.Y.Z` tag, and calls `.github/workflows/release_publish_artifacts.yaml`
+   It publishes the draft Release, creates the `X.Y.Z` tag, and calls `.github/workflows/release_publish_artifacts.yaml`
    directly as a job, which runs three sub-jobs in parallel:
    - `release_dockerhub` — republishes the already-built internal Job image to
-     `docker.io/apollograph/router-diagnostics`, tagged `vX.Y.Z`.
+     `docker.io/apollograph/router-diagnostics`, tagged `X.Y.Z`.
    - `publish_helm_chart` — packages the chart from the tagged commit and publishes it to
      `oci://registry-1.docker.io/apollograph/router-diagnostics-chart`.
    - `attach_collect_script` — uploads `router-diagnostics-collect/collect.sh` from the tagged
@@ -50,7 +60,10 @@ commit and overwrites the GitHub Release's notes with it.
 
 7. **Verify the actual published artifacts** — `docker pull` the image,
    `helm show chart oci://registry-1.docker.io/apollograph/router-diagnostics-chart
-   --version vX.Y.Z`, and download the script through the customer-facing Orbiter URL.
-   Confirm each reports the version expected.
+   --version X.Y.Z`, and download the script through the customer-facing Orbiter URL.
+   Confirm each reports the version expected. Also confirm an *unpinned* `helm show chart
+   oci://registry-1.docker.io/apollograph/router-diagnostics-chart` (no `--version` at all)
+   resolves to this release — if it fails with "unable to locate any tags," some published tag
+   in the repository isn't valid semver (see the warning above).
 8. **Update customer-facing docs** if anything customer-visible changed, and ensure public docs
    are updated.
