@@ -18,13 +18,13 @@ There are two independent things you need to determine before installing anythin
 | --- | --- | --- |
 | Who runs collection | You, from your own machine, with your own `kubectl` access | A Kubernetes Job, in-cluster, using its own ServiceAccount |
 | What gets installed | Spec ConfigMap only | Spec ConfigMap + Job + ServiceAccount/RBAC (namespace-scoped and cluster-scoped) |
-| Where the bundle lands | Your current directory | S3 (or S3-compatible), GCS, or a bare HTTP(S) endpoint you configure. For more information, go to [Bundle storage and retrieval](../bundle-storage) |
+| Where the bundle lands | Your current directory | S3 (or S3-compatible), GCS, or a bare HTTP(S) endpoint you configure. For more information, go to [Bundle storage and retrieval](/router-support-tool/bundle-storage) |
 | Use when | You have `kubectl` access to production | Your `kubectl` access is restricted and a platform team runs collection on your behalf |
 
 Not sure which applies? If you can run `kubectl get pods` against production yourself right now, you want `mode: local`. If someone else on a platform team has to do that for you, you want `mode: job`.
 
-- [Running the tool locally (`mode: local`)](./local-mode)
-- [Running the tool as a Kubernetes Job (`mode: job`)](./job-mode)
+- [Running the tool locally (`mode: local`)](/router-support-tool/getting-started/local-mode)
+- [Running the tool as a Kubernetes Job (`mode: job`)](/router-support-tool/getting-started/job-mode)
 
 ## 2. Confirm how the router was deployed
 
@@ -35,7 +35,7 @@ Whichever mode you picked, the chart needs to know how to find your router. That
 | **[Official Apollo router Helm chart](https://github.com/apolloconfig/apollo-helm-chart)** | `namespace` only | The chart's collectors target your router by its standard `app.kubernetes.io/name=router` label and know the `ConfigMap` name and ports it uses |
 | **Raw manifests / custom deployment** | `namespace`, `selector`, `configMapName`, `metricsPort` (if not `9090`) | None of the official chart's conventions apply, so nothing about your router's location or configuration can be assumed |
 
-Both the [local mode](./local-mode) and [job mode](./job-mode) pages show the install command for each case.
+Both the [local mode](/router-support-tool/getting-started/local-mode) and [job mode](/router-support-tool/getting-started/job-mode) pages show the install command for each case.
 
 **Deploying the router via the Apollo Operator?** That path isn't supported yet.
 
@@ -43,8 +43,8 @@ Both the [local mode](./local-mode) and [job mode](./job-mode) pages show the in
 
 This page has covered the values you need to get a first bundle collected. For the complete set of chart values, as well as exactly what RBAC each mode grants and why, go to:
 
-- [`mode: local` reference](../local-mode-details)
-- [`mode: job` reference](../job-mode-details)
-- [Data Collected](../data-collected) — what's gathered, what each signal requires, and what's lost if you decline a permission
-- [Collecting Metrics](../collecting-metrics) — Prometheus prerequisites, per-mode targeting, and service mesh caveats
-- [Support bundle storage and retrieval](../bundle-storage) — `job.storage` reference and how to get the bundle back out
+- [`mode: local` reference](/router-support-tool/local-mode-details)
+- [`mode: job` reference](/router-support-tool/job-mode-details)
+- [Data Collected](/router-support-tool/data-collected) — what's gathered, what each signal requires, and what's lost if you decline a permission
+- [Collecting Metrics](/router-support-tool/collecting-metrics) — Prometheus prerequisites, per-mode targeting, and service mesh caveats
+- [Support bundle storage and retrieval](/router-support-tool/bundle-storage) — `job.storage` reference and how to get the bundle back out

@@ -20,7 +20,7 @@ What's collected by the tool includes:
 - A point-in-time Prometheus metrics snapshot, if you expose one
 - Sanitized router.yaml including secrets, tokens, and credentials stripped out automatically before the bundle ever leaves your cluster
 
-Go to [Data Collected](./data-collected) for the full per-signal breakdown—what each one requires, what it costs in permissions, and what's lost if you decline it.
+Go to [Data Collected](/router-support-tool/data-collected) for the full per-signal breakdown—what each one requires, what it costs in permissions, and what's lost if you decline it.
 
 And it does this without touching Apollo's systems. You generate and store the bundle entirely within infrastructure you control, locally on disk or in a bucket you own. Apollo only sees it if and when you choose.
 
@@ -43,7 +43,7 @@ Generating a support bundle is done through a single Helm chart, `router-diagnos
 
 Both modes install the troubleshoot.sh `support-bundle` engine at a version Apollo pins—using a standalone collection script for `mode: local`, or baked into the published Job image for `mode: job`—so results are reproducible regardless of whatever else happens to have been installed already.
 
-See the [Getting Started guide](./getting-started/getting-started) to pick a mode and get a first support bundle collected.
+See the [Getting Started guide](/router-support-tool/getting-started) to pick a mode and get a first support bundle collected.
 
 ## Support bundle output
 
@@ -63,4 +63,4 @@ From there, it's yours. Inspect it, keep it, or attach it to a support ticket.
 
 ## Get Started
 
-Ready to try it out? Go to the [Getting Started guide](./getting-started/getting-started).
+Ready to try it out? Go to the [Getting Started guide](/router-support-tool/getting-started).
