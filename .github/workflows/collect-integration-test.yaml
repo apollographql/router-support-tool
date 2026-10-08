@@ -85,3 +85,122 @@ jobs:
           name: support-bundle-official-chart-helm-v${{ matrix.helm_version }}
           path: testing/chainsaw/official-chart/support-bundle-*.tar.gz
           retention-days: 3
+
+  exercise_local_collect_windows:
+    name: "Exercise collect.ps1 (mode: local) against a kind cluster"
+    runs-on: windows-latest
+    env:
+      # windows-latest runners default to Windows containers mode. This env var tells
+      # the Docker CLI to resolve multi-arch images for linux/amd64 so that kind can
+      # pull kindest/node (Linux-only manifest) without switching the daemon engine.
+      DOCKER_DEFAULT_PLATFORM: linux/amd64
+      TEST_NAMESPACE: chainsaw-raw-manifest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # kind on windows-latest uses Docker Desktop's Linux-container support.
+      # The same kind-config.yaml works here — KubeletPSI runs in the Linux guest.
+      # helm/kind-action runs kind.sh which unconditionally downloads kind-linux-amd64
+      # regardless of runner OS. Install the Windows binary directly instead.
+      # The release asset has no .exe suffix in its name; curl saves it as kind.exe.
+      - name: Install kind
+        run: |
+          curl.exe -fLo kind.exe https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-windows-amd64
+          New-Item -ItemType Directory -Force "$env:ProgramFiles\kind" | Out-Null
+          Move-Item -Force kind.exe "$env:ProgramFiles\kind\kind.exe"
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:ProgramFiles\kind"
+        shell: pwsh
+
+      - name: Create kind cluster
+        run: kind create cluster --config testing/kind-config.yaml --wait 300s
+        shell: pwsh
+
+      - name: Deploy router to cluster
+        run: |
+          kubectl create namespace $env:TEST_NAMESPACE
+
+          # Mirror the raw-manifest Chainsaw test: same router.yaml and supergraph.graphql.
+          kubectl create configmap router-config -n $env:TEST_NAMESPACE `
+            --from-file=router.yaml=testing/chainsaw/raw-manifest/router.yaml `
+            --from-file=supergraph.graphql=testing/fixtures/supergraph.graphql
+          kubectl label configmap router-config -n $env:TEST_NAMESPACE app.kubernetes.io/name=router
+
+          kubectl apply -n $env:TEST_NAMESPACE -f testing/chainsaw/raw-manifest/resource.yaml
+
+          # router.yaml enables prometheus metrics on 9091 (deliberately not 9090,
+          # to exercise the metricsPort override path). The readinessProbe targets
+          # /metrics on 9091, so Available implies the metrics endpoint is up.
+          kubectl wait deployment/router -n $env:TEST_NAMESPACE `
+            --for=condition=Available --timeout=180s
+        shell: pwsh
+
+      - name: "Install router-diagnostics chart (mode: local)"
+        run: |
+          helm install router-diagnostics ./router-diagnostics-chart `
+            -n $env:TEST_NAMESPACE `
+            --set namespace=$env:TEST_NAMESPACE `
+            --set mode=local `
+            --set metricsPort=9091
+        shell: pwsh
+
+      # Image pulls on Windows runners can be slower than on Linux. kind-action's
+      # default wait_for_ready already retries, but collection itself gets extra time
+      # via the sleep step below.
+      # Wait for kubelet to complete one stats-collection cycle so that per-container
+      # nodeMetrics (cpu.psi, memory.psi) are present when support-bundle runs.
+      # Doubles the Chainsaw raw-manifest test's 15 s sleep to give Windows runners
+      # extra time for kubelet's slower stats-collection cycle.
+      - name: Wait for cluster metrics to stabilise
+        run: Start-Sleep -Seconds 30
+        shell: pwsh
+
+      - name: Run collect.ps1 against the cluster
+        run: |
+          ../../../router-diagnostics-collect/collect.ps1 -Namespace $env:TEST_NAMESPACE
+        shell: pwsh
+        working-directory: testing/chainsaw/raw-manifest
+
+      - name: Assert support bundle was produced
+        run: |
+          $bundle = Get-ChildItem -Filter 'support-bundle-*.tar.gz' |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+          if (-not $bundle) {
+            Write-Error 'No support bundle was produced by collect.ps1'
+            exit 1
+          }
+          if ($bundle.Length -eq 0) {
+            Write-Error "Support bundle is empty: $($bundle.Name)"
+            exit 1
+          }
+
+          Write-Host "Bundle produced: $($bundle.Name) ($($bundle.Length) bytes)"
+
+          # Verify the bundle has the expected top-level directories: at minimum
+          # cluster-resources (always collected) and router-logs (requires a running pod).
+          $entries = tar -tf $bundle.Name
+          $hasClusters = $entries | Where-Object { $_ -match '^[^/]+/cluster-resources/' }
+          $hasLogs     = $entries | Where-Object { $_ -match '^[^/]+/router-logs/' }
+
+          if (-not $hasClusters) {
+            Write-Error "Bundle is missing cluster-resources directory: $($bundle.Name)"
+            exit 1
+          }
+          if (-not $hasLogs) {
+            Write-Error "Bundle is missing router-logs directory: $($bundle.Name)"
+            exit 1
+          }
+
+          Write-Host 'Bundle structure check passed.'
+        shell: pwsh
+        working-directory: testing/chainsaw/raw-manifest
+
+      - name: Upload bundle for inspection
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: support-bundle-windows
+          path: testing/chainsaw/raw-manifest/support-bundle-*.tar.gz
+          retention-days: 3
