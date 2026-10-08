@@ -93,9 +93,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      # The stub uses tar to write a .tar.gz with the expected
-      # cluster-resources/ and router-logs/ structure.
-      - name: Set up fake support-bundle stub
+      - name: Set up support-bundle stub
         run: |
           $runDir = Join-Path $env:RUNNER_TEMP 'collect-run'
           New-Item -ItemType Directory -Force $runDir | Out-Null
