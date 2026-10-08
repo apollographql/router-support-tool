@@ -90,6 +90,10 @@ jobs:
     name: "Exercise collect.ps1 (mode: local) against a kind cluster"
     runs-on: windows-latest
     env:
+      # windows-latest runners default to Windows containers mode. This env var tells
+      # the Docker CLI to resolve multi-arch images for linux/amd64 so that kind can
+      # pull kindest/node (Linux-only manifest) without switching the daemon engine.
+      DOCKER_DEFAULT_PLATFORM: linux/amd64
       TEST_NAMESPACE: chainsaw-raw-manifest
     steps:
       - name: Checkout Code
@@ -97,10 +101,20 @@ jobs:
 
       # kind on windows-latest uses Docker Desktop's Linux-container support.
       # The same kind-config.yaml works here — KubeletPSI runs in the Linux guest.
+      # helm/kind-action runs kind.sh which unconditionally downloads kind-linux-amd64
+      # regardless of runner OS. Install the Windows binary directly instead.
+      # The release asset has no .exe suffix in its name; curl saves it as kind.exe.
+      - name: Install kind
+        run: |
+          curl.exe -fLo kind.exe https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-windows-amd64
+          New-Item -ItemType Directory -Force "$env:ProgramFiles\kind" | Out-Null
+          Move-Item -Force kind.exe "$env:ProgramFiles\kind\kind.exe"
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:ProgramFiles\kind"
+        shell: pwsh
+
       - name: Create kind cluster
-        uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
-        with:
-          config: testing/kind-config.yaml
+        run: kind create cluster --config testing/kind-config.yaml --wait 300s
+        shell: pwsh
 
       - name: Deploy router to cluster
         run: |

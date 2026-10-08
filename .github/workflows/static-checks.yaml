@@ -201,8 +201,7 @@ jobs:
         run: mise run test-collect-script
 
   # Static checks for collect.ps1: version-pin consistency with collect.sh, full-path binary
-  # invocation, and required-parameter enforcement. Full execution requires PowerShell (pwsh),
-  # which is not available on ubuntu-latest; execution testing is left as a gap.
+  # invocation, and required-parameter enforcement.
   collect_ps1_static_checks:
     name: "collect.ps1 static checks"
     runs-on: ubuntu-latest
