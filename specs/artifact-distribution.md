@@ -18,18 +18,25 @@ image by digest. Tagged with the release version (see `specs/release-process.md`
 
 ---
 
-## The router-diagnostics-collect script
+## The router-diagnostics-collect scripts
 
-**Source:** `router-diagnostics-collect/` (`collect.sh`)
+**Source:** `router-diagnostics-collect/` (`collect.sh` for macOS/Linux, `collect.ps1` for Windows)
 
-**External publish:** attached directly to the GitHub Release as a release asset. This is the
-underlying artifact location, not what we point customers at directly.
+**External publish:** both scripts are attached directly to the GitHub Release as release assets.
+This is the underlying artifact location, not what we point customers at directly.
 
 **Customers install through Orbiter:**
+
+macOS / Linux:
 
 ```bash
 curl -sSLo collect.sh https://router.apollo.dev/router-diagnostics-collect/latest
 ```
+
+Windows — Orbiter URL routing for `collect.ps1` is managed outside this repository. Until that
+routing is in place, customers can download the script directly from the GitHub Release assets.
+This is a known follow-up dependency; the script itself is shipped as a release asset from this
+repository's existing release workflow.
 
 ---
 
