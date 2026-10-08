@@ -16,9 +16,10 @@
     },
     {
       customType: 'regex',
-      description: "Keep the collect script's pinned support-bundle binary, the Job image's pinned binary, and the chart's declared troubleshoot_version in lock-step — all three match strings share a depName, so Renovate bumps them together in one PR.",
+      description: "Keep the collect scripts' pinned support-bundle binary, the Job image's pinned binary, and the chart's declared troubleshoot_version in lock-step — all four match strings share a depName, so Renovate bumps them together in one PR.",
       managerFilePatterns: [
         '/^router-diagnostics-collect/collect\\.sh$/',
+        '/^router-diagnostics-collect/collect\\.ps1$/',
         '/^router-diagnostics-job-image/Dockerfile$/',
         '/^router-diagnostics-chart/templates/base-spec-configmap\\.yaml$/',
       ],
