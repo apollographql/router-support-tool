@@ -90,10 +90,6 @@ jobs:
     name: "Exercise collect.ps1 (mode: local) against a kind cluster"
     runs-on: windows-latest
     env:
-      # windows-latest runners default to Windows containers mode. This env var tells
-      # the Docker CLI to resolve multi-arch images for linux/amd64 so that kind can
-      # pull kindest/node (Linux-only manifest) without switching the daemon engine.
-      DOCKER_DEFAULT_PLATFORM: linux/amd64
       TEST_NAMESPACE: chainsaw-raw-manifest
     steps:
       - name: Checkout Code
@@ -110,6 +106,19 @@ jobs:
           New-Item -ItemType Directory -Force "$env:ProgramFiles\kind" | Out-Null
           Move-Item -Force kind.exe "$env:ProgramFiles\kind\kind.exe"
           Add-Content -Path $env:GITHUB_PATH -Value "$env:ProgramFiles\kind"
+        shell: pwsh
+
+      # windows-latest ships Docker Engine pre-installed but the service is not started.
+      # The engine already runs in Linux-container mode by default on these runners.
+      - name: Start Docker service
+        run: |
+          Start-Service docker
+          $deadline = (Get-Date).AddMinutes(3)
+          while ((Get-Date) -lt $deadline) {
+            try { docker info | Out-Null; Write-Host "Docker ready."; break }
+            catch { Start-Sleep -Seconds 3 }
+          }
+          docker info
         shell: pwsh
 
       - name: Create kind cluster
@@ -144,9 +153,6 @@ jobs:
             --set metricsPort=9091
         shell: pwsh
 
-      # Image pulls on Windows runners can be slower than on Linux. kind-action's
-      # default wait_for_ready already retries, but collection itself gets extra time
-      # via the sleep step below.
       # Wait for kubelet to complete one stats-collection cycle so that per-container
       # nodeMetrics (cpu.psi, memory.psi) are present when support-bundle runs.
       # Doubles the Chainsaw raw-manifest test's 15 s sleep to give Windows runners
