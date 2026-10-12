@@ -28,7 +28,7 @@ if ($Missing.Count -gt 0) {
 # so a Renovate bump downloads a fresh binary rather than silently reusing a stale one. ---
 $CacheDir = if ($env:ROUTER_DIAGNOSTICS_CACHE_DIR) { $env:ROUTER_DIAGNOSTICS_CACHE_DIR } else { Join-Path $env:USERPROFILE '.router-diagnostics' }
 $Arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
-$Bin = Join-Path $CacheDir "bin\support-bundle-v${SupportBundleVersion}-windows-${Arch}.exe"
+$Bin = if ($env:SUPPORT_BUNDLE_BIN_OVERRIDE) { $env:SUPPORT_BUNDLE_BIN_OVERRIDE } else { Join-Path $CacheDir "bin\support-bundle-v${SupportBundleVersion}.exe" }
 
 if (-not (Test-Path $Bin)) {
     $Asset = switch ($env:PROCESSOR_ARCHITECTURE) {
