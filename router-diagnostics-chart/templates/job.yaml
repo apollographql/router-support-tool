@@ -16,18 +16,7 @@ metadata:
     troubleshoot.sh/kind: support-bundle-job
   annotations:
     # A Job's spec.template is immutable, so a new Job name is required on every
-    # upgrade that changes it (e.g. any job.storage.* value) - see router-diagnostics-job's
-    # own history for why. Without this annotation, Helm prunes the previous revision's
-    # Job as soon as it's no longer part of the rendered manifest, destroying its pod and
-    # logs in the same upgrade that was supposed to preserve them. TTL cleanup
-    # (job.ttlSecondsAfterFinished) still applies per-Job regardless of this annotation.
-    #
-    # Known edge case: this annotation also stops `helm uninstall` from deleting the Job,
-    # which means an `uninstall` immediately followed by a fresh `install` into the same
-    # namespace can collide with a leftover Job from the prior install if its TTL hasn't
-    # elapsed yet - `.Release.Revision` resets to 1 on a fresh install, so the new Job's
-    # name can match one Helm left behind on purpose. See docs/getting-started/job-mode.mdx
-    # -> "Cleaning up" for how this is documented to customers.
+    # upgrade that changes it.
     helm.sh/resource-policy: keep
 spec:
   backoffLimit: 0
