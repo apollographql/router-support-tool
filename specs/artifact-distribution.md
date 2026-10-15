@@ -33,10 +33,11 @@ macOS / Linux:
 curl -sSLo collect.sh https://router.apollo.dev/router-diagnostics-collect/latest
 ```
 
-Windows — Orbiter URL routing for `collect.ps1` is managed outside this repository. Until that
-routing is in place, customers can download the script directly from the GitHub Release assets.
-This is a known follow-up dependency; the script itself is shipped as a release asset from this
-repository's existing release workflow.
+Windows:
+
+```powershell
+Invoke-WebRequest -Uri https://router.apollo.dev/router-diagnostics-collect-ps1/latest -OutFile collect.ps1
+```
 
 ---
 
