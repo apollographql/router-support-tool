@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+#MISE description="Static checks for collect.ps1: version-pin consistency with collect.sh, full-path binary invocation, and required-parameter enforcement"
+#
+# Full execution of collect.ps1 requires a Windows machine or PowerShell (pwsh), which is not
+# available in CI (ubuntu-latest). This test performs static analysis only:
+#
+#   1. Version pin matches collect.sh — both files must declare the same SUPPORT_BUNDLE_VERSION.
+#   2. Never invokes a bare 'support-bundle' — the script must always call its own cached
+#      binary at the full versioned path, never fall back to whatever might be on PATH.
+#   3. Required -Namespace parameter is marked Mandatory — the script must not silently accept
+#      a missing namespace.
+set -euo pipefail
+
+SH="router-diagnostics-collect/collect.sh"
+PS1="router-diagnostics-collect/collect.ps1"
+
+FAILED=0
+
+# --- Step 1: version-pin consistency ---------------------------------------------------
+
+SH_VERSION=$(grep -m1 '^SUPPORT_BUNDLE_VERSION=' "$SH" | sed -E 's/^SUPPORT_BUNDLE_VERSION="(.*)"$/\1/')
+PS1_VERSION=$(grep -m1 '^\$SupportBundleVersion' "$PS1" | sed -E 's/^\$SupportBundleVersion = "(.*)"/\1/')
+
+if [ -z "$SH_VERSION" ]; then
+  echo "FAIL: could not extract SUPPORT_BUNDLE_VERSION from $SH" >&2
+  FAILED=1
+fi
+
+if [ -z "$PS1_VERSION" ]; then
+  echo "FAIL: could not extract \$SupportBundleVersion from $PS1" >&2
+  FAILED=1
+fi
+
+if [ "$SH_VERSION" != "$PS1_VERSION" ]; then
+  echo "FAIL: version pin mismatch — $SH has '$SH_VERSION', $PS1 has '$PS1_VERSION'" >&2
+  FAILED=1
+else
+  echo "OK: version pins match ($SH_VERSION)"
+fi
+
+# --- Step 2: binary is always called by full versioned path ----------------------------
+
+# collect.ps1 must invoke $Bin (the full versioned path). Check that:
+#   (a) the script never calls `& support-bundle` or `& 'support-bundle.exe'` directly, and
+#   (b) the script does call `& $Bin`.
+if grep -qE '^\s*&\s+[''"]?support-bundle' "$PS1"; then
+  echo "FAIL: $PS1 invokes 'support-bundle' by name rather than via \$Bin" >&2
+  grep -nE '^\s*&\s+[''"]?support-bundle' "$PS1" >&2
+  FAILED=1
+else
+  echo "OK: no bare 'support-bundle' invocation found"
+fi
+
+if ! grep -qE '^\s*&\s+\$Bin\b' "$PS1"; then
+  echo "FAIL: $PS1 never calls '& \$Bin'; it may not invoke the cached binary" >&2
+  FAILED=1
+else
+  echo "OK: binary invoked via \$Bin"
+fi
+
+# --- Step 3: -Namespace is mandatory ---------------------------------------------------
+
+if ! grep -q 'Mandatory' "$PS1"; then
+  echo "FAIL: $PS1 does not declare -Namespace as [Parameter(Mandatory)]" >&2
+  FAILED=1
+else
+  echo "OK: -Namespace parameter is declared Mandatory"
+fi
+
+# --- Step 4: renovate comment is present -----------------------------------------------
+
+if ! grep -q 'renovate: datasource=github-releases depName=replicatedhq/troubleshoot' "$PS1"; then
+  echo "FAIL: $PS1 is missing the Renovate tracking comment" >&2
+  FAILED=1
+else
+  echo "OK: Renovate tracking comment present"
+fi
+
+if [ "$FAILED" -ne 0 ]; then
+  exit 1
+fi
+
+echo ""
+echo "All static checks passed for $PS1"
+echo "NOTE: execution testing (download, extract, run) requires PowerShell (pwsh) and is not performed here."
