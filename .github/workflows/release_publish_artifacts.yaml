@@ -47,8 +47,8 @@ jobs:
           chart_path: router-diagnostics-chart
           version: ${{ inputs.version }}
 
-  attach_collect_script:
-    name: "Attach collect.sh to GitHub Release"
+  attach_collect_scripts:
+    name: "Attach collect scripts to GitHub Release"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -58,7 +58,11 @@ jobs:
         with:
           ref: ${{ inputs.version }}
 
-      - name: "Upload collect.sh as a release asset"
-        run: gh release upload "${{ inputs.version }}" router-diagnostics-collect/collect.sh --clobber
+      - name: "Upload collect scripts as release assets"
+        run: |
+          gh release upload "${{ inputs.version }}" \
+            router-diagnostics-collect/collect.sh \
+            router-diagnostics-collect/collect.ps1 \
+            --clobber
         env:
           GH_TOKEN: ${{ github.token }}
