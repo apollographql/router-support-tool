@@ -85,3 +85,67 @@ jobs:
           name: support-bundle-official-chart-helm-v${{ matrix.helm_version }}
           path: testing/chainsaw/official-chart/support-bundle-*.tar.gz
           retention-days: 3
+
+  exercise_local_collect_windows:
+    name: "Exercise collect.ps1 logic (mocked support-bundle)"
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up support-bundle stub
+        run: |
+          $runDir = Join-Path $env:RUNNER_TEMP 'collect-run'
+          New-Item -ItemType Directory -Force $runDir | Out-Null
+
+          $stub = "$env:GITHUB_WORKSPACE\testing\mock-troubleshoot.ps1"
+          Add-Content $env:GITHUB_ENV "COLLECT_RUN_DIR=$runDir"
+          Add-Content $env:GITHUB_ENV "SUPPORT_BUNDLE_BIN_OVERRIDE=$stub"
+        shell: pwsh
+
+      - name: Run collect.ps1 with mocked support-bundle
+        run: |
+          & "$env:GITHUB_WORKSPACE\router-diagnostics-collect\collect.ps1" -Namespace test-ns
+        shell: pwsh
+        working-directory: ${{ env.COLLECT_RUN_DIR }}
+
+      - name: Assert support bundle was produced
+        run: |
+          $bundle = Get-ChildItem $env:COLLECT_RUN_DIR -Filter 'support-bundle-*.tar.gz' |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+          if (-not $bundle) {
+            Write-Error 'No support bundle was produced by collect.ps1'
+            exit 1
+          }
+          if ($bundle.Length -eq 0) {
+            Write-Error "Support bundle is empty: $($bundle.Name)"
+            exit 1
+          }
+
+          Write-Host "Bundle produced: $($bundle.Name) ($($bundle.Length) bytes)"
+
+          $entries = tar -tf $bundle.FullName
+          $hasClusters = $entries | Where-Object { $_ -match '^[^/]+/cluster-resources/' }
+          $hasLogs = $entries | Where-Object { $_ -match '^[^/]+/router-logs/' }
+
+          if (-not $hasClusters) {
+            Write-Error "Bundle is missing cluster-resources/: $($bundle.Name)"
+            exit 1
+          }
+          if (-not $hasLogs) {
+            Write-Error "Bundle is missing router-logs/: $($bundle.Name)"
+            exit 1
+          }
+
+          Write-Host 'Bundle structure check passed.'
+        shell: pwsh
+
+      - name: Upload bundle for inspection
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: support-bundle-windows
+          path: ${{ env.COLLECT_RUN_DIR }}/support-bundle-*.tar.gz
+          retention-days: 3
