@@ -13,6 +13,5 @@ libraries, but the `gcloud` CLI binary itself still needs an explicitly activate
 account - nothing in `collect-and-upload.sh` ever did that. Confirmed against a real
 GCS bucket: collection always succeeded, but the upload never did.
 
-`collect-and-upload.sh`'s `gcs` branch now runs `gcloud auth activate-service-account
---key-file="$GOOGLE_APPLICATION_CREDENTIALS"` before the upload, only when that env var
-is set.
+`collect-and-upload.sh`'s `gcs` branch now sets `CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE`
+to `$GOOGLE_APPLICATION_CREDENTIALS` before the upload, only when that env var is set.
