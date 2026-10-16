@@ -35,6 +35,49 @@ spec:
               - name: NAMESPACE
                 value: ($namespace)
         - script:
+            # Testing Job mode repeat collection: each `helm upgrade` must get its own
+            # Job (router-diagnostics-job-<revision>) without the previous run's Job
+            # being pruned.
+            timeout: 30s
+            content: |
+              mise exec "helm@$HELM_VERSION" -- helm install router-diagnostics ../../../router-diagnostics-chart \
+                -n "$NAMESPACE" --set namespace="$NAMESPACE" --set mode=job \
+                --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
+                --set job.storage.provider=s3 --set job.storage.bucket=my-test-bucket \
+                --set job.storage.prefix=first-run/ \
+                --set job.storage.s3.accessKeyId=my-test-access-key \
+                --set job.storage.s3.secretAccessKey=my-test-secret-key
+
+              kubectl get job router-diagnostics-job-1 -n "$NAMESPACE" >/dev/null || {
+                echo "FAIL: expected router-diagnostics-job-1 to exist after install" >&2
+                exit 1
+              }
+
+              mise exec "helm@$HELM_VERSION" -- helm upgrade router-diagnostics ../../../router-diagnostics-chart \
+                -n "$NAMESPACE" --set namespace="$NAMESPACE" --set mode=job \
+                --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
+                --set job.storage.provider=s3 --set job.storage.bucket=my-test-bucket \
+                --set job.storage.prefix=second-run/ \
+                --set job.storage.s3.accessKeyId=my-test-access-key \
+                --set job.storage.s3.secretAccessKey=my-test-secret-key
+
+              kubectl get job router-diagnostics-job-1 -n "$NAMESPACE" >/dev/null || {
+                echo "FAIL: helm upgrade pruned router-diagnostics-job-1 instead of keeping it" >&2
+                exit 1
+              }
+              ACTUAL_COMMAND=$(kubectl get job router-diagnostics-job-2 -n "$NAMESPACE" \
+                -o jsonpath='{.spec.template.spec.containers[0].command}')
+              echo "$ACTUAL_COMMAND" | grep -q 'second-run/' || {
+                echo "FAIL: expected router-diagnostics-job-2 to carry the upgraded prefix rendered from the upgraded values, got: $ACTUAL_COMMAND" >&2
+                exit 1
+              }
+
+              mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE"
+              kubectl delete job -n "$NAMESPACE" -l troubleshoot.sh/kind=support-bundle-job --ignore-not-found
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - script:
             # job.storage.provider=s3, static accessKeyId/secretAccessKey:
             # the chart must render its own Secret with these values
             # baked in, and the Job must pull env from it.
