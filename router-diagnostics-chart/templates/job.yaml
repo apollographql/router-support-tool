@@ -11,9 +11,13 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: router-diagnostics-job
+  name: router-diagnostics-job-{{ .Release.Revision }}
   labels:
     troubleshoot.sh/kind: support-bundle-job
+  annotations:
+    # A Job's spec.template is immutable, so a new Job name is required on every
+    # upgrade that changes it.
+    helm.sh/resource-policy: keep
 spec:
   backoffLimit: 0
   ttlSecondsAfterFinished: {{ .Values.job.ttlSecondsAfterFinished | default 3600 }}
