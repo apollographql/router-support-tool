@@ -11,16 +11,24 @@ This page is the complete reference for `mode: local`. For the shortest path to 
 
 ## The `router-diagnostics` collect script
 
-Collection for `mode: local` runs through a standalone script:
+Collection for `mode: local` runs through a standalone script, available for macOS, Linux, and Windows.
+
+macOS / Linux (requires `kubectl` and `curl`):
 
 ```bash
 curl -sSLo collect.sh https://router.apollo.dev/router-diagnostics-collect/latest
 chmod +x collect.sh
 ```
 
-This gives you a `./collect.sh` command, which caches a pinned `support-bundle` binary locally, keyed by version—a pin bump downloads a fresh binary rather than reusing a stale one. Apollo controls this version, the same way `mode: job`'s image tag does.
+Windows (run in PowerShell, requires `kubectl`):
 
-**`--namespace` is a plain, required flag**. It must match wherever you actually installed the chart: both the `helm install --namespace` value and the chart's own `--set namespace=<router_namespace>` value (typically the same namespace in practice). `collect.sh` uses it directly for its `kubectl` calls and for `support-bundle --load-cluster-specs --namespace`, which is what discovers the rendered spec ConfigMap.
+```powershell
+Invoke-WebRequest -Uri https://router.apollo.dev/router-diagnostics-collect-ps1/latest -OutFile collect.ps1
+```
+
+This gives you a `./collect.sh` (or `.\collect.ps1` on Windows) command, which caches a pinned `support-bundle` binary locally — in `~/.router-diagnostics/bin` on Unix, `%USERPROFILE%\.router-diagnostics\bin` on Windows, or the path in `ROUTER_DIAGNOSTICS_CACHE_DIR` — keyed by version so  a version update downloads a fresh binary rather than using a stale one. Apollo controls this version, the same way `mode: job`'s image tag does.
+
+**`--namespace` (Unix) / `-Namespace` (Windows) is a plain, required flag**. It must match wherever you actually installed the chart: both the `helm install --namespace` value and the chart's own `--set namespace=<router_namespace>` value (typically the same namespace in practice). The script uses it directly for its `kubectl` calls and for `support-bundle --load-cluster-specs --namespace`, which is what discovers the rendered spec ConfigMap.
 
 ## Chart values
 
@@ -30,7 +38,7 @@ This gives you a `./collect.sh` command, which caches a pinned `support-bundle` 
 
 Installing the chart requires permission to create a ConfigMap in the target namespace, which is the same level of access needed to install the router itself.
 
-Running `./collect.sh` uses **your own existing kubectl credentials**; no additional ServiceAccount is created for this step. Reaching the metrics collector additionally needs `create` on the `pods/portforward` subresource in the router's namespace. For more information, go to [Collecting Metrics](/router-support-tool/collecting-metrics#mode-local). Declining this doesn't fail collection; it only means that section comes back empty.
+Running `./collect.sh` (or `.\collect.ps1`) uses **your own existing kubectl credentials**; no additional ServiceAccount is created for this step. Reaching the metrics collector additionally needs `create` on the `pods/portforward` subresource in the router's namespace. For more information, see [Collecting Metrics](/router-support-tool/collecting-metrics#mode-local). Declining this doesn't fail collection; it only means that section comes back empty.
 
 **`pods/exec` isn't required**: nothing this tool does runs inside your router container.
 
@@ -38,7 +46,7 @@ Running `./collect.sh` uses **your own existing kubectl credentials**; no additi
 
 ## Cluster footprint
 
-Spec ConfigMap plus Helm release metadata is left behind after install. Once installed, subsequent collections are just `./collect.sh --namespace <namespace>` again, with no reinstall needed. If you'd rather leave nothing behind:
+Spec `ConfigMap` plus Helm release metadata is left behind after install. Once installed, subsequent collections are just `./collect.sh --namespace <namespace>` (or `.\collect.ps1 -Namespace <namespace>` on Windows) again, with no reinstall needed. If you'd rather leave nothing behind:
 
 ```bash
 helm uninstall router-diagnostics --namespace <namespace>
