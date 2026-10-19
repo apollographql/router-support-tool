@@ -59,11 +59,13 @@ On top of this, three separate cluster-scoped grants apply for `nodeMetrics`, de
 
 ## Cluster footprint
 
-Spec ConfigMap, Helm release metadata, and the ServiceAccount/Role/RoleBinding stays behind after installing. The Job itself is transient: `ttlSecondsAfterFinished` (default `3600`) means Kubernetes automatically deletes the Job and its pod an hour after it completes. To remove everything else, including the RBAC:
+Spec ConfigMap, Helm release metadata, and the ServiceAccount/Role/RoleBinding stays behind after installing. Each Job is transient on its own: `ttlSecondsAfterFinished` (default `3600`) means Kubernetes automatically deletes that Job and its pod an hour after it completes. Collecting more than once creates a new, uniquely-named Job per run (`router-diagnostics-job-<n>`, see [Collecting again](/router-support-tool/getting-started/job-mode#collecting-again)) rather than replacing the previous one, and `helm uninstall` doesn't delete any Job early — each one only ever cleans up via its own TTL. To remove everything else, including the RBAC:
 
 ```bash
 helm uninstall router-diagnostics --namespace <namespace>
 ```
+
+Because `helm uninstall` leaves not-yet-expired Jobs in place, and a fresh `helm install` restarts Job naming from `router-diagnostics-job-1`, reinstalling into the same namespace within the TTL window can collide with a leftover Job of the same name. For a workaround, see [Collecting again → Cleaning up](/router-support-tool/getting-started/job-mode#cleaning-up).
 
 ## Bundle output shape
 

@@ -21,7 +21,7 @@ spec:
                 --set job.storage.provider=s3 --set job.storage.bucket=my-test-bucket \
                 --set job.storage.existingSecret=my-s3-secret
 
-              ACTUAL=$(kubectl get job router-diagnostics-job -n "$NAMESPACE" \
+              ACTUAL=$(kubectl get job router-diagnostics-job-1 -n "$NAMESPACE" \
                 -o jsonpath='{.spec.template.spec.containers[0].envFrom[0].secretRef.name}')
               [ "$ACTUAL" = "my-s3-secret" ] || {
                 echo "FAIL: expected envFrom to reference my-s3-secret, got: $ACTUAL" >&2
@@ -29,7 +29,51 @@ spec:
               }
 
               mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE"
+              kubectl delete job -n "$NAMESPACE" -l troubleshoot.sh/kind=support-bundle-job --ignore-not-found
               kubectl delete secret my-s3-secret -n "$NAMESPACE"
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - script:
+            # Testing Job mode repeat collection: each `helm upgrade` must get its own
+            # Job (router-diagnostics-job-<revision>) without the previous run's Job
+            # being pruned.
+            timeout: 30s
+            content: |
+              mise exec "helm@$HELM_VERSION" -- helm install router-diagnostics ../../../router-diagnostics-chart \
+                -n "$NAMESPACE" --set namespace="$NAMESPACE" --set mode=job \
+                --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
+                --set job.storage.provider=s3 --set job.storage.bucket=my-test-bucket \
+                --set job.storage.prefix=first-run/ \
+                --set job.storage.s3.accessKeyId=my-test-access-key \
+                --set job.storage.s3.secretAccessKey=my-test-secret-key
+
+              kubectl get job router-diagnostics-job-1 -n "$NAMESPACE" >/dev/null || {
+                echo "FAIL: expected router-diagnostics-job-1 to exist after install" >&2
+                exit 1
+              }
+
+              mise exec "helm@$HELM_VERSION" -- helm upgrade router-diagnostics ../../../router-diagnostics-chart \
+                -n "$NAMESPACE" --set namespace="$NAMESPACE" --set mode=job \
+                --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
+                --set job.storage.provider=s3 --set job.storage.bucket=my-test-bucket \
+                --set job.storage.prefix=second-run/ \
+                --set job.storage.s3.accessKeyId=my-test-access-key \
+                --set job.storage.s3.secretAccessKey=my-test-secret-key
+
+              kubectl get job router-diagnostics-job-1 -n "$NAMESPACE" >/dev/null || {
+                echo "FAIL: helm upgrade pruned router-diagnostics-job-1 instead of keeping it" >&2
+                exit 1
+              }
+              ACTUAL_COMMAND=$(kubectl get job router-diagnostics-job-2 -n "$NAMESPACE" \
+                -o jsonpath='{.spec.template.spec.containers[0].command}')
+              echo "$ACTUAL_COMMAND" | grep -q 'second-run/' || {
+                echo "FAIL: expected router-diagnostics-job-2 to carry the upgraded prefix rendered from the upgraded values, got: $ACTUAL_COMMAND" >&2
+                exit 1
+              }
+
+              mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE"
+              kubectl delete job -n "$NAMESPACE" -l troubleshoot.sh/kind=support-bundle-job --ignore-not-found
             env:
               - name: NAMESPACE
                 value: ($namespace)
@@ -59,7 +103,7 @@ spec:
                 exit 1
               }
 
-              ACTUAL_REF=$(kubectl get job router-diagnostics-job -n "$NAMESPACE" \
+              ACTUAL_REF=$(kubectl get job router-diagnostics-job-1 -n "$NAMESPACE" \
                 -o jsonpath='{.spec.template.spec.containers[0].envFrom[0].secretRef.name}')
               [ "$ACTUAL_REF" = "router-diagnostics-storage-credentials" ] || {
                 echo "FAIL: expected envFrom to reference the chart-rendered Secret, got: $ACTUAL_REF" >&2
@@ -67,6 +111,7 @@ spec:
               }
 
               mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE"
+              kubectl delete job -n "$NAMESPACE" -l troubleshoot.sh/kind=support-bundle-job --ignore-not-found
             env:
               - name: NAMESPACE
                 value: ($namespace)
@@ -86,13 +131,13 @@ spec:
                 --set job.storage.gcs.project=my-test-project \
                 --set job.storage.existingSecret=my-gcs-secret
 
-              ACTUAL_ENV=$(kubectl get job router-diagnostics-job -n "$NAMESPACE" \
+              ACTUAL_ENV=$(kubectl get job router-diagnostics-job-1 -n "$NAMESPACE" \
                 -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="GOOGLE_APPLICATION_CREDENTIALS")].value}')
               [ "$ACTUAL_ENV" = "/var/run/secrets/router-diagnostics-storage/key.json" ] || {
                 echo "FAIL: expected GOOGLE_APPLICATION_CREDENTIALS to point at the mounted key, got: $ACTUAL_ENV" >&2
                 exit 1
               }
-              ACTUAL_VOLUME=$(kubectl get job router-diagnostics-job -n "$NAMESPACE" \
+              ACTUAL_VOLUME=$(kubectl get job router-diagnostics-job-1 -n "$NAMESPACE" \
                 -o jsonpath='{.spec.template.spec.volumes[?(@.name=="storage-credentials")].secret.secretName}')
               [ "$ACTUAL_VOLUME" = "my-gcs-secret" ] || {
                 echo "FAIL: expected the credentials volume to mount my-gcs-secret, got: $ACTUAL_VOLUME" >&2
@@ -100,6 +145,7 @@ spec:
               }
 
               mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE"
+              kubectl delete job -n "$NAMESPACE" -l troubleshoot.sh/kind=support-bundle-job --ignore-not-found
               kubectl delete secret my-gcs-secret -n "$NAMESPACE"
             env:
               - name: NAMESPACE
@@ -121,7 +167,7 @@ spec:
                 echo "FAIL: expected the chart-rendered Secret to carry the static credentials JSON, got: $ACTUAL_KEY" >&2
                 exit 1
               }
-              ACTUAL_VOLUME=$(kubectl get job router-diagnostics-job -n "$NAMESPACE" \
+              ACTUAL_VOLUME=$(kubectl get job router-diagnostics-job-1 -n "$NAMESPACE" \
                 -o jsonpath='{.spec.template.spec.volumes[?(@.name=="storage-credentials")].secret.secretName}')
               [ "$ACTUAL_VOLUME" = "router-diagnostics-storage-credentials" ] || {
                 echo "FAIL: expected the credentials volume to mount the chart-rendered Secret, got: $ACTUAL_VOLUME" >&2
@@ -129,6 +175,7 @@ spec:
               }
 
               mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE"
+              kubectl delete job -n "$NAMESPACE" -l troubleshoot.sh/kind=support-bundle-job --ignore-not-found
             env:
               - name: NAMESPACE
                 value: ($namespace)
@@ -160,6 +207,7 @@ spec:
               }
 
               mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE"
+              kubectl delete job -n "$NAMESPACE" -l troubleshoot.sh/kind=support-bundle-job --ignore-not-found
             env:
               - name: NAMESPACE
                 value: ($namespace)
@@ -184,7 +232,7 @@ spec:
                 exit 1
               }
 
-              kubectl get job router-diagnostics-job -n "$NAMESPACE" 2>/dev/null && {
+              kubectl get job router-diagnostics-job-1 -n "$NAMESPACE" 2>/dev/null && {
                 echo "FAIL: a rejected install left a Job behind" >&2
                 exit 1
               }
@@ -199,6 +247,7 @@ spec:
             timeout: 30s
             content: |
               mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE" || true
+              kubectl delete job -n "$NAMESPACE" -l troubleshoot.sh/kind=support-bundle-job --ignore-not-found
               kubectl delete secret my-s3-secret my-gcs-secret -n "$NAMESPACE" --ignore-not-found
             env:
               - name: NAMESPACE

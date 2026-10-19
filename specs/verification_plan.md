@@ -103,7 +103,7 @@ The floor and current-release versions are two separate environment variants, di
 
 #### Bundle retrieval in RTF
 
-Use the `job.storage.provider: url` option (see `specs/storage/object_storage.md`). We will drop a plain `http.server` script into the environment via a file provider, run it reachably from the Job, and point `job.storage.url.endpoint` at it. The Job pushes the bundle there directly once collection finishes (via PUT request). The Scenario knows the Job is done via `kubectl wait --for=condition=complete job/router-diagnostics-job`, then fetches the bundle from the server.
+Use the `job.storage.provider: url` option (see `specs/storage/object_storage.md`). We will drop a plain `http.server` script into the environment via a file provider, run it reachably from the Job, and point `job.storage.url.endpoint` at it. The Job pushes the bundle there directly once collection finishes (via PUT request). The Scenario knows the Job is done via `kubectl wait --for=condition=complete job/router-diagnostics-job-1`, then fetches the bundle from the server.
 
 ### Other CI checks
 
