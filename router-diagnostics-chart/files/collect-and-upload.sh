@@ -25,6 +25,11 @@ if [ -n "$PROVIDER" ]; then
       BUCKET="$2"
       PREFIX="$3"
       PROJECT="$4"
+      # GOOGLE_APPLICATION_CREDENTIALS alone satisfies client-library ADC, but the gcloud
+      # CLI binary itself still needs to be told where to find credentials.
+      if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]; then
+        export CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE="$GOOGLE_APPLICATION_CREDENTIALS"
+      fi
       set -- gcloud storage cp "$BUNDLE" "gs://$BUCKET/$PREFIX$BUNDLE"
       [ -n "$PROJECT" ] && set -- "$@" --project="$PROJECT"
       "$@"

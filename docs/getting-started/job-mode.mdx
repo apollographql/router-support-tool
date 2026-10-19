@@ -54,6 +54,13 @@ The previous example uploads to S3 using IRSA with no credentials to store or ro
 
 Once the Job completes, the configured destination has the bundle. Retrieve it the way you'd retrieve anything else from that bucket or endpoint (for example, `aws s3 cp` for S3). For specifics per provider, go to [Support bundle storage and retrieval → Retrieval](/router-support-tool/bundle-storage#retrieval). This tool doesn't manage retention on the destination.
 
+## Collecting again
+
+Run `helm upgrade` with the same command you installed with (same flags, or changed storage
+settings) to trigger another collection. Each run gets its own uniquely-named Job
+(`router-diagnostics-job-<n>`, incrementing with the release's revision number), so a
+previous run's Job and its logs remain even after you've triggered a new one (for example, `kubectl logs job/router-diagnostics-job-<n>`).
+
 ## Service mesh environments
 
 <Caution>
@@ -75,8 +82,14 @@ The bundle's `meta.json` records whether the chart disabled injection (`sidecar_
 
 ## Cleaning up
 
-Installing this mode leaves the spec ConfigMap, Helm release metadata, and the ServiceAccount/RBAC in your cluster. The Job itself is transient, it's deleted automatically, by default, an hour after completing (`job.ttlSecondsAfterFinished`). To remove everything else:
+Installing this mode leaves the spec `ConfigMap`, Helm release metadata, and the ServiceAccount/RBAC in your cluster. Each Job is transient on its own: it's deleted automatically, by default, an hour after completing (`job.ttlSecondsAfterFinished`) — this applies per Job, so if you've collected more than once, each past run cleans up on its own schedule. `helm uninstall` does **not** delete any Job early, specifically so an in-progress investigation using an older run's logs isn't cut short by cleanup. To remove everything else:
 
 ```bash
 helm uninstall router-diagnostics --namespace production
+```
+
+Because `helm uninstall` leaves any not-yet-expired Job behind and because and a fresh `helm install` starts Job naming over from `router-diagnostics-job-1`, reinstalling into the same namespace within the TTL window (default 1 hour) can collide with a leftover Job and fail. If you hit this, either wait for the old Job's TTL to elapse, or delete it yourself before reinstalling:
+
+```bash
+kubectl delete job router-diagnostics-job-1 --namespace production
 ```
