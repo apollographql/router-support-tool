@@ -2,7 +2,7 @@
 
 ## The problem
 
-In both modes, `router-metrics` is a `hostCollectors.run` collector, a shell script troubleshoot.sh executes wherever `support-bundle` runs: the machine running `collect.sh` under `mode: local`, the Job's pod under `mode: job` (see `specs/collection/base_spec.md` → Per-pod metrics collection). troubleshoot.sh writes a `<collectorName>-info.json` diagnostic sidecar for this collector. It records the full exec invocation, **including the entire process environment `support-bundle` was launched with**. Under `mode: local` that is the invoking user's shell environment. Under `mode: job` it is the Job container's environment, which includes the object-storage credentials the chart injects there (`specs/storage/object_storage.md` → Credentials).
+`router-metrics` is a `hostCollectors.run` collector, a shell script troubleshoot.sh executes wherever `support-bundle` runs: the machine running `collect.sh` under `mode: local`, the Job's pod under `mode: job` (see `specs/collection/base_spec.md` → Per-pod metrics collection). troubleshoot.sh writes a `<collectorName>-info.json` diagnostic sidecar for this collector. It records the full exec invocation, **including the entire process environment `support-bundle` was launched with**. Under `mode: local` that is the invoking user's shell environment. Under `mode: job` it is the Job container's environment, which includes the object-storage credentials the chart injects there (`specs/storage/object_storage.md` → Credentials).
 
 ## Mitigation 1: shrink what's captured in the first place
 

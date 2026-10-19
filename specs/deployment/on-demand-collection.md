@@ -60,7 +60,7 @@ data:
 | --- | --- | --- | --- | --- |
 | `namespace` | Yes | — | Official chart, raw manifest / custom | The router's namespace. Rendered into every collector that accepts it, including `clusterResources.namespaces` as a single-element list. Never rely on the kubectl context fallback. |
 | `mode` | Yes | — | Official chart, raw manifest / custom | `local` or `job` |
-| `selector` | Raw-manifest tier only | The official chart's `app.kubernetes.io/name=router` label | Raw manifests / custom | Pod label selector, e.g. `app=my-router`. Also selects which pods `router-metrics` scrapes, in both modes, resolved each time collection runs. Set it on the official chart too if the router's `app.kubernetes.io/name` label isn't `router` (for example, with `router.nameOverride` or an aliased install). See `specs/collection/base_spec.md` → Per-pod metrics collection |
+| `selector` | Raw-manifest tier only | The official chart's `app.kubernetes.io/name=router` label | Raw manifests / custom | Pod label selector, e.g. `app=my-router`. Also selects which pods `router-metrics` scrapes and is resolved each time collection runs. Set it on the official chart too if the router's `app.kubernetes.io/name` label isn't `router` (for example, with `router.nameOverride` or an aliased install). See `specs/collection/base_spec.md` → Per-pod metrics collection |
 | `configMapName` | Raw-manifest tier only | Label-based targeting, no name needed | Raw manifests / custom | Name of the ConfigMap holding the router config |
 | `metricsPort` | No | `9090` | Official chart, raw manifest / custom | Port the router's metrics endpoint is reachable on, if not `9090`. |
 | `logs.maxAge` | No | Unset — no age cap | Official chart, raw manifest / custom | Maps to the `logs` collector's `limits.maxAge`. How far back to reach, e.g. `2h` |
@@ -72,7 +72,7 @@ data:
 
 You run the collection yourself, with your own kubectl access.
 
-If the router's metrics section comes back empty because collection runs outside a service mesh, see [Running outside the mesh doesn't have to mean losing metrics](#running-outside-the-mesh-doesnt-have-to-mean-losing-metrics).
+If the router's metrics are missing because collection runs outside a service mesh (the bundle says no pod responded), see [Running outside the mesh doesn't have to mean losing metrics](#running-outside-the-mesh-doesnt-have-to-mean-losing-metrics).
 
 ### Prerequisite: download the router-diagnostics collect script
 
@@ -170,7 +170,7 @@ the rendered spec ConfigMap.
 
 ### Permissions for `mode: local`
 
-Requires permission to create a ConfigMap in the target namespace, plus `create` on the `pods/portforward` subresource in the router's namespace to reach `router-metrics`. Declining the latter does not fail collection, it only means `router-metrics` throws an error. Running the collection uses the invoking user's existing kubectl credentials.
+Requires permission to create a ConfigMap in the target namespace, plus `create` on the `pods/portforward` subresource in the router's namespace to reach `router-metrics`. Declining the latter does not fail collection. The script includes the port-forward's error in each pod's "no response" line. Running the collection uses the invoking user's existing kubectl credentials.
 
 Collection never needs root: `collect.sh` runs `support-bundle` with `--interactive=false`, so the CLI's default sudo-reexec prompt (triggered by the presence of any `hostCollectors.run` entry, not an actual root requirement) never appears.
 

@@ -6,11 +6,11 @@ This spec lays out how we validate the support tool's behavior. We do not restat
 
 ### Deployment tiers
 
-Two of the deployment tiers in `specs/deployment/v1/v1.md` are in scope for this plan: the official Apollo Helm chart and raw manifest/custom deployment.
+Two of the deployment tiers in `specs/deployment/on-demand-collection.md` are in scope for this plan: the official Apollo Helm chart and raw manifest/custom deployment.
 
 ### Collection modes
 
-Both `mode: local` and `mode: job` (`specs/deployment/v1/v1.md`) need coverage, but not symmetrically:
+Both `mode: local` and `mode: job` (`specs/deployment/on-demand-collection.md`) need coverage, but not symmetrically:
 
 - `mode: job` pins the troubleshoot.sh support-bundle version via the image tag, which makes it the reproducible path — prefer it as the default.
 
@@ -81,7 +81,7 @@ Everything that makes a test case *not* healthy happens after that, from the Sce
 
 The environment itself is the same across every test case, and so is the Scenario's `command`. What varies is the matrix's scenario value, passed into that same script via `env_vars` (e.g. `SCENARIO: "{{ scenario }}"`). The script branches internally on that value to put the environment into whatever shape the test case needs, then runs the actual collection/verification commands. "All routers healthy" is simply the no-op branch.
 
-The environment does differ for the Routers under-resourced test case, where `resources.limits` will be set tight from the start. We can verify this by reading `node-metrics/*.json` and `router-metrics/result.json` against `resources.limits`. Note: `router-metrics/result.json` only populates if the router's Prometheus exporter is enabled in this scenario's config and its worth checking whether the router can prioritize serving `/metrics` even under memory pressure, so this signal doesn't just go dark exactly when it matters most.
+The environment does differ for the Routers under-resourced test case, where `resources.limits` will be set tight from the start. We can verify this by reading `node-metrics/*.json` and the per-pod files under `host-collectors/run-host/router-metrics/pods/` (raw Prometheus text, one `<pod-name>.txt` per pod) against `resources.limits`. Note: the `pods/` files only appear if the router's Prometheus exporter is enabled in this scenario's config and its worth checking whether the router can prioritize serving `/metrics` even under memory pressure, so this signal doesn't just go dark exactly when it matters most.
 
 #### Applying the collector attribution scenarios to RTF
 

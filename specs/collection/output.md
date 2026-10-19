@@ -61,7 +61,7 @@ Notes:
 
 ## `router-metrics` layout
 
-`router-metrics` is a `hostCollectors.run` collector in both modes (`specs/collection/base_spec.md` → Per-pod metrics collection), so the layout above is the same for `mode: local` and `mode: job`. troubleshoot.sh nests a host run collector's `outputDir` under `host-collectors/run-host/<collectorName>/`, not at the top level of the bundle. This collector's `collectorName` is `router-metrics` and its `outputDir` is `pods`, so pods `router-7f8` and `router-9ad`, for example, land at:
+`router-metrics` is a `hostCollectors.run` collector (`specs/collection/base_spec.md` → Per-pod metrics collection). troubleshoot.sh nests a host run collector's `outputDir` under `host-collectors/run-host/<collectorName>/`. This collector's `collectorName` is `router-metrics` and its `outputDir` is `pods`, so pods `router-7f8` and `router-9ad`, for example, land at:
 
 ```
 host-collectors/run-host/
