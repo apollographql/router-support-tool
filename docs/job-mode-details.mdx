@@ -13,6 +13,8 @@ This page is the complete reference for `mode: job`.
 
 The image bundles a pinned version of troubleshoot's `support-bundle` binary as well as `aws-cli` and `gcloud` for bundle upload. For more information, go to [Support bundle storage and retrieval](/router-support-tool/bundle-storage).
 
+It also bundles `kubectl` and `curl`, which the metrics collector uses to find your router pods and scrape them every time the Job runs. On linux/arm64, `kubectl` adds about 18 MB to the image download (about 64 MB once unpacked). For more information, go to [Collecting Metrics → `mode: job`](/router-support-tool/collecting-metrics#mode-job).
+
 ## Chart values
 
 ### Chart values common to both modes
@@ -51,6 +53,8 @@ Collection itself runs using a namespace-scoped ServiceAccount the chart creates
 - **`discovery.k8s.io`**: `endpointslices`
 - **`coordination.k8s.io`**: `leases`
 
+The same `get`/`list` on `pods` is what the metrics collector uses to find your router pods each time the Job runs. It reaches each pod's metrics port directly from inside the cluster, so no `pods/portforward` grant is needed.
+
 On top of this, three separate cluster-scoped grants apply for `nodeMetrics`, deliberately kept independent so you can decline the more sensitive ones without losing the others. Go to [Collecting Metrics → If Prometheus isn't set up yet](/router-support-tool/collecting-metrics#if-prometheus-isnt-set-up-yet) for exactly what those three grants are and what each authorizes.
 
 **`pods/exec` is not required**: nothing this tool does runs inside your router container.
@@ -82,8 +86,14 @@ support-bundle-2026-08-11T14_23_00/
 │   └── cluster_version.json
 ├── execution-data/
 │   └── summary.txt
-├── router-metrics-<pod-name>/
-│   └── result.json
+├── host-collectors/
+│   └── run-host/
+│       ├── router-metrics-info.json                               # masked wholesale — see Collecting Metrics
+│       ├── router-metrics.txt                                     # the collector's own output, including why any metrics are missing
+│       └── router-metrics/
+│           └── pods/
+│               ├── <pod-name>.txt
+│               └── <pod-2-name>.txt
 ├── router-logs/
 │   └── <router-pod-name>/
 │       └── router.log -> ../../cluster-resources/pods/logs/production/<router-pod-name>/router.log
@@ -102,7 +112,9 @@ support-bundle-2026-08-11T14_23_00/
         └── <configmap-name>.json
 ```
 
-- **`router-metrics-<pod-name>/`** — one directory per router pod matching `selector`, each from its own `http` collector. Go to [Collecting Metrics](/router-support-tool/collecting-metrics#mode-job) for how pods are targeted.
+- **`host-collectors/run-host/router-metrics/pods/`** — one `<pod-name>.txt` per router pod matching `selector` that responded, holding that pod's Prometheus metrics. `mode: local` bundles use the same path. Earlier versions of the chart wrote `mode: job` metrics to a top-level `router-metrics-<pod-name>/result.json` instead, so update any script that reads that path. Go to [Collecting Metrics → Where metrics land in the bundle](/router-support-tool/collecting-metrics#where-metrics-land-in-the-bundle) for details.
+- **`host-collectors/run-host/router-metrics.txt`** — the metrics collector's own output, separate from the per-pod files. It has one line for each pod that couldn't be scraped, or for why no pod could be. Go to [Collecting Metrics → If metrics are missing](/router-support-tool/collecting-metrics#if-metrics-are-missing) for what each line means.
+- **`host-collectors/run-host/router-metrics-info.json`** — a diagnostic sidecar troubleshoot.sh writes for the metrics collector. Its contents are masked wholesale.
 - The file under `configmaps/production/` is named after the matched ConfigMap's own Kubernetes name, on the official chart these happen to coincide, since that chart names the ConfigMap after the release, but a raw-manifest or custom deployment has no Helm release of the router at all. If more than one ConfigMap matched the label selector in `production`, `configmaps/production/` becomes multiple files, one per ConfigMap:
 
   ```

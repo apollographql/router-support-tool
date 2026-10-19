@@ -42,7 +42,7 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
   --set job.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=arn:aws:iam::123456789012:role/router-diagnostics-s3-writer
 ```
 
-`selector` also determines which of your router's pods get scraped for metrics. For more details, go to [Collecting Metrics](/router-support-tool/collecting-metrics#mode-job).
+`selector` also determines which of your router's pods get scraped for metrics. The Job finds those pods each time it runs, so this works the same when the chart is deployed through ArgoCD or another tool that only renders templates. If you're on the official chart but set `router.nameOverride` or installed it under an alias, set `selector` too. For more details, go to [Collecting Metrics → Which pods get scraped](/router-support-tool/collecting-metrics#which-pods-get-scraped).
 
 The Job runs immediately on install and uploads the bundle as soon as collection finishes.
 
