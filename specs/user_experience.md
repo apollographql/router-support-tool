@@ -119,7 +119,7 @@ If you're on a raw-manifest or custom deployment, also set `selector` and `confi
 
 The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle. See `specs/storage/`. Installing this mode needs someone who can create Jobs, namespace RBAC, *and* cluster-scoped RBAC — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below for the full grant list.
 
-**If your cluster runs a service mesh, the Job's pod doesn't join it by default.** Sidecar injection is disabled automatically so the Job reliably reaches `Completed` instead of getting stuck in `Running` waiting on a long-lived sidecar. If your platform team's policy requires every pod to be in the mesh, this can be overridden. See `specs/deployment/v1/v1.md` → Service mesh environments for how to override it.
+**If your cluster runs a service mesh, the Job's pod doesn't join it by default.** Sidecar injection is disabled automatically so the Job reliably reaches `Completed` instead of getting stuck in `Running` waiting on a long-lived sidecar. If your platform team's policy requires every pod to be in the mesh, this can be overridden. See `specs/deployment/on-demand-collection.md` → Service mesh environments for how to override it.
 
 ---
 
@@ -157,7 +157,7 @@ If the exporter is off, or bound somewhere the collector can't reach, that secti
 
 **If you're on a raw-manifest or custom deployment**, the `selector` you already set to locate your router is also what picks the pods to scrape, in both modes. The same applies on the official chart if your router's `app.kubernetes.io/name` label isn't `router`, for example with `router.nameOverride` set. If no pods match, the bundle says so and names the selector it used, so you know to set `selector`. If your exporter listens on a port other than `9090`, also set `metricsPort`. Under `mode: local`, the collector always targets `localhost:<metricsPort>` (default `9090`) once a pod is bridged.
 
-**A service mesh enforcing strict mTLS can also empty this section**, even with the exporter correctly configured above — this applies to `mode: local` and `mode: job` alike, since collection runs from outside the mesh either way. See `specs/deployment/v1/v1.md` → Running outside the mesh doesn't have to mean losing metrics.
+**A service mesh enforcing strict mTLS can also empty this section**, even with the exporter correctly configured above — this applies to `mode: local` and `mode: job` alike, since collection runs from outside the mesh either way. See `specs/deployment/on-demand-collection.md` → Running outside the mesh doesn't have to mean losing metrics.
 
 ### Redaction
 

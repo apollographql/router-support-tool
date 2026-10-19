@@ -79,7 +79,7 @@ jq -e '
   )' "$PODS" > /dev/null || fail "clusterResources: pod health/resources check failed"
 
 # --- clusterResources: APOLLO_GRAPH_REF/APOLLO_ROUTER_OFFICIAL_HELM_CHART env vars ---
-# Only the official chart is guaranteed to set these (specs/deployment/v1/v1.md).
+# Only the official chart is guaranteed to set these (specs/deployment/on-demand-collection.md).
 jq -e --arg ref "$EXPECTED_GRAPH_REF" '
   [.items[] | select(.metadata.labels["app.kubernetes.io/name"] == "router")] | all(
     (.spec.containers[0].env // [] | any(.name == "APOLLO_ROUTER_OFFICIAL_HELM_CHART" and .value == "true"))
