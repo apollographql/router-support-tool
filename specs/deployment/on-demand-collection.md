@@ -116,7 +116,7 @@ invokes `support-bundle --load-cluster-specs --namespace <namespace>`:
    - Writing each pod's scrape into the bundle. See `specs/collection/output.md` →
      `router-metrics` layout for exactly where that lands.
 
-   If no pod matches `selector`, or a matched pod doesn't respond, the script writes a plain
+   If the script can't list pods, no pod matches `selector`, or a matched pod doesn't respond, the script writes a plain
    explanation into the bundle instead of leaving the section silently empty (see
    `specs/collection/base_spec.md` → Per-pod metrics collection for each case). `nodeMetrics` remains available as a fallback for container-level
    memory/CPU signal regardless (see `specs/collection/base_spec.md` → `nodeMetrics` is a

@@ -145,11 +145,11 @@ Sensitive data is redacted automatically before the output bundle is created —
 The metrics collector targets port `9090` by default. You can override this default via the chart's `metricsPort` value, see below. Two settings in your `router.yaml` need to be in place for it to collect anything:
 
 - `telemetry.exporters.metrics.prometheus.enabled: true` — turns the exporter on.
-- `telemetry.exporters.metrics.prometheus.listen` — the `host:port` the exporter binds to. The host must be reachable from outside the router container — binding to loopback won't work even with the exporter enabled. If you change the port, set the chart's `metricsPort` to match. Leaving `metricsPort` unset while the exporter binds to a non-default port makes this section empty the same way an unreachable host would.
+- `telemetry.exporters.metrics.prometheus.listen` — the `host:port` the exporter binds to. The host must be reachable from outside the router container — binding to loopback won't work even with the exporter enabled. If you change the port, set the chart's `metricsPort` to match. Leaving `metricsPort` unset while the exporter binds to a non-default port has the same effect as an unreachable host.
 
 Note that the **router chart's** `serviceMonitor.enabled` value (not `router-diagnostics-chart`) is a *different* switch. It exposes the metrics port on the Service and renders a ServiceMonitor for your own Prometheus, but it does not enable the exporter — the two settings above are what do that. You can have one without the other.
 
-If the exporter is off, or bound somewhere the collector can't reach, that section of the bundle will simply be empty — the rest of the bundle is unaffected.
+If the exporter is off, or bound somewhere the collector can't reach, the bundle has no metrics files and says why instead; the rest of the bundle is unaffected.
 
 **Under `mode: local`, reaching this port also requires bridging your machine to the cluster network** because pod IPs aren't reachable directly from outside the cluster. This is handled automatically by our chart's own script, run as the `router-metrics` collector. It resolves matching pods and port-forwards each one in turn.
 
@@ -157,7 +157,7 @@ If the exporter is off, or bound somewhere the collector can't reach, that secti
 
 **If you're on a raw-manifest or custom deployment**, the `selector` you already set to locate your router is also what picks the pods to scrape, in both modes. The same applies on the official chart if your router's `app.kubernetes.io/name` label isn't `router`, for example with `router.nameOverride` set. If no pods match, the bundle says so and names the selector it used, so you know to set `selector`. If your exporter listens on a port other than `9090`, also set `metricsPort`. Under `mode: local`, the collector always targets `localhost:<metricsPort>` (default `9090`) once a pod is bridged.
 
-**A service mesh enforcing strict mTLS can also empty this section**, even with the exporter correctly configured above — this applies to `mode: local` and `mode: job` alike, since collection runs from outside the mesh either way. See `specs/deployment/on-demand-collection.md` → Running outside the mesh doesn't have to mean losing metrics.
+**A service mesh enforcing strict mTLS can also stop metrics being collected**, even with the exporter correctly configured above — this applies to `mode: local` and `mode: job` alike, since collection runs from outside the mesh either way. See `specs/deployment/on-demand-collection.md` → Running outside the mesh doesn't have to mean losing metrics.
 
 ### Redaction
 
