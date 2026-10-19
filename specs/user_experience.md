@@ -153,7 +153,9 @@ If the exporter is off, or bound somewhere the collector can't reach, that secti
 
 **Under `mode: local`, reaching this port also requires bridging your machine to the cluster network** because pod IPs aren't reachable directly from outside the cluster. This is handled automatically by our chart's own script, run as the `router-metrics` collector. It resolves matching pods and port-forwards each one in turn.
 
-**If you're on a raw-manifest or custom deployment**, the `selector` you already set to locate your router is also what enables metrics collection under `mode: job`. This tier has no fixed label to resolve pods from otherwise, so leaving `selector` unset means no pods to try, and this section stays empty. If your exporter listens on a port other than `9090`, also set `metricsPort`. Under `mode: local`, the collector always targets `localhost:<metricsPort>` (default `9090`) once a pod is bridged.
+**Under `mode: job`, no bridging is needed.** The Job's pod is already inside the cluster, so the same script reaches each matching pod directly. In both modes, pods are found each time collection runs, so the chart works the same whether it's installed with `helm install` or rendered by a GitOps tool such as ArgoCD.
+
+**If you're on a raw-manifest or custom deployment**, the `selector` you already set to locate your router is also what picks the pods to scrape, in both modes. The same applies on the official chart if your router's `app.kubernetes.io/name` label isn't `router`, for example with `router.nameOverride` set. If no pods match, the bundle says so and names the selector it used, so you know to set `selector`. If your exporter listens on a port other than `9090`, also set `metricsPort`. Under `mode: local`, the collector always targets `localhost:<metricsPort>` (default `9090`) once a pod is bridged.
 
 **A service mesh enforcing strict mTLS can also empty this section**, even with the exporter correctly configured above — this applies to `mode: local` and `mode: job` alike, since collection runs from outside the mesh either way. See `specs/deployment/v1/v1.md` → Running outside the mesh doesn't have to mean losing metrics.
 

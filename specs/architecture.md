@@ -86,7 +86,7 @@ Collection degrades gracefully. A collector whose target does not exist — Prom
 | Router version (container image tag) | `clusterResources` |
 | Runtime logs (all containers in the pod) | `logs` |
 | Container CPU and memory metrics | `nodeMetrics` (kubelet Summary API) |
-| Prometheus metrics snapshot | `http` |
+| Prometheus metrics snapshot | `hostCollectors.run` (`router-metrics`, a script that scrapes each router pod's metrics endpoint over HTTP) |
 | `router.yaml` configuration | `configMap` |
 | `APOLLO_GRAPH_REF`, `APOLLO_ROUTER_OFFICIAL_HELM_CHART` (from the pod spec) | `clusterResources` |
 
