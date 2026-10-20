@@ -23,12 +23,20 @@ curl -sk -X POST "https://router.${NAMESPACE}.svc.cluster.local:4000/" \
 # selector=app=router: our own manifests use "app: router" (raw-manifest/custom tier),
 # not the official chart's "app.kubernetes.io/name: router" convention that the chart's
 # collectors default to when this is left unset - without it, logs/metrics/configMap all
-# silently come back empty because nothing actually matches.
+# come back empty because nothing actually matches.
+#
+# selector-mismatch leaves it unset on purpose: the default selector then misses this
+# environment's pods the same way it misses an official-chart install whose
+# app.kubernetes.io/name label was changed by router.nameOverride.
+SELECTOR_FLAG="--set selector=app=router"
+if [ "$CONDITION" = "selector-mismatch" ]; then
+  SELECTOR_FLAG=""
+fi
 helm install router-diagnostics "$CHART_DIR" \
   --namespace "$NAMESPACE" \
   --set namespace="$NAMESPACE" \
   --set mode=job \
-  --set selector=app=router \
+  $SELECTOR_FLAG \
   --set job.image.repository=us-central1-docker.pkg.dev/platform-cross-environment/apollo-private-docker/router-diagnostics \
   --set job.image.tag=edge \
   --set job.image.pullPolicy=IfNotPresent \
@@ -67,6 +75,63 @@ grep -q "\"namespace\": *\"$NAMESPACE\"" "$BUNDLE_DIR/meta.json"
 grep -q '"sidecar_injection_disabled": *true' "$BUNDLE_DIR/meta.json"
 EXPECTED_VERSION=$(grep -m1 '^version:' "$CHART_DIR/Chart.yaml" | awk '{print $2}')
 grep -q "\"version\": *\"$EXPECTED_VERSION\"" "$BUNDLE_DIR/meta.json"
+
+# --- router-metrics: the run collector's own output names every missing pod's reason
+# (specs/collection/base_spec.md -> Per-pod metrics collection). Scraped pods land in
+# pods/<pod-name>.txt (specs/collection/output.md -> router-metrics layout).
+METRICS_OUTPUT="$BUNDLE_DIR/host-collectors/run-host/router-metrics.txt"
+METRICS_DIR="$BUNDLE_DIR/host-collectors/run-host/router-metrics/pods"
+test -f "$METRICS_OUTPUT"
+if find "$BUNDLE_DIR" -maxdepth 1 -name 'router-metrics-*' | grep -q .; then
+  echo "router-metrics: found a top-level router-metrics-<pod> directory from the old http collectors" >&2
+  exit 1
+fi
+
+if [ "$CONDITION" = "selector-mismatch" ]; then
+  grep -qxF "metrics not collected: no pods matched selector app.kubernetes.io/name=router in namespace $NAMESPACE" "$METRICS_OUTPUT"
+  if [ -n "$(ls "$METRICS_DIR" 2>/dev/null)" ]; then
+    echo "router-metrics: per-pod files found although no pod matched the selector" >&2
+    exit 1
+  fi
+  # router-logs and configMap share the same selector, so they're empty here too and
+  # nothing below applies.
+  tar tzf /tmp/bundle.tar.gz > /tmp/bundle-contents.txt
+  {
+    echo "Bundle retrieved and verified (selector-mismatch). Contents:"
+    cat /tmp/bundle-contents.txt
+  } | tee "$RTF_OUTPUT"
+  exit 0
+fi
+
+# Every router pod either has a metrics file or a line naming it.
+for pod in $(jq -r '.items[] | select(.metadata.labels.app == "router") | .metadata.name' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"); do
+  if [ -f "$METRICS_DIR/$pod.txt" ]; then
+    grep -q '# HELP' "$METRICS_DIR/$pod.txt" || { echo "router-metrics: $pod.txt has no # HELP line" >&2; exit 1; }
+  else
+    grep -qxF "metrics not collected for pod $pod: no response on port 9090" "$METRICS_OUTPUT" \
+      || { echo "router-metrics: no file and no attribution line for pod $pod" >&2; exit 1; }
+  fi
+done
+
+MISSING_PODS=$(grep -c '^metrics not collected for pod ' "$METRICS_OUTPUT" || true)
+case "$CONDITION" in
+  all-metrics-misconfigured)
+    # Every router has prometheus.enabled=false, so no pod is scraped and the output
+    # names the exporter as the likely cause.
+    if [ -n "$(ls "$METRICS_DIR" 2>/dev/null)" ]; then
+      echo "router-metrics: unexpected per-pod files with every exporter disabled" >&2
+      exit 1
+    fi
+    grep -qxF "metrics not collected: no pod responded on port 9090 — prometheus may not be enabled" "$METRICS_OUTPUT"
+    ;;
+  some-metrics-misconfigured)
+    # env_setup.sh disabled the exporter on exactly one router.
+    [ "$MISSING_PODS" -eq 1 ] || { echo "router-metrics: expected exactly one non-responding pod, got $MISSING_PODS" >&2; exit 1; }
+    ;;
+  *)
+    [ "$MISSING_PODS" -eq 0 ] || { echo "router-metrics: $MISSING_PODS pod(s) didn't respond" >&2; cat "$METRICS_OUTPUT" >&2; exit 1; }
+    ;;
+esac
 
 # Every section below should have data to collect. An empty one here is an error.
 find "$BUNDLE_DIR/router-logs" -name '*.log' -size +0 | grep -q .               # router container logs
@@ -118,41 +183,6 @@ jq -j '.data["router.yaml"]' "$BUNDLE_DIR/configmaps/$NAMESPACE/router-config.js
 TRUNCATED_COLLECTED_CONFIG=$(sed '/^override_subgraph_url:/,$d' /tmp/collected-router-config.yaml)
 printf '%s\n' "$TRUNCATED_COLLECTED_CONFIG" > /tmp/collected-router-config-truncated.yaml
 diff "$EXPECTED_REDACTED_ROUTER_CONFIG" /tmp/collected-router-config-truncated.yaml
-
-# job mode emits one http collector per pod: router-metrics-<pod-name>/result.json.
-# If no files exist the selector didn't match any pods at render time.
-METRICS_FILES=$(find "$BUNDLE_DIR" -path "*/router-metrics-*/result.json" -type f 2>/dev/null)
-[ -n "$METRICS_FILES" ] || { echo "router-metrics: no per-pod result files found — selector/label mismatch at render time?" >&2; exit 1; }
-
-case "$CONDITION" in
-  all-metrics-misconfigured)
-    # Every router has prometheus.enabled=false, so every scrape should fail —
-    # no # HELP line in any result.
-    UNEXPECTED=false
-    while IFS= read -r f; do
-      if jq -r '.response.body' "$f" | grep -q '# HELP'; then
-        echo "router-metrics: unexpected # HELP in $f" >&2
-        UNEXPECTED=true
-      fi
-    done <<METRICS_EOF
-$METRICS_FILES
-METRICS_EOF
-    [ "$UNEXPECTED" = false ] || exit 1
-    ;;
-  healthy)
-    # At least one pod's scrape should return real metrics text.
-    FOUND=false
-    while IFS= read -r f; do
-      if jq -r '.response.body' "$f" | grep -q '# HELP'; then
-        FOUND=true
-        break
-      fi
-    done <<METRICS_EOF
-$METRICS_FILES
-METRICS_EOF
-    [ "$FOUND" = true ] || { echo "router-metrics: no result file contains # HELP" >&2; exit 1; }
-    ;;
-esac
 
 # --- Router recently restarted: the logs collector's previous-container capture ---
 if [ "$CONDITION" = "router-recently-restarted" ]; then

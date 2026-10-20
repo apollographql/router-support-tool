@@ -6,7 +6,7 @@ description: >
 matrix:
   variant_names: "${condition}_${router_version}"
   dimensions:
-    condition: [healthy, some-metrics-misconfigured, all-metrics-misconfigured, router-recently-restarted]
+    condition: [healthy, some-metrics-misconfigured, all-metrics-misconfigured, router-recently-restarted, selector-mismatch]
   compound:
     router_version_and_redaction:
       - router_version: "v2.4.0"
