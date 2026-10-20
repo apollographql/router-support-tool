@@ -21,6 +21,9 @@ mkdir -p "$STUB_DIR"
 #   STUB_PODS        "<name> <ip>" lines returned by `kubectl get pods`
 #   STUB_LIST_FAILS  set to make `kubectl get pods` fail
 #   STUB_RESPONDING  space-separated pod names whose metrics endpoint answers
+#   STUB_PF_FORBIDDEN space-separated pod names whose port-forward is refused
+#   STUB_PF_LOST     space-separated pod names whose forward starts, then logs an error
+#   STUB_MKTEMP_FAILS set to make `mktemp` fail
 
 # kubectl: scans its arguments rather than reading fixed positions, since mode: job's
 # script prepends its own API server flags.
@@ -34,8 +37,21 @@ for arg in "$@"; do
       exit 0
       ;;
     pod/*)
+      for p in ${STUB_PF_FORBIDDEN:-}; do
+        if [ "$p" = "${arg#pod/}" ]; then
+          echo "Error from server (Forbidden): pods \"$p\" is forbidden: User \"dev\" cannot create resource \"pods/portforward\" in API group \"\" in the namespace \"ci-test\"" >&2
+          exit 1
+        fi
+      done
       # port-forward: localhost reaches this pod until the script kills the forward.
       trap 'rm -f "$STUB_DIR/forwarded"; exit 0' TERM
+      echo "Forwarding from 127.0.0.1:9090 -> 9090"
+      for p in ${STUB_PF_LOST:-}; do
+        if [ "$p" = "${arg#pod/}" ]; then
+          echo "E1019 17:29:08.481862 97571 portforward.go:549] \"An error occurred forwarding\" err=\"connect: connection refused\"" >&2
+          echo "error: lost connection to pod" >&2
+        fi
+      done
       echo "${arg#pod/}" > "$STUB_DIR/forwarded"
       while :; do /bin/sleep 0.05; done
       ;;
@@ -72,10 +88,17 @@ done
 exit 7
 EOF
 
+# mktemp: fails on request, otherwise defers to the real one later in PATH.
+cat > "$STUB_DIR/mktemp" <<'EOF'
+#!/bin/sh
+[ -n "${STUB_MKTEMP_FAILS:-}" ] && { echo "mktemp: Permission denied" >&2; exit 1; }
+PATH=${PATH#"$STUB_DIR:"} exec mktemp "$@"
+EOF
+
 # sleep: shortened so mode: local's 30-attempt retry loop finishes quickly, while still
 # giving the backgrounded port-forward stub time to start.
 printf '#!/bin/sh\nexec /bin/sleep 0.02\n' > "$STUB_DIR/sleep"
-chmod +x "$STUB_DIR/kubectl" "$STUB_DIR/curl" "$STUB_DIR/sleep"
+chmod +x "$STUB_DIR/kubectl" "$STUB_DIR/curl" "$STUB_DIR/mktemp" "$STUB_DIR/sleep"
 
 FAILED=false
 
@@ -90,7 +113,8 @@ run_case() {
 
   local output
   output=$(env STUB_DIR="$STUB_DIR" STUB_PODS="${STUB_PODS:-}" STUB_LIST_FAILS="${STUB_LIST_FAILS:-}" \
-    STUB_RESPONDING="${STUB_RESPONDING:-}" PATH="$STUB_DIR:$PATH" TS_OUTPUT_DIR="$out_dir" \
+    STUB_RESPONDING="${STUB_RESPONDING:-}" STUB_PF_FORBIDDEN="${STUB_PF_FORBIDDEN:-}" \
+    STUB_PF_LOST="${STUB_PF_LOST:-}" STUB_MKTEMP_FAILS="${STUB_MKTEMP_FAILS:-}" PATH="$STUB_DIR:$PATH" TS_OUTPUT_DIR="$out_dir" \
     sh -c "$SCRIPT" 2>/dev/null)
 
   local ok=true
@@ -157,6 +181,27 @@ for mode in local job; do
   STUB_PODS=$'router-a 10.0.0.1\nrouter-b 10.0.0.2' STUB_LIST_FAILS="" STUB_RESPONDING="router-a router-b" EXPECT_FILES="router-a router-b" \
     run_case "every pod responds" \
     "!metrics not collected"
+
+  if [ "$mode" = "local" ]; then
+    # The port-forward's own error follows the pod's line; a pod whose forward worked
+    # but didn't answer gets the plain line.
+    STUB_PODS=$'router-a 10.0.0.1\nrouter-b 10.0.0.2' STUB_LIST_FAILS="" STUB_RESPONDING="" STUB_PF_FORBIDDEN="router-a" EXPECT_FILES="" \
+      run_case "port-forward is forbidden for one pod" \
+      'metrics not collected for pod router-a: no response on port 9090 — kubectl port-forward: Error from server (Forbidden): pods "router-a" is forbidden: User "dev" cannot create resource "pods/portforward" in API group "" in the namespace "ci-test"' \
+      "metrics not collected for pod router-b: no response on port 9090"
+
+    # A forward that came up and then logged an error means nothing answered on the port,
+    # not that the forward failed, so the pod gets the plain line.
+    STUB_PODS=$'router-a 10.0.0.1\nrouter-b 10.0.0.2' STUB_LIST_FAILS="" STUB_RESPONDING="router-b" STUB_PF_LOST="router-a" EXPECT_FILES="router-b" \
+      run_case "forward starts but nothing listens" \
+      "metrics not collected for pod router-a: no response on port 9090" \
+      "!kubectl port-forward:"
+
+    # Without a temp dir the forward still runs; only the reason is lost.
+    STUB_PODS=$'router-a 10.0.0.1\nrouter-b 10.0.0.2' STUB_LIST_FAILS="" STUB_RESPONDING="router-a" STUB_PF_FORBIDDEN="router-b" STUB_MKTEMP_FAILS=1 EXPECT_FILES="router-a" \
+      run_case "mktemp fails" \
+      "metrics not collected for pod router-b: no response on port 9090"
+  fi
 done
 
 if [ "$FAILED" = true ]; then
