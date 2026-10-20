@@ -61,7 +61,7 @@ data:
                 "troubleshoot_version": "0.134.1"
               }
       # Runs wherever support-bundle runs (the user's machine, or the Job's pod) and finds
-      # router pods at collection time, so nothing here depends on cluster state at render.
+      # router pods at collection time.
       hostCollectors:
         - run:
             collectorName: router-metrics

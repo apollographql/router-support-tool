@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-#MISE description="Verify the router-metrics script names a reason in the bundle whenever a pod's metrics are missing, in both modes"
+#MISE description="Verify the router-metrics script names a reason in the bundle whenever a pod's metrics are missing "
 #
-# A missing metrics file is indistinguishable from a collector that never ran, so the
+# A missing metrics file is indistinguishable from a collector that never ran so the
 # hostCollectors.run script writes a plain explanation to stdout (saved by troubleshoot.sh
 # as host-collectors/run-host/router-metrics.txt) for every case in
 # specs/collection/base_spec.md -> Per-pod metrics collection. This runs the rendered script
-# against stubbed kubectl/curl for each case, in both modes.
+# against stubbed kubectl/curl for each case.
 set -euo pipefail
 
 CHART_PATH="router-diagnostics-chart"
@@ -25,17 +25,18 @@ mkdir -p "$STUB_DIR"
 #   STUB_PF_LOST     space-separated pod names whose forward starts, then logs an error
 #   STUB_MKTEMP_FAILS set to make `mktemp` fail
 
-# kubectl: scans its arguments rather than reading fixed positions, since mode: job's
-# script prepends its own API server flags.
+# kubectl: scans its arguments rather than reading fixed positions
 cat > "$STUB_DIR/kubectl" <<'EOF'
 #!/bin/sh
 for arg in "$@"; do
   case "$arg" in
+    # kubectl get pods: lists STUB_PODS, or fails with a forbidden error when STUB_LIST_FAILS is set.
     get)
       [ -n "${STUB_LIST_FAILS:-}" ] && { echo "error: forbidden" >&2; exit 1; }
       [ -n "${STUB_PODS:-}" ] && printf '%s\n' "$STUB_PODS"
       exit 0
       ;;
+    # kubectl port-forward pod/<name>: refused for STUB_PF_FORBIDDEN pods, otherwise comes up, and for STUB_PF_LOST pods then logs an error.
     pod/*)
       for p in ${STUB_PF_FORBIDDEN:-}; do
         if [ "$p" = "${arg#pod/}" ]; then
@@ -183,7 +184,7 @@ for mode in local job; do
     "!metrics not collected"
 
   if [ "$mode" = "local" ]; then
-    # The port-forward's own error follows the pod's line; a pod whose forward worked
+    # The port-forward's own error follows the pod's line. A pod whose forward worked
     # but didn't answer gets the plain line.
     STUB_PODS=$'router-a 10.0.0.1\nrouter-b 10.0.0.2' STUB_LIST_FAILS="" STUB_RESPONDING="" STUB_PF_FORBIDDEN="router-a" EXPECT_FILES="" \
       run_case "port-forward is forbidden for one pod" \

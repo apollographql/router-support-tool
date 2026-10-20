@@ -36,7 +36,7 @@ These tests validate that an empty section is always attributable to a specific,
 | --- | --- | --- |
 | 1 | **Metrics/observability not configured** | Router deployed with Prometheus scraping disabled. Confirms the bundle still collects, no per-pod metrics files are written, and `router-metrics`'s output names each pod plus the overall reason (`no pod responded on port <metricsPort> — prometheus may not be enabled`). |
 | 2 | **RBAC permission declined for a collector** | Environment's ServiceAccount/Role deliberately omits a permission a collector needs (e.g. `nodes/proxy` for `nodeMetrics`, or read access to the router's ConfigMap). The affected collector degrades to empty/an attributable error rather than crashing the whole bundle.
-| 3 | **One router's metrics endpoint not responding** | One router's exporter is disabled while its neighbours stay healthy. Confirms the healthy pods still get their own `<pod-name>.txt` and the silent pod gets its own `metrics not collected for pod <pod-name>: no response on port <metricsPort>` line, so a single missing file is attributable to that pod. |
+| 3 | **One router's metrics endpoint not responding** | One router's exporter is disabled while its neighbors stay healthy. Confirms the healthy pods still get their own `<pod-name>.txt` and the silent pod gets its own `metrics not collected for pod <pod-name>: no response on port <metricsPort>` line, so a single missing file is attributable to that pod. |
 | 4 | **Selector matches no router pods** | The chart's `selector` doesn't match the router's pod labels, which is what an official-chart install with `router.nameOverride` (or an aliased release) looks like when `selector` is left at its default. Confirms `router-metrics`'s output says `no pods matched selector <selector> in namespace <namespace>`, naming the selector to fix, instead of an empty section. |
 
 The expected line for every case is defined in `specs/collection/base_spec.md` → Per-pod metrics collection; the per-pod file layout is `specs/collection/output.md` → `router-metrics` layout.
@@ -89,7 +89,7 @@ The environment does differ for the Routers under-resourced test case, where `re
 
 #### Applying the collector attribution scenarios to RTF
 
-These are also just matrix dimension values on the same templated manifests. Every `router-metrics` check reads `host-collectors/run-host/router-metrics/pods/<pod-name>.txt` for scraped pods and `host-collectors/run-host/router-metrics.txt` for the collector's own explanation lines. Either a pod has a file or that output has a line naming it, never neither. A top-level `router-metrics-<pod-name>/` directory is a failure: it's the old render-time layout.
+These are also just matrix dimension values on the same templated manifests. Every `router-metrics` check reads `host-collectors/run-host/router-metrics/pods/<pod-name>.txt` for scraped pods and `host-collectors/run-host/router-metrics.txt` for the collector's own explanation lines. Either a pod has a file or that output has a line naming it.
 
 - **Metrics/observability not configured** — the `all-metrics-misconfigured` condition overwrites every router's config with one that disables the Prometheus exporter, before collection runs.
 
@@ -121,7 +121,7 @@ Used for structural checks that don't need a real cluster.
 
 Running `helm template` with each tier's (official chart, raw-manifest) and mode's (`local`, `job`) actual values, and validating the output.
 
-Rendering never contacts a cluster, which is all ArgoCD and similar GitOps tools do. So the rendered `mode: job` spec must still contain the `router-metrics` `run` collector, with `metricsPort` reaching its script, and no `http` collectors. Nothing about pods may be resolved at render time.
+Rendering never contacts a cluster, which is what ArgoCD and similar GitOps tools do. So the rendered `mode: job` spec must still contain the `router-metrics` `run` collector, with `metricsPort` reaching its script, and no `http` collectors. Nothing about pods may be resolved at render time.
 
 The script's explanation lines are checked the same way, without a cluster: the rendered script runs against stubbed `kubectl`/`curl` for each case in `specs/collection/base_spec.md` → Per-pod metrics collection, in both modes.
 

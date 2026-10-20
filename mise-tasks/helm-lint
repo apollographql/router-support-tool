@@ -36,7 +36,7 @@ for tier in official-chart official-chart-metrics raw-manifest raw-manifest-metr
     helm template ci-test "$CHART_PATH" $FLAGS > "$WORKDIR/rendered.yaml"
     kubeconform -strict -summary "$WORKDIR/rendered.yaml"
 
-    # Whenever metricsPort is set it must reach the router-metrics script, in both modes.
+    # Whenever metricsPort is set it must reach the router-metrics script
     if [[ "$FLAGS" == *"--set metricsPort="* ]]; then
       port=$(grep -oE -- '--set metricsPort=[0-9]+' <<< "$FLAGS" | grep -oE '[0-9]+$')
       if ! grep -q "PORT='${port}'" "$WORKDIR/rendered.yaml"; then
