@@ -7,8 +7,9 @@ mode: ""
 # -- Raw-manifest / custom deployments only. Pod label selector for the router, e.g.
 # `app=my-router`. Defaults to the official chart's own `app.kubernetes.io/name=router`
 # label — leave unset when the router was deployed via the official Apollo Helm chart.
-# Under `mode: job`, setting this is also what enables metrics collection for this
-# tier — see `metricsPort` below.
+# Also selects which pods the `router-metrics` collector scrapes, in both modes. Set it
+# on the official chart too if the router's `app.kubernetes.io/name` label isn't
+# `router` (for example, with `router.nameOverride` or an aliased install).
 selector: ""
 # -- Raw-manifest / custom deployments only. Name of the ConfigMap holding the router's
 # rendered config. Defaults to label-based discovery (via `selector`). Leave unset when

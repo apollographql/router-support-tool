@@ -1,24 +1,4 @@
 {{/*
-Renders one http collector per router pod matching the selector when the collection
-job runs in-cluster and can reach pod IPs directly. Pod IPs are resolved at Helm 
-render time.
-*/}}
-{{- define "router-diagnostics-chart.routerMetricsCollectors" -}}
-{{- $selector := .Values.selector | default "app.kubernetes.io/name=router" }}
-{{- $key := index (splitList "=" $selector) 0 }}
-{{- $value := index (splitList "=" $selector) 1 }}
-{{- $metricsPort := .Values.metricsPort | default 9090 }}
-{{- range (lookup "v1" "Pod" .Values.namespace "").items }}
-{{- if eq (index .metadata.labels $key) $value }}
-- http:
-    name: router-metrics-{{ .metadata.name }}
-    get:
-      url: http://{{ .status.podIP }}:{{ $metricsPort }}/metrics
-{{- end }}
-{{- end }}
-{{- end -}}
-
-{{/*
 mode: job's default pod annotations (disable Istio/Linkerd sidecar injection) — the
 single source of truth for both templates below, so the disabling values only ever
 need to be written in one place.

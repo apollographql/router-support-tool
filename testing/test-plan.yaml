@@ -148,3 +148,4 @@ scenario:
           - "templates/job-storage-secret.yaml"
           - "templates/job.yaml"
           - "files/collect-and-upload.sh"
+          - "files/router-metrics-collect.sh"
