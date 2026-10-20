@@ -95,7 +95,7 @@ These are also just matrix dimension values on the same templated manifests. Eve
 
 - **One router's metrics endpoint not responding** — the `some-metrics-misconfigured` condition does the same to exactly one router, so exactly one pod has a `no response` line and the rest have files.
 
-- **Selector matches no router pods** — the `selector-mismatch` condition installs the chart with `selector` unset, so its default `app.kubernetes.io/name=router` misses the environment's `app: router` pods. `router-logs` and `configMap` share that selector, so the run only asserts the `no pods matched` line and the absence of per-pod files.
+- **Selector matches no router pods** — the `selector-mismatch` condition installs the chart with `selector` unset, so its default `app.kubernetes.io/name=router` misses the environment's `app: router` pods. `router-logs` and `configMap` share that selector, so the checks that read them are skipped. It asserts the `no pods matched` line and the absence of per-pod files, and still runs the checks that read `clusterResources` (which is collected by namespace) and the `APOLLO_KEY` absence check.
 
 - **RBAC permission declined** — the RTF environment cannot be granted the cluster-scoped permissions `nodeMetrics` needs so this will be declined across all runs.
 

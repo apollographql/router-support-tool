@@ -87,14 +87,69 @@ if find "$BUNDLE_DIR" -maxdepth 1 -name 'router-metrics-*' | grep -q .; then
   exit 1
 fi
 
+# --- Checks that read only the namespace-wide clusterResources pods JSON and the bundle
+# as a whole, never the router-logs or configMap collectors. They run for every condition,
+# including selector-mismatch, where those two collectors are empty by design.
+
+# clusterResources collector: assert the router pod's own image tag was captured correctly
+jq -e --arg version "$ROUTER_VERSION" '
+  [.items[] | select(.metadata.labels.app == "router") | .spec.containers[0].image]
+  | any(. == "ghcr.io/apollographql/router:" + $version)
+' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+
+# clusterResources collector: pod status and restart counts.
+# Every router pod should be Running by this point regardless of condition - env_setup.sh
+# always waits for Ready before returning control here.
+jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.phase] | all(. == "Running")' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+
+case "$CONDITION" in
+  router-recently-restarted)
+    # Exactly one router pod was restarted in place by env_setup.sh - assert exactly one
+    # has a nonzero restart count.
+    jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.containerStatuses[0].restartCount | select(. > 0)] | length == 1' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+    ;;
+  *)
+    jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.containerStatuses[0].restartCount] | all(. == 0)' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+    ;;
+esac
+
+# clusterResources collector: configured resource requests/limits are captured - set on
+# the router container in router-manifest.yaml purely so this has a real value to check.
+jq -e '
+  [.items[] | select(.metadata.labels.app == "router") | .spec.containers[0].resources]
+  | all(.requests.cpu == "100m" and .requests.memory == "128Mi"
+        and .limits.cpu == "500m" and .limits.memory == "256Mi")
+' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+
+# clusterResources collector: node MemoryPressure/DiskPressure - NOT positively testable
+# Listing nodes needs the same cluster-scoped "nodes: list" RBAC that
+# job.collectNodeMetrics=false already declines above so cluster-resources/nodes.json
+# should correctly come back with an empty items array.
+grep -qi "forbidden" "$BUNDLE_DIR/cluster-resources/nodes-errors.json"
+
+# --- APOLLO_KEY literal-env-value redaction (specs/collection/data_sanitization/secret_shaped_env_vars.md) ---
+PODS_JSON="$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
+if ! grep -q '"name": "APOLLO_KEY"' "$PODS_JSON"; then
+  echo "APOLLO_KEY env var name not found in $PODS_JSON - positive control failed, the redaction check below would be meaningless" >&2
+  exit 1
+fi
+if ! grep -q '"value": "\*\*\*HIDDEN\*\*\*"' "$PODS_JSON"; then
+  echo "APOLLO_KEY env var in $PODS_JSON was not masked" >&2
+  exit 1
+fi
+if grep -rq "SENTINELAPOLLOKEYTESTING123" "$BUNDLE_DIR"; then
+  echo "APOLLO_KEY literal value found unredacted in bundle contents - this must never happen" >&2
+  exit 1
+fi
+
 if [ "$CONDITION" = "selector-mismatch" ]; then
   grep -qxF "metrics not collected: no pods matched selector app.kubernetes.io/name=router in namespace $NAMESPACE" "$METRICS_OUTPUT"
   if [ -n "$(ls "$METRICS_DIR" 2>/dev/null)" ]; then
     echo "router-metrics: per-pod files found although no pod matched the selector" >&2
     exit 1
   fi
-  # router-logs and configMap share the same selector, so they're empty here too and
-  # nothing below applies.
+  # router-logs and configMap share the same selector, so they're empty here too and the
+  # checks below that read them don't apply.
   tar tzf /tmp/bundle.tar.gz > /tmp/bundle-contents.txt
   {
     echo "Bundle retrieved and verified (selector-mismatch). Contents:"
@@ -136,42 +191,6 @@ esac
 # Every section below should have data to collect. An empty one here is an error.
 find "$BUNDLE_DIR/router-logs" -name '*.log' -size +0 | grep -q .               # router container logs
 
-# clusterResources collector: assert the router pod's own image tag was captured correctly
-jq -e --arg version "$ROUTER_VERSION" '
-  [.items[] | select(.metadata.labels.app == "router") | .spec.containers[0].image]
-  | any(. == "ghcr.io/apollographql/router:" + $version)
-' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
-
-# clusterResources collector: pod status and restart counts.
-# Every router pod should be Running by this point regardless of condition - env_setup.sh
-# always waits for Ready before returning control here.
-jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.phase] | all(. == "Running")' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
-
-case "$CONDITION" in
-  router-recently-restarted)
-    # Exactly one router pod was restarted in place by env_setup.sh - assert exactly one
-    # has a nonzero restart count.
-    jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.containerStatuses[0].restartCount | select(. > 0)] | length == 1' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
-    ;;
-  *)
-    jq -e '[.items[] | select(.metadata.labels.app == "router") | .status.containerStatuses[0].restartCount] | all(. == 0)' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
-    ;;
-esac
-
-# clusterResources collector: configured resource requests/limits are captured - set on
-# the router container in router-manifest.yaml purely so this has a real value to check.
-jq -e '
-  [.items[] | select(.metadata.labels.app == "router") | .spec.containers[0].resources]
-  | all(.requests.cpu == "100m" and .requests.memory == "128Mi"
-        and .limits.cpu == "500m" and .limits.memory == "256Mi")
-' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
-
-# clusterResources collector: node MemoryPressure/DiskPressure - NOT positively testable
-# Listing nodes needs the same cluster-scoped "nodes: list" RBAC that
-# job.collectNodeMetrics=false already declines above so cluster-resources/nodes.json
-# should correctly come back with an empty items array.
-grep -qi "forbidden" "$BUNDLE_DIR/cluster-resources/nodes-errors.json"
-
 # configMap collector: assert the collected router.yaml matches the expected config byte
 # for byte, up through (not including) override_subgraph_url. $EXPECTED_REDACTED_ROUTER_CONFIG
 # is the fixture with the redactors' masking already applied, and deliberately ends right
@@ -199,21 +218,6 @@ if [ "$CONDITION" = "router-recently-restarted" ]; then
   test -f "$CURRENT_LOG"
   grep -q '"message":"state machine transitioned"' "$CURRENT_LOG"
   grep -q '"state":"Startup"' "$CURRENT_LOG"
-fi
-
-# --- APOLLO_KEY literal-env-value redaction (specs/collection/data_sanitization/secret_shaped_env_vars.md) ---
-PODS_JSON="$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
-if ! grep -q '"name": "APOLLO_KEY"' "$PODS_JSON"; then
-  echo "APOLLO_KEY env var name not found in $PODS_JSON - positive control failed, the redaction check below would be meaningless" >&2
-  exit 1
-fi
-if ! grep -q '"value": "\*\*\*HIDDEN\*\*\*"' "$PODS_JSON"; then
-  echo "APOLLO_KEY env var in $PODS_JSON was not masked" >&2
-  exit 1
-fi
-if grep -rq "SENTINELAPOLLOKEYTESTING123" "$BUNDLE_DIR"; then
-  echo "APOLLO_KEY literal value found unredacted in bundle contents - this must never happen" >&2
-  exit 1
 fi
 
 # --- Redaction tests: The sentinel value must be gone and something structurally
