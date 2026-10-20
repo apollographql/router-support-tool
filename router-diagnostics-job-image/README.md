@@ -1,7 +1,8 @@
 # router-diagnostics Job image
 
 The container image the router support tool's `mode: job` runs bundling a pinned troubleshoot `support-bundle`
-binary plus `aws-cli`/`gcloud`/`curl` for the object-storage upload paths.
+binary plus `aws-cli`/`gcloud`/`curl` for the object-storage upload paths, and `kubectl`/`curl` for
+the `router-metrics` collector, which lists router pods and scrapes each one when collection runs.
 
 
 ## Local build and test
