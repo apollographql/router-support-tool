@@ -80,7 +80,7 @@ data:
             args:
               - -c
               - |
-                {{- tpl (.Files.Get "files/local-metrics-collect.sh") . | nindent 16 }}
+                {{- tpl (.Files.Get "files/router-metrics-collect.sh") . | nindent 16 }}
 {{- end }}
   redactor-spec: |
     apiVersion: troubleshoot.sh/v1beta2
