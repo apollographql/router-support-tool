@@ -62,3 +62,12 @@ or provider: url with no existingSecret).
 router-diagnostics-storage-credentials
 {{- end -}}
 {{- end -}}
+
+{{/*
+Wraps a value in single quotes for the router-metrics shell script, escaping any single
+quote inside it. Helm's squote alone leaves an embedded ' unescaped, which would end the
+quoted string early.
+*/}}
+{{- define "router-diagnostics-chart.shellQuote" -}}
+{{- . | toString | replace "'" "'\\''" | squote -}}
+{{- end -}}

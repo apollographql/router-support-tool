@@ -1,6 +1,6 @@
-NAMESPACE={{ .Values.namespace | squote }}
-SELECTOR={{ .Values.selector | default "app.kubernetes.io/name=router" | squote }}
-PORT={{ .Values.metricsPort | default 9090 | toString | squote }}
+NAMESPACE={{ include "router-diagnostics-chart.shellQuote" .Values.namespace }}
+SELECTOR={{ include "router-diagnostics-chart.shellQuote" (.Values.selector | default "app.kubernetes.io/name=router") }}
+PORT={{ include "router-diagnostics-chart.shellQuote" (.Values.metricsPort | default 9090) }}
 {{- if eq .Values.mode "job" }}
 
 # ignoreParentEnvs drops the KUBERNETES_SERVICE_HOST/PORT variables kubectl uses to find
@@ -13,12 +13,30 @@ kubectl() {
 }
 
 # The Job's pod is inside the cluster network, so each pod IP is reachable directly.
-scrape() {
-  curl -sf --connect-timeout 5 --max-time 30 "http://$2:$PORT/metrics" -o "$TS_OUTPUT_DIR/$1.txt"
+scrape_pod() {
+  if ! curl -sf --connect-timeout 5 --max-time 30 "http://$2:$PORT/metrics" -o "$TS_OUTPUT_DIR/$1.txt"; then
+    rm -f "$TS_OUTPUT_DIR/$1.txt"
+    echo "metrics not collected for pod $1: no response on port $PORT"
+  fi
 }
 
-# No port-forward, so a pod's "no response" line has nothing to add.
-scrape_error() { :; }
+# Scrapes run in batches of ten at once, so a fleet of unresponsive pods costs about one
+# timeout per ten pods instead of one per pod. A pod with no IP yet (still Pending) has
+# nothing to scrape.
+RUNNING=0
+run_pod() {
+  if [ -z "$2" ]; then
+    echo "metrics not collected for pod $1: pod has no IP yet"
+    return 0
+  fi
+  ATTEMPTED=$((ATTEMPTED + 1))
+  scrape_pod "$1" "$2" &
+  RUNNING=$((RUNNING + 1))
+  if [ "$RUNNING" -ge 10 ]; then
+    wait
+    RUNNING=0
+  fi
+}
 {{- else }}
 
 # Pod IPs aren't reachable from the user's machine, so forward each pod's port in turn.
@@ -56,6 +74,15 @@ scrape_error() {
     printf ' — kubectl port-forward: %s' "$ERR"
   fi
 }
+
+# Port-forwards use one fixed local port, so pods are scraped one at a time.
+run_pod() {
+  ATTEMPTED=$((ATTEMPTED + 1))
+  if ! scrape "$1"; then
+    rm -f "$TS_OUTPUT_DIR/$1.txt"
+    echo "metrics not collected for pod $1: no response on port $PORT$(scrape_error)"
+  fi
+}
 {{- end }}
 
 # kubectl's own error goes to stderr, which troubleshoot.sh saves next to this output.
@@ -67,14 +94,14 @@ if [ -z "$PODS" ]; then
   echo "metrics not collected: no pods matched selector $SELECTOR in namespace $NAMESPACE"
   exit 0
 fi
+ATTEMPTED=0
 while read -r POD POD_IP; do
-  if ! scrape "$POD" "$POD_IP"; then
-    rm -f "$TS_OUTPUT_DIR/$POD.txt"
-    echo "metrics not collected for pod $POD: no response on port $PORT$(scrape_error)"
-  fi
+  run_pod "$POD" "$POD_IP"
 done <<EOF
 $PODS
 EOF
-if [ -z "$(ls "$TS_OUTPUT_DIR"/*.txt 2>/dev/null)" ]; then
+wait
+# Only blame the exporter when at least one pod was actually asked.
+if [ "$ATTEMPTED" -gt 0 ] && [ -z "$(ls "$TS_OUTPUT_DIR"/*.txt 2>/dev/null)" ]; then
   echo "metrics not collected: no pod responded on port $PORT — prometheus may not be enabled"
 fi

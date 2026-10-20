@@ -183,7 +183,60 @@ for mode in local job; do
     run_case "every pod responds" \
     "!metrics not collected"
 
+  # A selector holding a single quote must reach the script intact, not end its quoting early.
+  QUOTED_SCRIPT=$(helm template ci-test "$CHART_PATH" "${FLAGS[@]}" --set selector="app=it's" --show-only templates/base-spec-configmap.yaml \
+    | yq '.data["support-bundle-spec"]' | yq '.spec.hostCollectors[0].run.args[1]')
+  DEFAULT_SCRIPT="$SCRIPT"
+  SCRIPT="$QUOTED_SCRIPT"
+  STUB_PODS="" STUB_LIST_FAILS="" STUB_RESPONDING="" EXPECT_FILES="" \
+    run_case "selector containing a single quote" \
+    "metrics not collected: no pods matched selector app=it's in namespace ci-test"
+  SCRIPT="$DEFAULT_SCRIPT"
+
+  if [ "$mode" = "job" ]; then
+    # Pods are scraped by IP, and a pod that hasn't been given one yet (Pending) has nothing
+    # to scrape. That is not an exporter problem, so it gets its own line.
+    STUB_PODS=$'router-a 10.0.0.1\nrouter-b ' STUB_LIST_FAILS="" STUB_RESPONDING="router-a" EXPECT_FILES="router-a" \
+      run_case "one pod has no IP yet" \
+      "metrics not collected for pod router-b: pod has no IP yet" \
+      "!router-b: no response" "!no pod responded"
+
+    STUB_PODS=$'router-a 10.0.0.1\nrouter-b ' STUB_LIST_FAILS="" STUB_RESPONDING="" EXPECT_FILES="" \
+      run_case "one pod has no IP and the other doesn't respond" \
+      "metrics not collected for pod router-a: no response on port 9090" \
+      "metrics not collected for pod router-b: pod has no IP yet" \
+      "metrics not collected: no pod responded on port 9090 — prometheus may not be enabled"
+
+    # No pod was asked, so blaming the exporter would be wrong.
+    STUB_PODS=$'router-a \nrouter-b ' STUB_LIST_FAILS="" STUB_RESPONDING="" EXPECT_FILES="" \
+      run_case "no pod has an IP yet" \
+      "metrics not collected for pod router-a: pod has no IP yet" \
+      "metrics not collected for pod router-b: pod has no IP yet" \
+      "!no pod responded"
+
+    # More pods than fit in one batch of ten: every pod still gets its own line.
+    MANY_PODS=$(for i in $(seq 1 25); do echo "router-$i 10.0.1.$i"; done)
+    MANY_LINES=()
+    for i in $(seq 1 25); do
+      MANY_LINES+=("metrics not collected for pod router-$i: no response on port 9090")
+    done
+    STUB_PODS="$MANY_PODS" STUB_LIST_FAILS="" STUB_RESPONDING="" EXPECT_FILES="" \
+      run_case "twenty-five pods, none respond" \
+      "${MANY_LINES[@]}" \
+      "metrics not collected: no pod responded on port 9090 — prometheus may not be enabled"
+
+    STUB_PODS="$MANY_PODS" STUB_LIST_FAILS="" STUB_RESPONDING="$(seq -f 'router-%g' 1 25 | tr '\n' ' ')" \
+      EXPECT_FILES="$(seq -f 'router-%g' 1 25 | tr '\n' ' ')" \
+      run_case "twenty-five pods, all respond" \
+      "!metrics not collected"
+  fi
+
   if [ "$mode" = "local" ]; then
+    # Port-forwards go by pod name, so the IP column is never used and an empty one is fine.
+    STUB_PODS=$'router-a ' STUB_LIST_FAILS="" STUB_RESPONDING="router-a" EXPECT_FILES="router-a" \
+      run_case "pod with no IP is still scraped through the forward" \
+      "!no IP yet" "!metrics not collected"
+
     # The port-forward's own error follows the pod's line. A pod whose forward worked
     # but didn't answer gets the plain line.
     STUB_PODS=$'router-a 10.0.0.1\nrouter-b 10.0.0.2' STUB_LIST_FAILS="" STUB_RESPONDING="" STUB_PF_FORBIDDEN="router-a" EXPECT_FILES="" \
