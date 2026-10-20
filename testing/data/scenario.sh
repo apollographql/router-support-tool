@@ -38,7 +38,7 @@ helm install router-diagnostics "$CHART_DIR" \
   --set mode=job \
   $SELECTOR_FLAG \
   --set job.image.repository=us-central1-docker.pkg.dev/platform-cross-environment/apollo-private-docker/router-diagnostics \
-  --set job.image.tag=edge \
+  --set job.image.tag="$JOB_IMAGE_TAG" \
   --set job.image.pullPolicy=IfNotPresent \
   --set job.collectNodeMetrics=false \
   --set job.storage.provider=url \
@@ -163,8 +163,15 @@ for pod in $(jq -r '.items[] | select(.metadata.labels.app == "router") | .metad
   if [ -f "$METRICS_DIR/$pod.txt" ]; then
     grep -q '# HELP' "$METRICS_DIR/$pod.txt" || { echo "router-metrics: $pod.txt has no # HELP line" >&2; exit 1; }
   else
-    grep -qxF "metrics not collected for pod $pod: no response on port 9090" "$METRICS_OUTPUT" \
-      || { echo "router-metrics: no file and no attribution line for pod $pod" >&2; exit 1; }
+    grep -qxF "metrics not collected for pod $pod: no response on port 9090" "$METRICS_OUTPUT" || {
+      echo "router-metrics: no file and no attribution line for pod $pod" >&2
+      echo "--- router-metrics.txt ---" >&2
+      cat "$METRICS_OUTPUT" >&2
+      echo "--- router-metrics-stderr.txt ---" >&2
+      cat "${METRICS_OUTPUT%.txt}-stderr.txt" >&2 || true
+      echo "--- end ---" >&2
+      exit 1
+    }
   fi
 done
 

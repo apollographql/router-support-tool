@@ -109,6 +109,10 @@ These are also just matrix dimension values on the same templated manifests. Eve
 
 The floor and current-release versions are two separate environment variants, differing only in which `support-bundle` binary/image the environment stages.
 
+#### Job image under test in RTF
+
+The Job installs the image built from the commit under test, not `edge`, which only the default branch publishes. A change that touches both the image and the chart (such as the `kubectl` the `router-metrics` script needs) is therefore tested together on a PR. The workflow passes the commit SHA to the test plan as `job_image_tag`.
+
 #### Bundle retrieval in RTF
 
 Use the `job.storage.provider: url` option (see `specs/storage/object_storage.md`). We will drop a plain `http.server` script into the environment via a file provider, run it reachably from the Job, and point `job.storage.url.endpoint` at it. The Job pushes the bundle there directly once collection finishes (via PUT request). The Scenario knows the Job is done via `kubectl wait --for=condition=complete job/router-diagnostics-job-1`, then fetches the bundle from the server.

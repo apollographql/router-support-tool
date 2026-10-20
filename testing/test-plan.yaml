@@ -96,6 +96,8 @@ scenario:
         description: "Relative path to the router-config ConfigMap manifest this variant applies. See the compound matrix in test-plan.yaml."
       - name: expected_redacted_router_config_path
         description: "Relative path to the fixture this variant's byte-diff check uses. See the compound matrix in test-plan.yaml."
+      - name: job_image_tag
+        description: "The router-diagnostics Job image tag to install. .github/workflows/run-rtf-test-plan.yaml passes the commit SHA, so the chart is tested against the image built from the same commit."
 
     docker:
       image: us-central1-docker.pkg.dev/platform-cross-environment/apollo-private-docker/rtf-toolbox
@@ -106,6 +108,7 @@ scenario:
       CONDITION: "{{ condition }}"
       ROUTER_VERSION: "{{ router_version }}"
       REDACTION: "{{ redaction }}"
+      JOB_IMAGE_TAG: "{{ job_image_tag }}"
 
     file_providers:
       - name: env_setup.sh
