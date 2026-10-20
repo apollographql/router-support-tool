@@ -119,7 +119,7 @@ If you're on a raw-manifest or custom deployment, also set `selector` and `confi
 
 The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle. See `specs/storage/`. Installing this mode needs someone who can create Jobs, namespace RBAC, *and* cluster-scoped RBAC — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below for the full grant list.
 
-**If your cluster runs a service mesh, the Job's pod doesn't join it by default.** Sidecar injection is disabled automatically so the Job reliably reaches `Completed` instead of getting stuck in `Running` waiting on a long-lived sidecar. If your platform team's policy requires every pod to be in the mesh, this can be overridden. See `specs/deployment/v1/v1.md` → Service mesh environments for how to override it.
+**If your cluster runs a service mesh, the Job's pod doesn't join it by default.** Sidecar injection is disabled automatically so the Job reliably reaches `Completed` instead of getting stuck in `Running` waiting on a long-lived sidecar. If your platform team's policy requires every pod to be in the mesh, this can be overridden. See `specs/deployment/on-demand-collection.md` → Service mesh environments for how to override it.
 
 ---
 
@@ -145,17 +145,19 @@ Sensitive data is redacted automatically before the output bundle is created —
 The metrics collector targets port `9090` by default. You can override this default via the chart's `metricsPort` value, see below. Two settings in your `router.yaml` need to be in place for it to collect anything:
 
 - `telemetry.exporters.metrics.prometheus.enabled: true` — turns the exporter on.
-- `telemetry.exporters.metrics.prometheus.listen` — the `host:port` the exporter binds to. The host must be reachable from outside the router container — binding to loopback won't work even with the exporter enabled. If you change the port, set the chart's `metricsPort` to match. Leaving `metricsPort` unset while the exporter binds to a non-default port makes this section empty the same way an unreachable host would.
+- `telemetry.exporters.metrics.prometheus.listen` — the `host:port` the exporter binds to. The host must be reachable from outside the router container — binding to loopback won't work even with the exporter enabled. If you change the port, set the chart's `metricsPort` to match. Leaving `metricsPort` unset while the exporter binds to a non-default port has the same effect as an unreachable host.
 
 Note that the **router chart's** `serviceMonitor.enabled` value (not `router-diagnostics-chart`) is a *different* switch. It exposes the metrics port on the Service and renders a ServiceMonitor for your own Prometheus, but it does not enable the exporter — the two settings above are what do that. You can have one without the other.
 
-If the exporter is off, or bound somewhere the collector can't reach, that section of the bundle will simply be empty — the rest of the bundle is unaffected.
+If the exporter is off, or bound somewhere the collector can't reach, the bundle has no metrics files and says why instead; the rest of the bundle is unaffected.
 
-**Under `mode: local`, reaching this port also requires bridging your machine to the cluster network** because pod IPs aren't reachable directly from outside the cluster. This is handled automatically by our chart's own script, run as the `router-metrics` collector. It resolves matching pods and port-forwards each one in turn.
+**Under `mode: local`, your machine can't reach pod IPs directly**, so the `router-metrics` script port-forwards to each matching pod in turn, scrapes its metrics port, and closes the forward before moving to the next. This happens automatically during collection, but it needs `create` on `pods/portforward` in the router's namespace. Without it, collection still completes and the bundle says no pod responded.
 
-**If you're on a raw-manifest or custom deployment**, the `selector` you already set to locate your router is also what enables metrics collection under `mode: job`. This tier has no fixed label to resolve pods from otherwise, so leaving `selector` unset means no pods to try, and this section stays empty. If your exporter listens on a port other than `9090`, also set `metricsPort`. Under `mode: local`, the collector always targets `localhost:<metricsPort>` (default `9090`) once a pod is bridged.
+**Under `mode: job`, no port-forward is needed.** The Job's pod is already inside the cluster, so the same script requests each matching pod's IP directly. In both modes, pods are found each time collection runs, so the chart works the same whether it's installed with `helm install` or rendered by a GitOps tool such as ArgoCD.
 
-**A service mesh enforcing strict mTLS can also empty this section**, even with the exporter correctly configured above — this applies to `mode: local` and `mode: job` alike, since collection runs from outside the mesh either way. See `specs/deployment/v1/v1.md` → Running outside the mesh doesn't have to mean losing metrics.
+**If you're on a raw-manifest or custom deployment**, the `selector` you already set to locate your router is also what picks the pods to scrape. The same applies on the official chart if your router's `app.kubernetes.io/name` label isn't `router`, for example with `router.nameOverride` set. If no pods match, the bundle says so and names the selector it used, so you know to set `selector`. If your exporter listens on a port other than `9090`, also set `metricsPort`. Under `mode: local`, the collector always targets `localhost:<metricsPort>` (default `9090`) once a pod is bridged.
+
+**A service mesh enforcing strict mTLS can also stop metrics being collected**, even with the exporter correctly configured above — this applies to `mode: local` and `mode: job` alike, since collection runs from outside the mesh either way. See `specs/deployment/on-demand-collection.md` → Running outside the mesh doesn't have to mean losing metrics.
 
 ### Redaction
 
@@ -177,7 +179,7 @@ If you expect to run diagnostics more than once, you may prefer to leave it inst
 
 ### Permissions for on-demand collection
 
-Installing with `mode: local` requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself. `collect.sh` then runs using your existing kubectl credentials; no additional ServiceAccount is created for that step. Reaching `router-metrics` also needs `create` on the `pods/portforward` subresource in the router's namespace because `router-metrics` port-forwards directly to each matching pod under the hood as part of running `support-bundle` itself. Declining it doesn't fail collection, it only means `router-metrics` throws an error.
+Installing with `mode: local` requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself. `collect.sh` then runs using your existing kubectl credentials; no additional ServiceAccount is created for that step. Reaching `router-metrics` also needs `create` on the `pods/portforward` subresource in the router's namespace because `router-metrics` port-forwards directly to each matching pod under the hood as part of running `support-bundle` itself. Declining it doesn't fail collection. Each pod's "no response" line in the bundle includes the port-forward's error.
 
 Installing with `mode: job` requires more: creating a Job, a ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
 

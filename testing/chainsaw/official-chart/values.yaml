@@ -1,7 +1,7 @@
 # Values for the *official* apollographql/router Helm chart
 # (oci://ghcr.io/apollographql/helm-charts/router), used only to exercise the
 # "Official Apollo router Helm chart" deployment tier from
-# specs/deployment/v1/v1.md - specifically the APOLLO_GRAPH_REF and
+# specs/deployment/on-demand-collection.md - specifically the APOLLO_GRAPH_REF and
 # APOLLO_ROUTER_OFFICIAL_HELM_CHART env vars that only this tier sets.
 #
 # managedFederation.graphRef is a fake ref with no managedFederation.apiKey - the chart

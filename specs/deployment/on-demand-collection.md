@@ -1,4 +1,4 @@
-# Deployment — v1 (on-demand collection)
+# Deployment — On-demand collection
 
 This file is the technical reference for the `router-diagnostics-chart` chart — deployment tiers, RBAC, and cluster footprint. For the step-by-step customer-facing setup flow, see `specs/user_experience.md`.
 
@@ -60,7 +60,7 @@ data:
 | --- | --- | --- | --- | --- |
 | `namespace` | Yes | — | Official chart, raw manifest / custom | The router's namespace. Rendered into every collector that accepts it, including `clusterResources.namespaces` as a single-element list. Never rely on the kubectl context fallback. |
 | `mode` | Yes | — | Official chart, raw manifest / custom | `local` or `job` |
-| `selector` | Raw-manifest tier only | The official chart's `app.kubernetes.io/name=router` label | Raw manifests / custom | Pod label selector, e.g. `app=my-router`. Under `mode: job`, setting this also switches metrics host resolution to `selector` — this tier has no fixed label to resolve one from otherwise. See `specs/collection/base_spec.md` → Prometheus metrics prerequisites |
+| `selector` | Raw-manifest tier only | The official chart's `app.kubernetes.io/name=router` label | Raw manifests / custom | Pod label selector, e.g. `app=my-router`. Also selects which pods `router-metrics` scrapes and is resolved each time collection runs. Set it on the official chart too if the router's `app.kubernetes.io/name` label isn't `router` (for example, with `router.nameOverride` or an aliased install). See `specs/collection/base_spec.md` → Per-pod metrics collection |
 | `configMapName` | Raw-manifest tier only | Label-based targeting, no name needed | Raw manifests / custom | Name of the ConfigMap holding the router config |
 | `metricsPort` | No | `9090` | Official chart, raw manifest / custom | Port the router's metrics endpoint is reachable on, if not `9090`. |
 | `logs.maxAge` | No | Unset — no age cap | Official chart, raw manifest / custom | Maps to the `logs` collector's `limits.maxAge`. How far back to reach, e.g. `2h` |
@@ -72,7 +72,7 @@ data:
 
 You run the collection yourself, with your own kubectl access.
 
-If the router's metrics section comes back empty because collection runs outside a service mesh, see [Running outside the mesh doesn't have to mean losing metrics](#running-outside-the-mesh-doesnt-have-to-mean-losing-metrics).
+If the router's metrics are missing because collection runs outside a service mesh (the bundle says no pod responded), see [Running outside the mesh doesn't have to mean losing metrics](#running-outside-the-mesh-doesnt-have-to-mean-losing-metrics).
 
 ### Prerequisite: download the router-diagnostics collect script
 
@@ -113,17 +113,19 @@ invokes `support-bundle --load-cluster-specs --namespace <namespace>`:
    - For each matched pod, starting `kubectl port-forward pod/<pod-name> <metricsPort>:<metricsPort>`
      (default `9090:9090`), scraping `/metrics`, then tearing the forward down before moving to
      the next pod.
-   - Writing each pod's scrape into the bundle. See `specs/collection/output.md` → Bundle layout
-     differs by mode for `router-metrics` for exactly where that lands.
+   - Writing each pod's scrape into the bundle. See `specs/collection/output.md` →
+     `router-metrics` layout for exactly where that lands.
 
-   If no pod responds, the script writes a plain explanation into the bundle instead of leaving
-   the section silently empty. `nodeMetrics` remains available as a fallback for container-level
+   If the script can't list pods, no pod matches `selector`, or a matched pod doesn't respond, the script writes a plain
+   explanation into the bundle instead of leaving the section silently empty (see
+   `specs/collection/base_spec.md` → Per-pod metrics collection for each case). `nodeMetrics` remains available as a fallback for container-level
    memory/CPU signal regardless (see `specs/collection/base_spec.md` → `nodeMetrics` is a
    fallback, not the preferred path).
 
-   This per-pod bridging is **not** required under `mode: job`: the Job's pod runs inside the
-   cluster, so pod IPs are reachable directly and are resolved once, at Helm render time, instead,
-   with each pod getting its own `http` collector.
+   `mode: job` runs the same script, resolving pods the same way at collection time, but inside
+   the Job's pod. That pod is already inside the cluster network, so the script requests each
+   matched pod's IP directly and skips the port-forward; this per-pod bridging is a `mode: local`
+   concern only.
 
 ### Invocation for `mode: local`
 
@@ -168,7 +170,7 @@ the rendered spec ConfigMap.
 
 ### Permissions for `mode: local`
 
-Requires permission to create a ConfigMap in the target namespace, plus `create` on the `pods/portforward` subresource in the router's namespace to reach `router-metrics`. Declining the latter does not fail collection, it only means `router-metrics` throws an error. Running the collection uses the invoking user's existing kubectl credentials.
+Requires permission to create a ConfigMap in the target namespace, plus `create` on the `pods/portforward` subresource in the router's namespace to reach `router-metrics`. Declining the latter does not fail collection. The script includes the port-forward's error in each pod's "no response" line. Running the collection uses the invoking user's existing kubectl credentials.
 
 Collection never needs root: `collect.sh` runs `support-bundle` with `--interactive=false`, so the CLI's default sudo-reexec prompt (triggered by the presence of any `hostCollectors.run` entry, not an actual root requirement) never appears.
 
@@ -187,6 +189,8 @@ For teams whose kubectl access to production is restricted and who need a platfo
 The troubleshoot `support-bundle`binary ships in the Job's container image.
 
 The image also needs `aws-cli` and `gcloud` bundled alongside the support-bundle binary. The generated support bundle is uploaded by invoking these CLIs directly, see `specs/storage/object_storage.md`.
+
+The image also bundles `kubectl` and `curl`, which the `router-metrics` script uses to list router pods and scrape each one when collection runs (`specs/collection/base_spec.md` → Per-pod metrics collection).
 
 ### Chart values specific to `mode: job`
 
@@ -207,7 +211,9 @@ kind: Job
 
 ### Invocation for `mode: job`
 
-A platform team member with cluster access installs the chart with `mode=job` (plus `selector`/`configMapName` if the deployment is raw-manifest). The Job runs the collection using its namespace-scoped ServiceAccount and the platform team retrieves the bundle. See `specs/storage` for details on retrieving the bundle.
+A platform team member with cluster access installs the chart with `mode=job` (plus `selector`/`configMapName` if the deployment is raw-manifest). The Job runs the collection using its namespace-scoped ServiceAccount and the platform team retrieves the bundle. Like `collect.sh`, the Job runs `support-bundle` with `--interactive=false`, since the spec carries a `hostCollectors.run` entry (see [Permissions for `mode: local`](#permissions-for-mode-local) for why).
+
+Nothing the chart renders depends on the live cluster, so `mode: job` behaves the same whether the chart is installed with `helm install` or rendered with `helm template` and applied by a GitOps tool such as ArgoCD. See `specs/storage` for details on retrieving the bundle.
 
 ### Service mesh environments
 
@@ -232,7 +238,7 @@ Given that, the chart sets `job.podAnnotations` to disable injection by default,
 
 ### Permissions for `mode: job`
 
-Additionally requires creating a Job, a namespace-scoped ServiceAccount, a Role/RoleBinding, and a ClusterRole/ClusterRoleBinding (for `nodeMetrics`'s cluster-scoped grants). Running the collection uses **a namespace-scoped ServiceAccount created by the chart**, run on the customer's behalf by a platform team member via the Job.
+Additionally requires creating a Job, a namespace-scoped ServiceAccount, a Role/RoleBinding, and a ClusterRole/ClusterRoleBinding (for `nodeMetrics`'s cluster-scoped grants). Running the collection uses **a namespace-scoped ServiceAccount created by the chart**, run on the customer's behalf by a platform team member via the Job. Its Role's `get`/`list` on pods is also what `router-metrics` uses to find router pods at collection time; unlike `mode: local`, no `pods/portforward` grant is needed.
 
 #### `nodeMetrics` RBAC
 
