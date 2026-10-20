@@ -64,5 +64,5 @@ jobs:
       - uses: apollographql/release-tooling/rtf-orchestrator-run-known@0164abcc44f36be7659ce0be5bc984e4f44614d1
         with:
           git_ref: ${{ steps.resolve.outputs.sha }}
-          vars_file: ${{ runner.temp }}/rtf-vars.json
           test_plan_id: d92be985-ca2a-457c-9fc8-d692256782ae
+          vars_file: ${{ runner.temp }}/rtf-vars.json
