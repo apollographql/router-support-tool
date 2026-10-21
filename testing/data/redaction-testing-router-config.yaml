@@ -185,6 +185,7 @@ response_cache:
   subgraph:
     all:
       enabled: true
+      ttl: 60s
       redis:
         urls:
           - "redis://localhost:6393"
