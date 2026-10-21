@@ -34,12 +34,6 @@ data:
               {{- end }}
             {{- end }}
 
-        # Metrics collection differs by mode because pod IPs are only reachable in-cluster.
-        # Job mode — support-bundle runs inside a Kubernetes Job and can reach pod IPs directly
-        {{- if ne .Values.mode "local" }}
-        {{- include "router-diagnostics-chart.routerMetricsCollectors" . | trim | nindent 8 }}
-        {{- end }}
-
         - configMap:
             collectorName: router-config-rendered
             namespace: {{ .Values.namespace }}
@@ -66,9 +60,8 @@ data:
                 {{- end }}
                 "troubleshoot_version": "0.134.1"
               }
-    # mode: local — support-bundle runs on the user's machine where pod IPs are not
-    # reachable, so a hostCollectors.run script handles all port-forwards at collection time.
-{{- if eq .Values.mode "local" }}
+      # Runs wherever support-bundle runs (the user's machine, or the Job's pod) and finds
+      # router pods at collection time.
       hostCollectors:
         - run:
             collectorName: router-metrics
@@ -80,8 +73,7 @@ data:
             args:
               - -c
               - |
-                {{- tpl (.Files.Get "files/local-metrics-collect.sh") . | nindent 16 }}
-{{- end }}
+                {{- tpl (.Files.Get "files/router-metrics-collect.sh") . | nindent 16 }}
   redactor-spec: |
     apiVersion: troubleshoot.sh/v1beta2
     kind: Redactor

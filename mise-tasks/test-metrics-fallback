@@ -1,70 +1,265 @@
 #!/usr/bin/env bash
-#MISE description="Verify the mode: local metrics collector emits a friendly message when no pod responds on the metrics port"
+#MISE description="Verify the router-metrics script names a reason in the bundle whenever a pod's metrics are missing "
 #
-# When prometheus is disabled or the metrics port doesn't match, no pod returns data and the
-# router-metrics section in the bundle is empty. The hostCollectors.run script should write a
-# plain explanation to stdout (recorded as router-metrics/output by troubleshoot.sh) instead
-# of leaving the section silently empty.
+# A missing metrics file is indistinguishable from a collector that never ran so the
+# hostCollectors.run script writes a plain explanation to stdout (saved by troubleshoot.sh
+# as host-collectors/run-host/router-metrics.txt) for every case in
+# specs/collection/base_spec.md -> Per-pod metrics collection. This runs the rendered script
+# against stubbed kubectl/curl for each case.
 set -euo pipefail
 
 CHART_PATH="router-diagnostics-chart"
 
-# --- Step 1: extract the hostCollectors.run script from the rendered spec -----------------
-
-RENDERED=$(helm template ci-test "$CHART_PATH" \
-  --set namespace=ci-test --set mode=local \
-  --show-only templates/base-spec-configmap.yaml)
-
-SPEC_DOC=$(echo "$RENDERED" | yq '.data["support-bundle-spec"]')
-SCRIPT=$(echo "$SPEC_DOC" | yq '.spec.hostCollectors[0].run.args[1]')
-
-if [ -z "$SCRIPT" ]; then
-  echo "could not extract hostCollectors.run script from rendered spec" >&2
-  exit 1
-fi
-
 WORKDIR=$(mktemp -d)
 trap 'rm -rf "$WORKDIR"' EXIT
 
-TS_OUTPUT_DIR="$WORKDIR/output"
 STUB_DIR="$WORKDIR/stubs"
-mkdir -p "$TS_OUTPUT_DIR" "$STUB_DIR"
+mkdir -p "$STUB_DIR"
 
-# --- Step 2: stubs -------------------------------------------------------------------------
+# --- Stubs ---------------------------------------------------------------------------------
+# Driven by environment variables so each case below sets up its own cluster:
+#   STUB_PODS        "<name> <ip>" lines returned by `kubectl get pods`
+#   STUB_LIST_FAILS  set to make `kubectl get pods` fail
+#   STUB_RESPONDING  space-separated pod names whose metrics endpoint answers
+#   STUB_PF_FORBIDDEN space-separated pod names whose port-forward is refused
+#   STUB_PF_LOST     space-separated pod names whose forward starts, then logs an error
+#   STUB_MKTEMP_FAILS set to make `mktemp` fail
 
-# kubectl: returns one fake pod name for 'get pods' and no-op for everything else
+# kubectl: scans its arguments rather than reading fixed positions
 cat > "$STUB_DIR/kubectl" <<'EOF'
 #!/bin/sh
-if [ "$1" = "get" ] && [ "$2" = "pods" ]; then
-  echo "fake-router-pod-abc"
-fi
+for arg in "$@"; do
+  case "$arg" in
+    # kubectl get pods: lists STUB_PODS, or fails with a forbidden error when STUB_LIST_FAILS is set.
+    get)
+      [ -n "${STUB_LIST_FAILS:-}" ] && { echo "error: forbidden" >&2; exit 1; }
+      [ -n "${STUB_PODS:-}" ] && printf '%s\n' "$STUB_PODS"
+      exit 0
+      ;;
+    # kubectl port-forward pod/<name>: refused for STUB_PF_FORBIDDEN pods, otherwise comes up, and for STUB_PF_LOST pods then logs an error.
+    pod/*)
+      for p in ${STUB_PF_FORBIDDEN:-}; do
+        if [ "$p" = "${arg#pod/}" ]; then
+          echo "Error from server (Forbidden): pods \"$p\" is forbidden: User \"dev\" cannot create resource \"pods/portforward\" in API group \"\" in the namespace \"ci-test\"" >&2
+          exit 1
+        fi
+      done
+      # port-forward: localhost reaches this pod until the script kills the forward.
+      trap 'rm -f "$STUB_DIR/forwarded"; exit 0' TERM
+      echo "Forwarding from 127.0.0.1:9090 -> 9090"
+      for p in ${STUB_PF_LOST:-}; do
+        if [ "$p" = "${arg#pod/}" ]; then
+          echo "E1019 17:29:08.481862 97571 portforward.go:549] \"An error occurred forwarding\" err=\"connect: connection refused\"" >&2
+          echo "error: lost connection to pod" >&2
+        fi
+      done
+      echo "${arg#pod/}" > "$STUB_DIR/forwarded"
+      while :; do /bin/sleep 0.05; done
+      ;;
+  esac
+done
 EOF
-chmod +x "$STUB_DIR/kubectl"
 
-# curl: always fails — simulates no listener on the metrics port
+# curl: succeeds only for a pod listed in STUB_RESPONDING, writing a metrics body to -o.
 cat > "$STUB_DIR/curl" <<'EOF'
 #!/bin/sh
-exit 1
+OUT=""
+URL=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) OUT="$2"; shift ;;
+    http://*) URL="$1" ;;
+  esac
+  shift
+done
+case "$URL" in
+  http://localhost:*) POD=$(cat "$STUB_DIR/forwarded" 2>/dev/null) ;;
+  *)
+    IP=${URL#http://}
+    IP=${IP%%:*}
+    POD=$(printf '%s\n' "$STUB_PODS" | awk -v ip="$IP" '$2 == ip && ip != "" { print $1 }')
+    ;;
+esac
+for p in ${STUB_RESPONDING:-}; do
+  if [ -n "$POD" ] && [ "$p" = "$POD" ]; then
+    echo "# HELP apollo_router_stub stub" > "$OUT"
+    exit 0
+  fi
+done
+exit 7
 EOF
-chmod +x "$STUB_DIR/curl"
 
-# sleep: no-op so the 30-retry loop completes instantly
-cat > "$STUB_DIR/sleep" <<'EOF'
+# mktemp: fails on request, otherwise defers to the real one later in PATH.
+cat > "$STUB_DIR/mktemp" <<'EOF'
 #!/bin/sh
-exit 0
+[ -n "${STUB_MKTEMP_FAILS:-}" ] && { echo "mktemp: Permission denied" >&2; exit 1; }
+PATH=${PATH#"$STUB_DIR:"} exec mktemp "$@"
 EOF
-chmod +x "$STUB_DIR/sleep"
 
-# --- Step 3: run the script ----------------------------------------------------------------
+# sleep: shortened so mode: local's 30-attempt retry loop finishes quickly, while still
+# giving the backgrounded port-forward stub time to start.
+printf '#!/bin/sh\nexec /bin/sleep 0.02\n' > "$STUB_DIR/sleep"
+chmod +x "$STUB_DIR/kubectl" "$STUB_DIR/curl" "$STUB_DIR/mktemp" "$STUB_DIR/sleep"
 
-OUTPUT=$(PATH="$STUB_DIR:$PATH" TS_OUTPUT_DIR="$TS_OUTPUT_DIR" sh -c "$SCRIPT" 2>/dev/null)
+FAILED=false
 
-# --- Step 4: assert the fallback message appears -------------------------------------------
+# run_case <description> <expected stdout line>... (with "!" prefix: must be absent)
+# Expects SCRIPT, STUB_* and EXPECT_FILES (pod names that must have a .txt) to be set.
+run_case() {
+  local desc="$1"
+  shift
+  local out_dir="$WORKDIR/output"
+  rm -rf "$out_dir" "$STUB_DIR/forwarded"
+  mkdir -p "$out_dir"
 
-if echo "$OUTPUT" | grep -q "metrics not collected"; then
-  echo "test-metrics-fallback: PASS"
-else
-  echo "test-metrics-fallback: FAIL — expected 'metrics not collected' in script stdout" >&2
-  echo "Script output was: $OUTPUT" >&2
+  local output
+  output=$(env STUB_DIR="$STUB_DIR" STUB_PODS="${STUB_PODS:-}" STUB_LIST_FAILS="${STUB_LIST_FAILS:-}" \
+    STUB_RESPONDING="${STUB_RESPONDING:-}" STUB_PF_FORBIDDEN="${STUB_PF_FORBIDDEN:-}" \
+    STUB_PF_LOST="${STUB_PF_LOST:-}" STUB_MKTEMP_FAILS="${STUB_MKTEMP_FAILS:-}" PATH="$STUB_DIR:$PATH" TS_OUTPUT_DIR="$out_dir" \
+    sh -c "$SCRIPT" 2>/dev/null)
+
+  local ok=true
+  for expected in "$@"; do
+    if [[ "$expected" == !* ]]; then
+      grep -qF -- "${expected#!}" <<<"$output" && ok=false
+    else
+      grep -qxF -- "$expected" <<<"$output" || ok=false
+    fi
+  done
+  for pod in ${EXPECT_FILES:-}; do
+    grep -q '# HELP' "$out_dir/$pod.txt" 2>/dev/null || ok=false
+  done
+  local files
+  files=$(cd "$out_dir" && ls 2>/dev/null | wc -l | tr -d ' ')
+  [ "$files" -eq "$(wc -w <<<"${EXPECT_FILES:-}" | tr -d ' ')" ] || ok=false
+
+  if [ "$ok" = true ]; then
+    echo "PASS [$mode] $desc"
+  else
+    echo "FAIL [$mode] $desc" >&2
+    echo "  expected: $*" >&2
+    echo "  expected files: ${EXPECT_FILES:-<none>}" >&2
+    echo "  stdout was:" >&2
+    sed 's/^/    /' <<<"$output" >&2
+    echo "  files were: $(cd "$out_dir" && ls)" >&2
+    FAILED=true
+  fi
+}
+
+for mode in local job; do
+  FLAGS=(--set namespace=ci-test --set mode="$mode")
+  if [ "$mode" = "job" ]; then
+    # Not a real image — this only renders the spec.
+    FLAGS+=(--set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 --set job.storage.provider=s3 --set job.storage.bucket=ci-test)
+  fi
+  SCRIPT=$(helm template ci-test "$CHART_PATH" "${FLAGS[@]}" --show-only templates/base-spec-configmap.yaml \
+    | yq '.data["support-bundle-spec"]' | yq '.spec.hostCollectors[0].run.args[1]')
+  if [ -z "$SCRIPT" ] || [ "$SCRIPT" = "null" ]; then
+    echo "could not extract hostCollectors.run script from the mode: $mode spec" >&2
+    exit 1
+  fi
+
+  STUB_PODS="" STUB_LIST_FAILS="" STUB_RESPONDING="" EXPECT_FILES="" \
+    run_case "no pod matches the selector" \
+    "metrics not collected: no pods matched selector app.kubernetes.io/name=router in namespace ci-test"
+
+  STUB_PODS="" STUB_LIST_FAILS=1 STUB_RESPONDING="" EXPECT_FILES="" \
+    run_case "listing pods fails" \
+    "metrics not collected: could not list pods matching selector app.kubernetes.io/name=router in namespace ci-test" \
+    "!no pods matched"
+
+  STUB_PODS=$'router-a 10.0.0.1\nrouter-b 10.0.0.2' STUB_LIST_FAILS="" STUB_RESPONDING="router-a" EXPECT_FILES="router-a" \
+    run_case "one of two pods doesn't respond" \
+    "metrics not collected for pod router-b: no response on port 9090" \
+    "!router-a: no response" "!no pod responded"
+
+  STUB_PODS=$'router-a 10.0.0.1\nrouter-b 10.0.0.2' STUB_LIST_FAILS="" STUB_RESPONDING="" EXPECT_FILES="" \
+    run_case "no pod responds" \
+    "metrics not collected for pod router-a: no response on port 9090" \
+    "metrics not collected for pod router-b: no response on port 9090" \
+    "metrics not collected: no pod responded on port 9090 — prometheus may not be enabled"
+
+  STUB_PODS=$'router-a 10.0.0.1\nrouter-b 10.0.0.2' STUB_LIST_FAILS="" STUB_RESPONDING="router-a router-b" EXPECT_FILES="router-a router-b" \
+    run_case "every pod responds" \
+    "!metrics not collected"
+
+  # A selector holding a single quote must reach the script intact, not end its quoting early.
+  QUOTED_SCRIPT=$(helm template ci-test "$CHART_PATH" "${FLAGS[@]}" --set selector="app=it's" --show-only templates/base-spec-configmap.yaml \
+    | yq '.data["support-bundle-spec"]' | yq '.spec.hostCollectors[0].run.args[1]')
+  DEFAULT_SCRIPT="$SCRIPT"
+  SCRIPT="$QUOTED_SCRIPT"
+  STUB_PODS="" STUB_LIST_FAILS="" STUB_RESPONDING="" EXPECT_FILES="" \
+    run_case "selector containing a single quote" \
+    "metrics not collected: no pods matched selector app=it's in namespace ci-test"
+  SCRIPT="$DEFAULT_SCRIPT"
+
+  if [ "$mode" = "job" ]; then
+    # Pods are scraped by IP, and a pod that hasn't been given one yet (Pending) has nothing
+    # to scrape. That is not an exporter problem, so it gets its own line.
+    STUB_PODS=$'router-a 10.0.0.1\nrouter-b ' STUB_LIST_FAILS="" STUB_RESPONDING="router-a" EXPECT_FILES="router-a" \
+      run_case "one pod has no IP yet" \
+      "metrics not collected for pod router-b: pod has no IP yet" \
+      "!router-b: no response" "!no pod responded"
+
+    STUB_PODS=$'router-a 10.0.0.1\nrouter-b ' STUB_LIST_FAILS="" STUB_RESPONDING="" EXPECT_FILES="" \
+      run_case "one pod has no IP and the other doesn't respond" \
+      "metrics not collected for pod router-a: no response on port 9090" \
+      "metrics not collected for pod router-b: pod has no IP yet" \
+      "metrics not collected: no pod responded on port 9090 — prometheus may not be enabled"
+
+    # No pod was asked, so blaming the exporter would be wrong.
+    STUB_PODS=$'router-a \nrouter-b ' STUB_LIST_FAILS="" STUB_RESPONDING="" EXPECT_FILES="" \
+      run_case "no pod has an IP yet" \
+      "metrics not collected for pod router-a: pod has no IP yet" \
+      "metrics not collected for pod router-b: pod has no IP yet" \
+      "!no pod responded"
+
+    # More pods than fit in one batch of ten: every pod still gets its own line.
+    MANY_PODS=$(for i in $(seq 1 25); do echo "router-$i 10.0.1.$i"; done)
+    MANY_LINES=()
+    for i in $(seq 1 25); do
+      MANY_LINES+=("metrics not collected for pod router-$i: no response on port 9090")
+    done
+    STUB_PODS="$MANY_PODS" STUB_LIST_FAILS="" STUB_RESPONDING="" EXPECT_FILES="" \
+      run_case "twenty-five pods, none respond" \
+      "${MANY_LINES[@]}" \
+      "metrics not collected: no pod responded on port 9090 — prometheus may not be enabled"
+
+    STUB_PODS="$MANY_PODS" STUB_LIST_FAILS="" STUB_RESPONDING="$(seq -f 'router-%g' 1 25 | tr '\n' ' ')" \
+      EXPECT_FILES="$(seq -f 'router-%g' 1 25 | tr '\n' ' ')" \
+      run_case "twenty-five pods, all respond" \
+      "!metrics not collected"
+  fi
+
+  if [ "$mode" = "local" ]; then
+    # Port-forwards go by pod name, so the IP column is never used and an empty one is fine.
+    STUB_PODS=$'router-a ' STUB_LIST_FAILS="" STUB_RESPONDING="router-a" EXPECT_FILES="router-a" \
+      run_case "pod with no IP is still scraped through the forward" \
+      "!no IP yet" "!metrics not collected"
+
+    # The port-forward's own error follows the pod's line. A pod whose forward worked
+    # but didn't answer gets the plain line.
+    STUB_PODS=$'router-a 10.0.0.1\nrouter-b 10.0.0.2' STUB_LIST_FAILS="" STUB_RESPONDING="" STUB_PF_FORBIDDEN="router-a" EXPECT_FILES="" \
+      run_case "port-forward is forbidden for one pod" \
+      'metrics not collected for pod router-a: no response on port 9090 — kubectl port-forward: Error from server (Forbidden): pods "router-a" is forbidden: User "dev" cannot create resource "pods/portforward" in API group "" in the namespace "ci-test"' \
+      "metrics not collected for pod router-b: no response on port 9090"
+
+    # A forward that came up and then logged an error means nothing answered on the port,
+    # not that the forward failed, so the pod gets the plain line.
+    STUB_PODS=$'router-a 10.0.0.1\nrouter-b 10.0.0.2' STUB_LIST_FAILS="" STUB_RESPONDING="router-b" STUB_PF_LOST="router-a" EXPECT_FILES="router-b" \
+      run_case "forward starts but nothing listens" \
+      "metrics not collected for pod router-a: no response on port 9090" \
+      "!kubectl port-forward:"
+
+    # Without a temp dir the forward still runs; only the reason is lost.
+    STUB_PODS=$'router-a 10.0.0.1\nrouter-b 10.0.0.2' STUB_LIST_FAILS="" STUB_RESPONDING="router-a" STUB_PF_FORBIDDEN="router-b" STUB_MKTEMP_FAILS=1 EXPECT_FILES="router-a" \
+      run_case "mktemp fails" \
+      "metrics not collected for pod router-b: no response on port 9090"
+  fi
+done
+
+if [ "$FAILED" = true ]; then
+  echo "test-metrics-fallback: FAIL" >&2
   exit 1
 fi
+echo "test-metrics-fallback: PASS"

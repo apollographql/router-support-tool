@@ -216,7 +216,7 @@ jobs:
         run: mise run test-collect-script-ps1
 
   metrics_fallback_message:
-    name: "mode: local emits fallback message when metrics unavailable"
+    name: "router-metrics names a reason when metrics are missing"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code

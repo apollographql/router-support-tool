@@ -36,13 +36,11 @@ for tier in official-chart official-chart-metrics raw-manifest raw-manifest-metr
     helm template ci-test "$CHART_PATH" $FLAGS > "$WORKDIR/rendered.yaml"
     kubeconform -strict -summary "$WORKDIR/rendered.yaml"
 
-    # Whenever metricsPort is set it must reach the metrics collector's URL.
-    # Only checkable for mode: local — mode: job resolves pod IPs at Helm render time via
-    # lookup, which returns empty during a dry-run, so no metrics URLs appear in the output.
-    if [[ "$FLAGS" == *"--set metricsPort="* ]] && [[ "$mode" == "local" ]]; then
+    # Whenever metricsPort is set it must reach the router-metrics script
+    if [[ "$FLAGS" == *"--set metricsPort="* ]]; then
       port=$(grep -oE -- '--set metricsPort=[0-9]+' <<< "$FLAGS" | grep -oE '[0-9]+$')
-      if ! grep -q ":${port}/metrics" "$WORKDIR/rendered.yaml"; then
-        echo "FAIL: expected metricsPort=${port} to appear in the router-metrics URL for $tier / mode: $mode" >&2
+      if ! grep -q "PORT='${port}'" "$WORKDIR/rendered.yaml"; then
+        echo "FAIL: expected metricsPort=${port} to reach the router-metrics script for $tier / mode: $mode" >&2
         exit 1
       fi
     fi

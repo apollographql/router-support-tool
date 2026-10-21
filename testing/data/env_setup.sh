@@ -29,6 +29,10 @@ misconfigure_metrics() {
 case "$CONDITION" in
   healthy)
     ;;
+  selector-mismatch)
+    # The routers stay healthy; scenario.sh installs the chart with a selector that
+    # doesn't match them.
+    ;;
   some-metrics-misconfigured)
     set -- $(router_pods)
     misconfigure_metrics "$1"

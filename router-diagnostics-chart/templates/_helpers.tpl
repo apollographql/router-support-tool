@@ -1,24 +1,4 @@
 {{/*
-Renders one http collector per router pod matching the selector when the collection
-job runs in-cluster and can reach pod IPs directly. Pod IPs are resolved at Helm 
-render time.
-*/}}
-{{- define "router-diagnostics-chart.routerMetricsCollectors" -}}
-{{- $selector := .Values.selector | default "app.kubernetes.io/name=router" }}
-{{- $key := index (splitList "=" $selector) 0 }}
-{{- $value := index (splitList "=" $selector) 1 }}
-{{- $metricsPort := .Values.metricsPort | default 9090 }}
-{{- range (lookup "v1" "Pod" .Values.namespace "").items }}
-{{- if eq (index .metadata.labels $key) $value }}
-- http:
-    name: router-metrics-{{ .metadata.name }}
-    get:
-      url: http://{{ .status.podIP }}:{{ $metricsPort }}/metrics
-{{- end }}
-{{- end }}
-{{- end -}}
-
-{{/*
 mode: job's default pod annotations (disable Istio/Linkerd sidecar injection) — the
 single source of truth for both templates below, so the disabling values only ever
 need to be written in one place.
@@ -81,4 +61,13 @@ or provider: url with no existingSecret).
 {{- else if or (and .Values.job.storage.s3.accessKeyId .Values.job.storage.s3.secretAccessKey) .Values.job.storage.gcs.credentialsJson -}}
 router-diagnostics-storage-credentials
 {{- end -}}
+{{- end -}}
+
+{{/*
+Wraps a value in single quotes for the router-metrics shell script, escaping any single
+quote inside it. Helm's squote alone leaves an embedded ' unescaped, which would end the
+quoted string early.
+*/}}
+{{- define "router-diagnostics-chart.shellQuote" -}}
+{{- . | toString | replace "'" "'\\''" | squote -}}
 {{- end -}}

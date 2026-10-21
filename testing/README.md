@@ -53,7 +53,7 @@ infrastructure. `data/` holds the fixtures and scripts RTF's scenario runs:
   `chainsaw/scripts/verify_*.sh`).
 - **`env_setup.sh`** — puts the router fixture into the condition a given test matrix variant
   needs before collection runs (healthy, a misconfigured metrics exporter, a recently-restarted
-  pod).
+  pod, or healthy routers that the chart's default `selector` doesn't match).
 - **`router-manifest.yaml`**, **`mock-backend-manifest.yaml`**, **`mock_backend_server.py`** —
   the router deployment and a mock upload receiver the Job uploads its bundle to.
   `*-router-config*.yaml`, `*-expected-redacted-router-config.yaml` — per-variant router config
