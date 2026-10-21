@@ -370,13 +370,13 @@ if [ "$REDACTION" = "full" ]; then
   grep -q "x-sentinel-source-header" "$CONFIGMAP_JSON"
 
   # Response cache invalidation shared_key (specs/collection/data_sanitization/response_cache_invalidation_key.md) -
-  # block-style, quoted, and flow-style values. Only redaction-testing-router-config.yaml carries
-  # these: response_cache doesn't exist in the older routers the base matrix covers.
+  # block-style, quoted, and flow-style values, in redaction-testing-router-config.yaml. The Router 3
+  # fixture carries its own shared_key sentinel, checked above.
   if grep -qE "SENTINEL_RESPONSE_CACHE_SHARED_KEY" "$CONFIGMAP_JSON"; then
     echo "response_cache invalidation shared_key sentinel found unredacted in bundle" >&2
     exit 1
   fi
-  grep -q "ttl: 120s" "$CONFIGMAP_JSON"  # non-secret sibling field survives
+  grep -q "ttl: 60s" "$CONFIGMAP_JSON"  # non-secret sibling field survives (both fixtures set it on "all")
   grep -q "invalidation:" "$CONFIGMAP_JSON"
   # Each of the four set keys (block, quoted, flow, and last line with no trailing newline) must
   # carry the mask, spliced in where the value was.
