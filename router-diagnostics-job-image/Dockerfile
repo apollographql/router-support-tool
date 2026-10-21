@@ -6,7 +6,7 @@ FROM gcr.io/google.com/cloudsdktool/google-cloud-cli:${GCLOUD_VERSION}-alpine AS
 FROM alpine:3.24
 
 # renovate: datasource=repology depName=alpine_3_24/ca-certificates versioning=loose
-ARG CA_CERTIFICATES_VERSION="20260909-r0"
+ARG CA_CERTIFICATES_VERSION="20261020-r0"
 # renovate: datasource=repology depName=alpine_3_24/aws-cli versioning=loose
 ARG AWS_CLI_VERSION="2.34.63-r0"
 # renovate: datasource=repology depName=alpine_3_24/curl versioning=loose

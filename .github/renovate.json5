@@ -50,6 +50,13 @@
   ],
   packageRules: [
     {
+      description: "The Job image's pinned apk versions (the repology-sourced '# renovate:' ARGs in router-diagnostics-job-image/Dockerfile) get no release-age wait. Alpine drops a package's previous version from the branch the moment a new one lands, so any delay in proposing the bump leaves the exact pin unresolvable and the image build failing until it merges. They are also grouped into one PR: when Alpine updates several pinned packages at once, a PR per package would each fail the image build on the others' stale pins and none could merge alone.",
+      matchDatasources: ['repology'],
+      groupName: 'Job image apk packages',
+      groupSlug: 'job-image-apk',
+      minimumReleaseAge: null,
+    },
+    {
       description: "Keep each file's explicit helm_version matrix entries each pinned within their own major version.",
       matchFileNames: ['.github/workflows/static-checks.yaml', '.github/workflows/collect-integration-test.yaml'],
       matchCurrentValue: '/^3\\./',
