@@ -4,7 +4,7 @@
 
 `router.yaml`'s Redis cache config can carry a literal credential two ways: embedded in a connection URL (`redis://user:pass@host:6379`), or as separate `username`/`password` fields. Nothing in the router requires one over the other, and both can be set at once.
 
-The `configMap` collector captures `router.yaml` as written, so either form is collected into the bundle. This applies to all three Redis-backed caches — query-plan, APQ, and entity caching — which share the same config shape. Verified against `apollographql/router` at `v2.17.0`.
+The `configMap` collector captures `router.yaml` as written, so either form is collected into the bundle. This applies to all three Redis-backed caches — query-plan, APQ, and response caching (`response_cache`, which replaces the removed `preview_entity_cache` in Router 3) — which share the same config shape. Verified against `apollographql/router` at `v2.17.0`; the response cache and its Redis fields are also covered at `v3.0.0-preview.0`, where `response_cache.subgraph.all.redis` and `response_cache.subgraph.subgraphs.<name>.redis` carry the same URL and `username`/`password` fields.
 
 ## Redactor: embedded URL credentials
 
@@ -43,7 +43,7 @@ troubleshoot.sh's built-in redactors don't cover this shape, so it needs its own
 
 ### Notes
 
-- This pattern is deliberately not scoped to the Redis blocks specifically. Since `username:`/`password:` are generic key names it will also mask any other config field literally named `username`/`password` elsewhere in `router.yaml`, if one exists.
+- This pattern is deliberately not scoped to the Redis blocks specifically. Since `username:`/`password:` are generic key names it will also mask any other config field literally named `username`/`password` elsewhere in `router.yaml`, if one exists. That is also why it covers the response cache's Redis blocks without a rule of their own.
 
 **Required before this is considered done:** collect against a router with (a) a URL-embedded credential in both the `user:pass@` and pathless `:pass@` forms, (b) `username`/`password` as separate fields, quoted in one cache block and unquoted in another, and (c) at least one Redis-backed cache left unconfigured. Confirm every credential is masked, the fields above survive, and the unconfigured cache's absence is attributable rather than mistaken for a rule that failed to match.
 
