@@ -47,9 +47,9 @@ data:
             grpc:
               key: |
                 -----BEGIN EC PRIVATE KEY-----
-                MHcCAQEEILKPwQVyeMfux+nXAigxk/pd+ZtWpTTkmZG+2q3aDv4BoAoGCCqGSM49
-                AwEHoUQDQgAEw8FPJfapEzz15DXvrZLGz8EtfIFFFYg2Mju/bQRLolpRGyUox4ry
-                LW2szQ5JrqWFfha50aEkzDpQEQuwlmGnwg==
+                MHcCAQEEILT7hLTNnTYhG+FD64X9Zsvb6t7iPHQaT32KXMXhzr7LoAoGCCqGSM49
+                AwEHoUQDQgAEqU8Us1ADy03O5lJj0Cp25AbJGjD/qVabmlfDK+4WDTFJqvt1eH/C
+                8qdIzxniezIHyq9u+Z4KK1PMs937LMj7nw==
                 -----END EC PRIVATE KEY-----
       # specs/collection/data_sanitization/operation_bodies.md
       instrumentation:
