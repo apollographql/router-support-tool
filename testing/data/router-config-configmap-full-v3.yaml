@@ -74,14 +74,18 @@ data:
     # response_cache_invalidation_key.md. Router 3 only: v2 names this plugin
     # preview_response_cache. The router rejects a URL-embedded credential combined with
     # username/password on one cache, so each shape gets its own scope.
+    # Disabled so the router doesn't open a Redis pool or the invalidation listener in RTF;
+    # redaction only needs the keys to be present in the collected config. The plugin still
+    # validates its config at startup when disabled, hence the ttl below.
     response_cache:
-      enabled: true
+      enabled: false
       invalidation:
         listen: 127.0.0.1:4005
         path: /invalidation
       subgraph:
         all:
           enabled: true
+          ttl: 60s
           redis:
             urls:
               - "redis://cacheuser:SENTINEL_RESPONSE_CACHE_URL_PASSWORD@localhost:6393"
