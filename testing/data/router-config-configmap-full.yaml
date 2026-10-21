@@ -189,13 +189,14 @@ data:
     # Tests specs/collection/data_sanitization/response_cache_invalidation_key.md - the
     # invalidation shared_key in block style (all), quoted (per-subgraph override), and flow
     # style (per-subgraph override). Placed after override_subgraph_url so it is excluded from
-    # the byte-diff and checked by sentinel instead. The ttl is a non-secret sibling that must
-    # survive. Needs a Router version with response_cache (v2.17.0 here, not the base matrix).
+    # the byte-diff and checked by sentinel instead. The ttl is a non-secret sibling that must survive redaction.
+    # Needs a Router version with response_cache (v2.17.0 here, not the base matrix).
     response_cache:
       enabled: true
       subgraph:
         all:
           enabled: true
+          ttl: 60s
           redis:
             urls:
               - "redis://localhost:6393"
