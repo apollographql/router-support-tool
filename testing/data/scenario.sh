@@ -334,6 +334,14 @@ if [ "$REDACTION" = "full" ]; then
     exit 1
   fi
 
+  # Response cache and OTLP gRPC key sentinels - only the Router 3 fixture
+  # (redaction-testing-router-config-v3.yaml) carries these; on other versions they are
+  # absent, so the check passes trivially.
+  if grep -qE "SENTINEL_RESPONSE_CACHE_URL_PASSWORD|SENTINEL_RESPONSE_CACHE_REDIS_USERNAME|SENTINEL_RESPONSE_CACHE_REDIS_PASSWORD|SENTINEL_INVALIDATION_SHARED_KEY" "$CONFIGMAP_JSON"; then
+    echo "Response cache credential sentinel found unredacted in bundle" >&2
+    exit 1
+  fi
+
   # Header values redaction tests - only redaction-testing-router-config.yaml carries these
   # (see base-router-config.yaml for why: this schema changed incompatibly across versions).
   if grep -qE "SENTINEL_HEADER_INSERT_VALUE|SENTINEL_HEADER_INSERT_DEFAULT|SENTINEL_HEADER_PROPAGATE_DEFAULT" "$CONFIGMAP_JSON"; then
