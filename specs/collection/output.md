@@ -33,6 +33,8 @@ support-bundle-2026-08-11T14_23_00/
 ├── meta.json
 ├── host-collectors/
 │   └── run-host/
+│       ├── router-metrics.txt                 # the collector's own output, including why any metrics are missing
+│       ├── router-metrics-stderr.txt          # the script's stderr, only present if it wrote any
 │       └── router-metrics/
 │           └── pods/
 │               └── <router-pod-name>.txt
@@ -71,4 +73,4 @@ host-collectors/run-host/
         └── router-9ad.txt
 ```
 
-Each file is that pod's raw `/metrics` response, in Prometheus text format. A pod with no file was not scraped; the collector's own output carries the line saying why (`specs/collection/base_spec.md` → Per-pod metrics collection lists each case). There is no top-level `router-metrics-<pod-name>/` directory in either mode.
+Each file is that pod's raw `/metrics` response, in Prometheus text format. A pod with no file was not scraped; the collector's own output carries the line saying why (`specs/collection/base_spec.md` → Per-pod metrics collection lists each case). The script's stderr, such as `kubectl`'s own error when it can't list pods, is saved beside that output as `host-collectors/run-host/router-metrics-stderr.txt`, and only when the script wrote anything to stderr. There is no top-level `router-metrics-<pod-name>/` directory in either mode.

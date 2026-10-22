@@ -60,13 +60,14 @@ Each pod's scrape is written to its own `<pod-name>.txt` file, in Prometheus tex
 host-collectors/run-host/
 ├── router-metrics-info.json
 ├── router-metrics.txt
+├── router-metrics-stderr.txt
 └── router-metrics/
     └── pods/
         ├── <pod-name>.txt
         └── <pod-2-name>.txt
 ```
 
-`router-metrics.txt` holds the script's own output: one line for each pod it couldn't scrape, or for why it couldn't scrape any. Go to [If metrics are missing](#if-metrics-are-missing) for what each line means.
+`router-metrics.txt` holds the script's own output: one line for each pod it couldn't scrape, or for why it couldn't scrape any. Go to [If metrics are missing](#if-metrics-are-missing) for what each line means. `router-metrics-stderr.txt` holds the script's stderr, such as the error `kubectl` returned when it couldn't list pods. It is only present if the script wrote to stderr.
 
 A second file, `router-metrics-info.json`, is fully masked. troubleshoot.sh writes this diagnostic sidecar for every `hostCollectors.run` collector and it records the full exec invocation, including the process environment collection ran with: your own shell under `mode: local`, or the Job's container under `mode: job`. Two things limit what ends up in your bundle: the chart sets `ignoreParentEnvs: true`, which narrows that captured environment down to just `PATH`/`KUBECONFIG`/`PWD` before the file is even written, and a redactor masks the entire file's contents.
 

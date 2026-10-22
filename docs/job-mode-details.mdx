@@ -90,6 +90,7 @@ support-bundle-2026-08-11T14_23_00/
 │   └── run-host/
 │       ├── router-metrics-info.json                               # masked wholesale — see Collecting Metrics
 │       ├── router-metrics.txt                                     # the collector's own output, including why any metrics are missing
+│       ├── router-metrics-stderr.txt                              # the script's stderr, only present if it wrote any
 │       └── router-metrics/
 │           └── pods/
 │               ├── <pod-name>.txt
@@ -114,6 +115,7 @@ support-bundle-2026-08-11T14_23_00/
 
 - **`host-collectors/run-host/router-metrics/pods/`** — one `<pod-name>.txt` per router pod matching `selector` that responded, holding that pod's Prometheus metrics. Go to [Collecting Metrics → Where metrics land in the bundle](/router-support-tool/collecting-metrics#where-metrics-land-in-the-bundle) for details.
 - **`host-collectors/run-host/router-metrics.txt`** — the metrics collector's own output, separate from the per-pod files. It has one line for each pod that couldn't be scraped, or for why no pod could be. Go to [Collecting Metrics → If metrics are missing](/router-support-tool/collecting-metrics#if-metrics-are-missing) for what each line means.
+- **`host-collectors/run-host/router-metrics-stderr.txt`** — the metrics collector's stderr, such as the error `kubectl` returned when it couldn't list pods. It is only present if the script wrote to stderr. Go to [Collecting Metrics → If metrics are missing](/router-support-tool/collecting-metrics#if-metrics-are-missing).
 - **`host-collectors/run-host/router-metrics-info.json`** — a diagnostic sidecar troubleshoot.sh writes for the metrics collector. Its contents are fully masked.
 - The file under `configmaps/production/` is named after the matched ConfigMap's own Kubernetes name, on the official chart these happen to coincide, since that chart names the ConfigMap after the release, but a raw-manifest or custom deployment has no Helm release of the router at all. If more than one ConfigMap matched the label selector in `production`, `configmaps/production/` becomes multiple files, one per ConfigMap:
 
