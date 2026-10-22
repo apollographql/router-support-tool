@@ -2,10 +2,16 @@ name: Test with RTF
 
 # Builds the Job image and runs RTF against it
 on:
-  pull_request: {}
+  pull_request:
+    paths-ignore:
+      - .changeset/**
+      - docs/**
   push:
     branches:
       - main
+    paths-ignore:
+      - .changeset/**
+      - docs/**
 
 jobs:
   build_job_image:
