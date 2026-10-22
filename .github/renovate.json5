@@ -67,6 +67,8 @@
       groupName: 'Job image apk packages',
       groupSlug: 'job-image-apk',
       minimumReleaseAge: null,
+    },
+    {
       description: 'Keep the Router 3 preview pin on the 3.x line so it is not proposed a Router 2 release.',
       matchFileNames: ['.github/workflows/collect-integration-test.yaml'],
       matchDepNames: ['apollographql/router'],
