@@ -23,6 +23,25 @@ misconfigure_metrics() {
   test -n "$healthy_path"
   test -n "$degraded_path"
   kubectl exec "$pod" -n "$NAMESPACE" -- cp "$degraded_path" "$healthy_path"
+  wait_for_metrics_disabled "$pod"
+}
+
+# The router applies the swapped-in config through --hot-reload's file watcher.
+# Without this wait, collection can scrape the pod before Prometheus is disabled
+# so a scenario that expects a non-responding pod sees every pod respond and fails 
+# intermittently.
+wait_for_metrics_disabled() {
+  pod="$1"
+  ip=$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.status.podIP}')
+  test -n "$ip"
+  for _ in $(seq 1 60); do
+    if ! curl -s --max-time 2 "http://$ip:9090/metrics" | grep -q '# HELP'; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "pod $pod still serving metrics 60s after its config was swapped to the degraded variant" >&2
+  return 1
 }
 
 # Put the environment into the shape this matrix variant needs.
