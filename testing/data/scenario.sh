@@ -388,6 +388,13 @@ if [ "$REDACTION" = "full" ]; then
   grep -qE 'invalidation:\\n +enabled: true\\n +shared_key: \*\*\*HIDDEN\*\*\*' "$CONFIGMAP_JSON"
   # An empty shared_key is the schema default and means "unset", so it must not be mangled.
   grep -qF 'shared_key: \"\"' "$CONFIGMAP_JSON"
+  # The redactor has no fileSelector so we look everywhere.
+  LEAKED_IN=$(grep -rlE "SENTINEL_(RESPONSE_CACHE_SHARED_KEY|INVALIDATION_SHARED_KEY)" "$BUNDLE_DIR" || true)
+  if [ -n "$LEAKED_IN" ]; then
+    echo "response_cache shared_key sentinel found unredacted in:" >&2
+    echo "$LEAKED_IN" >&2
+    exit 1
+  fi
 fi
 
 tar tzf /tmp/bundle.tar.gz > /tmp/bundle-contents.txt

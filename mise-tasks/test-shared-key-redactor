@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+#MISE description="Run the response_cache shared_key redactor's patterns over every shape the key can take"
+#
+# specs/collection/data_sanitization/response_cache_invalidation_key.md. The patterns are
+# read from the rendered chart rather than copied here, so a change to them is what gets
+# tested. This is the only place the raw quoted shape (`shared_key: "x"`, which a YAML
+# serializer produces for values that look like numbers or booleans) is exercised: RTF's
+# collected ConfigMap is JSON-wrapped, so it only ever holds the escaped `\"x\"` form.
+#
+# The shapes live in scripts/test_shared_key_redactor.py. troubleshoot.sh runs the patterns
+# with Go's RE2 and that script runs them with Python's re, which agree for these patterns.
+set -euo pipefail
+
+CHART_PATH="router-diagnostics-chart"
+REDACTOR_NAME="router-response-cache-invalidation-shared-key"
+
+WORKDIR=$(mktemp -d)
+trap 'rm -rf "$WORKDIR"' EXIT
+
+helm template ci-test "$CHART_PATH" --set namespace=ci-test --set mode=local \
+  --show-only templates/base-spec-configmap.yaml \
+  | yq '.data["redactor-spec"]' \
+  | yq -o=json ".spec.redactors[] | select(.name == \"$REDACTOR_NAME\") | .removals.regex[].redactor" \
+  | jq -r . > "$WORKDIR/patterns"
+
+if [ ! -s "$WORKDIR/patterns" ]; then
+  echo "FAIL: no patterns found for redactor $REDACTOR_NAME in the rendered spec" >&2
+  exit 1
+fi
+
+python3 scripts/test_shared_key_redactor.py "$WORKDIR/patterns"
