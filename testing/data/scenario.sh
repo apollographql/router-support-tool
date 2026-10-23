@@ -402,6 +402,13 @@ $FOUND_IN"
     echo "unredacted sentinels found in the bundle:$LEAKS" >&2
     exit 1
   fi
+
+  # Router 2.19.0 adds response_cache.connector (redaction-testing-router-config-v2.19.yaml). Its
+  # shared_key and Redis credential sentinels are covered by the sweep above; this only checks
+  # that the non-secret source name survives. It is absent from every other fixture.
+  if grep -q "SENTINEL_RESPONSE_CACHE_CONNECTOR" "$ROUTER_CONFIG_CONFIGMAP"; then
+    grep -q "accounts.rest_api" "$CONFIGMAP_JSON"
+  fi
 fi
 
 tar tzf /tmp/bundle.tar.gz > /tmp/bundle-contents.txt

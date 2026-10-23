@@ -1,10 +1,9 @@
-# Used for every router_version except v2.17.0 in the RTF test plan's matrix.
+# Used for router_version's prior to v2.17.0 in the RTF test plan's matrix.
 # redaction-testing-router-config.yaml exhaustively exercises every redaction rule, but its schema
 # isn't stable across the whole router_version range. For example, headers.all.request's shape
 # changed between v2.4.0 and v2.17.0 with no syntax valid on both (confirmed via
 # `router config validate`), so header redaction is the one category this file can't cover.
-# Every other category is covered, with a config confirmed schema-valid on v2.4.0, v2.10.1,
-# v2.13.0, and v2.17.0.
+# Every other category is covered.
 supergraph:
   listen: 0.0.0.0:4000
 

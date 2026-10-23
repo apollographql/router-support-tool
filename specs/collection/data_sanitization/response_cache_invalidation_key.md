@@ -8,6 +8,7 @@ The field lives at:
 
 - **`response_cache.subgraph.all.invalidation.shared_key`**
 - **`response_cache.subgraph.subgraphs.<name>.invalidation.shared_key`** — a per-subgraph override.
+- **`response_cache.connector.all.invalidation.shared_key`** and **`response_cache.connector.sources.<subgraph>.<source>.invalidation.shared_key`**. The connector's `invalidation` block reuses the subgraph config type (`SubgraphInvalidationConfig` in `plugins/response_cache/connectors.rs`).
 
 Verified against `apollographql/router` at `v2.17.0` (the field exists in `plugins/response_cache/plugin.rs`) and `v3.0.0-preview.0` (the generated config schema marks it `x-apollo-secret: true`, with a default of `""`).
 
@@ -53,7 +54,8 @@ Collect against a router (Router 2.x and the 3.0 preview) with `response_cache` 
 - a different sentinel in one `subgraph.subgraphs.<name>.invalidation` override (quoted),
 - a third in flow style,
 - a case with `shared_key` as the last line of `router.yaml` with no trailing newline,
-- another subgraph with the key unset or `""`.
+- another subgraph with the key unset or `""`,
+- on Router `v2.19.0`+, a sentinel in `connector.all.invalidation` and a quoted one in a `connector.sources.<subgraph>.<source>.invalidation` override.
 
 Confirm every sentinel is absent, the other `invalidation` fields (`enabled`, `indexes`) survive in the block-style cases, and the unset subgraph is not mangled (no mask spliced into `shared_key: ""`). Also confirm masking on the non-ConfigMap surface: the `last-applied-configuration` annotation (deploy with `kubectl apply`), by searching the whole extracted bundle for the sentinels. The base spec has no `helm` collector, so there is no `helm/*.json` surface to check.
 

@@ -21,7 +21,7 @@ Detail lives with the layer it belongs to:
 
 ## Supported router versions
 
-Apollo Router **2.4.0 through the 3.0.0 preview** (`v3.0.0-preview.0`) are supported. The versions the RTF plan runs against are the evidence: 2.4.0, 2.10.1, 2.13.0 and 2.17.0, and the 3.0 preview, listed in `testing/test-plan.yaml`. The plan is the source of truth for what is tested, so a version bump there is a version-support change and updates this section.
+Apollo Router **2.4.0 through 3.0.0 preview** (`v3.0.0-preview.0`) are supported. The versions the RTF plan runs against are the evidence: 2.4.0, 2.10.1, 2.13.0, 2.17.0, 2.19.0, and 3.0 preview, listed in `testing/test-plan.yaml`. The plan is the source of truth for what is tested, so a version bump there is a version-support change and updates this section.
 
 What this does **not** claim:
 
