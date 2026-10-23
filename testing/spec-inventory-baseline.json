@@ -82,6 +82,11 @@
   {
     "kind": "redactor",
     "type": "redactor",
+    "name": "router-response-cache-invalidation-shared-key"
+  },
+  {
+    "kind": "redactor",
+    "type": "redactor",
     "name": "router-subgraph-aws-sigv4-hardcoded"
   },
   {

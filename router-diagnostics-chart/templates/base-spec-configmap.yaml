@@ -175,6 +175,14 @@ data:
               - redactor: '(username:\s*\\?"?)(?P<mask>[^"\\\n]+?)(\\?"?\\n)'
               - redactor: '(password:\s*\\?"?)(?P<mask>[^"\\\n]+?)(\\?"?\\n)'
 
+        # specs/collection/data_sanitization/response_cache_invalidation_key.md
+        - name: router-response-cache-invalidation-shared-key
+          removals:
+            regex:
+              - redactor: '(shared_key:\s*(?:\\?")?)(?P<mask>[^"\\\s][^"\\]*)(\\?"?)'
+              - redactor: '("shared_key":\s*")(?P<mask>[^"\\]+)(")'
+              - redactor: '(\\"shared_key\\":\s*\\")(?P<mask>[^"\\]+)(\\")'
+
         # specs/collection/data_sanitization/tls_private_keys.md
         - name: router-tls-private-keys
           removals:
