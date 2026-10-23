@@ -19,14 +19,14 @@ Single-line `regex` with a `mask` capture group. Three patterns, one per shape t
 - name: router-response-cache-invalidation-shared-key
   removals:
     regex:
-      - redactor: '(shared_key:\s*(?:\\")?)(?P<mask>[^"\\\s][^"\\]*)(\\?"?)'
+      - redactor: '(shared_key:\s*(?:\\?")?)(?P<mask>[^"\\\s][^"\\]*)(\\?"?)'
       - redactor: '("shared_key":\s*")(?P<mask>[^"\\]+)(")'
       - redactor: '(\\"shared_key\\":\s*\\")(?P<mask>[^"\\]+)(\\")'
 ```
 
 | Pattern | Shape it matches | Where it shows up |
 | --- | --- | --- |
-| 1 | YAML text: `shared_key: x`, either raw or inside a JSON-escaped string | `router.yaml` in `cluster-resources/configmaps/*.json` and `configmaps/*/*.json`; `helm/*.json` once a `yamlPath` rule has re-serialized it as YAML |
+| 1 | YAML text: `shared_key: x` or `shared_key: "x"`, either raw or inside a JSON-escaped string (`\"x\"`) | `router.yaml` in `cluster-resources/configmaps/*.json` and `configmaps/*/*.json`; `helm/*.json` once a `yamlPath` rule has re-serialized it as YAML |
 | 2 | Pretty or compact JSON: `"shared_key": "x"` | Structured JSON output, such as the `helm` collector's values |
 | 3 | JSON inside a JSON string: `\"shared_key\":\"x\"` | The `kubectl.kubernetes.io/last-applied-configuration` annotation |
 
@@ -35,6 +35,8 @@ Single-line `regex` with a `mask` capture group. Three patterns, one per shape t
 - **Deliberately has no `fileSelector` so it runs against every file in the bundle.** This matches `redis_credentials.md`'s URL rule and `secret_shaped_env_vars.md`, and is what reaches the `helm` collector's output and the annotation without enumerating those paths. `shared_key` appears exactly once in the `v3.0.0-preview.0` config schema, so over-redaction is unlikely. A `shared_key:` in unrelated output, such as a CRD schema example, is masked the same as a real one.
 
 - **One pattern covers block and flow style.** The mask stops at the first `"` or `\`, so it ends at a closing quote or at the literal `\n` that ends a block-style line, and needs no key-order modelling. Flow style still matches. The value does not need to be followed by a newline, so a `router.yaml` whose last line is the `shared_key` (a `|-` block scalar strips the trailing newline) is masked.
+
+- **A quoted value is masked whether the quotes are plain or JSON-escaped.** The optional opening quote is `\\?"`, so both `shared_key: "x"` (YAML re-serialized, where a serializer quotes values that look like numbers or booleans) and `shared_key: \"x\"` (inside a JSON string, the `router.yaml` ConfigMap form) match.
 
 - **An empty or absent key is left alone.** `shared_key: ""` (the schema default), `"shared_key": ""` and a bare `shared_key:` do not match, in any of the three patterns. A bundle whose `invalidation` block shows `shared_key: ""` means no key was set.
 

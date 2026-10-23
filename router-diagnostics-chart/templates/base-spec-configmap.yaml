@@ -179,7 +179,7 @@ data:
         - name: router-response-cache-invalidation-shared-key
           removals:
             regex:
-              - redactor: '(shared_key:\s*(?:\\")?)(?P<mask>[^"\\\s][^"\\]*)(\\?"?)'
+              - redactor: '(shared_key:\s*(?:\\?")?)(?P<mask>[^"\\\s][^"\\]*)(\\?"?)'
               - redactor: '("shared_key":\s*")(?P<mask>[^"\\]+)(")'
               - redactor: '(\\"shared_key\\":\s*\\")(?P<mask>[^"\\]+)(\\")'
 

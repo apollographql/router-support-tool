@@ -177,7 +177,8 @@ authentication:
 
 # Tests specs/collection/data_sanitization/response_cache_invalidation_key.md - the
 # invalidation shared_key in block style (all), quoted (per-subgraph override), and flow
-# style (per-subgraph override). Placed after override_subgraph_url so it is excluded from
+# style (per-subgraph override), plus a subgraph with the key set to "" (must be left
+# alone) and one whose shared_key is the last line of the file. Placed after override_subgraph_url so it is excluded from
 # the byte-diff and checked by sentinel instead. The ttl is a non-secret sibling that must
 # survive.
 response_cache:
@@ -201,3 +202,9 @@ response_cache:
           shared_key: "SENTINEL_RESPONSE_CACHE_SHARED_KEY_QUOTED"
       inventory:
         invalidation: { enabled: true, shared_key: SENTINEL_RESPONSE_CACHE_SHARED_KEY_FLOW }
+      products:
+        invalidation: { enabled: true, shared_key: "" }
+      reviews:
+        invalidation:
+          enabled: true
+          shared_key: SENTINEL_RESPONSE_CACHE_SHARED_KEY_LAST

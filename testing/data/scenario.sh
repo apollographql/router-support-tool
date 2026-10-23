@@ -353,6 +353,14 @@ if [ "$REDACTION" = "full" ]; then
   fi
   grep -q "ttl: 120s" "$CONFIGMAP_JSON"  # non-secret sibling field survives
   grep -q "invalidation:" "$CONFIGMAP_JSON"
+  # Each of the four set keys (block, quoted, flow, and last line with no trailing newline) must
+  # carry the mask, spliced in where the value was.
+  MASKED_KEYS=$(grep -oE 'shared_key: (\\")?\*\*\*HIDDEN\*\*\*' "$CONFIGMAP_JSON" | wc -l)
+  [ "$MASKED_KEYS" -eq 4 ] || { echo "expected 4 masked shared_keys, got $MASKED_KEYS" >&2; exit 1; }
+  # The sibling `enabled` survives next to a masked block-style key.
+  grep -qE 'invalidation:\\n +enabled: true\\n +shared_key: \*\*\*HIDDEN\*\*\*' "$CONFIGMAP_JSON"
+  # An empty shared_key is the schema default and means "unset", so it must not be mangled.
+  grep -qF 'shared_key: \"\"' "$CONFIGMAP_JSON"
 fi
 
 tar tzf /tmp/bundle.tar.gz > /tmp/bundle-contents.txt

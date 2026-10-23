@@ -28,7 +28,7 @@ misconfigure_metrics() {
 
 # The router applies the swapped-in config through --hot-reload's file watcher.
 # Without this wait, collection can scrape the pod before Prometheus is disabled
-# so a scenario that expects a non-responding pod sees every pod respond and fails 
+# so a scenario that expects a non-responding pod sees every pod respond and fails
 # intermittently.
 wait_for_metrics_disabled() {
   pod="$1"

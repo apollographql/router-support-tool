@@ -10,7 +10,7 @@ metadata:
   labels:
     app: router
 data:
-  router.yaml: |
+  router.yaml: |-
     supergraph:
       listen: 0.0.0.0:4000
       # Tests specs/collection/data_sanitization/redis_credentials.md - URL-embedded credentials
@@ -188,7 +188,8 @@ data:
 
     # Tests specs/collection/data_sanitization/response_cache_invalidation_key.md - the
     # invalidation shared_key in block style (all), quoted (per-subgraph override), and flow
-    # style (per-subgraph override). Placed after override_subgraph_url so it is excluded from
+    # style (per-subgraph override), plus a subgraph with the key set to "" (must be left
+    # alone). Placed after override_subgraph_url so it is excluded from
     # the byte-diff and checked by sentinel instead. The ttl is a non-secret sibling that must survive redaction.
     # Needs a Router version with response_cache (v2.17.0 here, not the base matrix).
     response_cache:
@@ -212,6 +213,12 @@ data:
               shared_key: "SENTINEL_RESPONSE_CACHE_SHARED_KEY_QUOTED"
           inventory:
             invalidation: { enabled: true, shared_key: SENTINEL_RESPONSE_CACHE_SHARED_KEY_FLOW }
+          products:
+            invalidation: { enabled: true, shared_key: "" }
+          reviews:
+            invalidation:
+              enabled: true
+              shared_key: SENTINEL_RESPONSE_CACHE_SHARED_KEY_LAST
   supergraph.graphql: |
     schema
         @link(url: "https://specs.apollo.dev/link/v1.0")
