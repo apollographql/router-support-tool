@@ -9,13 +9,14 @@ This directory is where Apollo's custom redactors are specified, one file per se
 | GraphQL operation bodies reaching router logs | `operation_bodies.md` |
 | Subgraph routing URLs | `subgraph_urls.md` |
 | Redis credentials embedded in cache URLs | `redis_credentials.md` |
-| TLS private keys (`tls.supergraph`, `tls.subgraph.*`, `tls.connector.*`) | `tls_private_keys.md` |
+| Response cache invalidation shared key (`response_cache.subgraph.*.invalidation.shared_key`) | `response_cache_invalidation_key.md` |
+| TLS private keys (`tls.supergraph`, `tls.subgraph.*`, `tls.connector.*`, and the OTLP gRPC client `key`) | `tls_private_keys.md` |
 | `APOLLO_KEY` and GraphOS-key-shaped values in pod specs | `secret_shaped_env_vars.md` |
 | The collecting operator's own machine environment via a host-collector's diagnostic sidecar | `host_collector_diagnostics.md` |
 
 ## The general limit: env-indirected secrets outside `router.yaml`
 
-A secret a customer keeps out of `router.yaml` via `${env.*}` indirection, and sets as a literal pod-spec env value, is only covered on that surface if it matches a redactor specifically written for it, currently `APOLLO_KEY`/any `*_KEY`-named var (`secret_shaped_env_vars.md`), Redis URL-embedded credentials (`redis_credentials.md`), and TLS private keys (`tls_private_keys.md`). Everything else this directory protects in `router.yaml` because no recognizable value format exists to mask by and no fixed env var name exists to key on.
+A secret a customer keeps out of `router.yaml` via `${env.*}` indirection, and sets as a literal pod-spec env value, is only covered on that surface if it matches a redactor specifically written for it, currently `APOLLO_KEY`/any `*_KEY`-named var (`secret_shaped_env_vars.md`), Redis URL-embedded credentials (`redis_credentials.md`), and TLS private keys (`tls_private_keys.md`). The `response_cache` invalidation `shared_key` (`response_cache_invalidation_key.md`) is a `router.yaml` field redactor only; indirected through an env var it is covered only if the var's name ends in `KEY` or `PASS`. Everything else this directory protects in `router.yaml` because no recognizable value format exists to mask by and no fixed env var name exists to key on.
 
 ## Built-in redactors
 

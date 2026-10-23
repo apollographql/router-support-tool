@@ -2,11 +2,12 @@
 
 ## The Problem
 
-`tls.*` in `router.yaml` has three separate private-key locations, all PEM-encoded. Verified against `apollographql/router` at `v2.17.0`:
+`tls.*` in `router.yaml` has three separate private-key locations, all PEM-encoded, plus a fourth outside `tls.*` (below). Verified against `apollographql/router` at `v2.17.0`:
 
 - **`tls.supergraph.key`** — the router's own server private key, backing the GraphQL endpoint's TLS listener. [`mod.rs#L1227-L1240`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/configuration/mod.rs#L1227)
 - **`tls.subgraph.all.client_authentication.key`** and **`tls.subgraph.subgraphs.<name>.client_authentication.key`** — the router's client private key for mTLS to subgraphs. `.all` applies globally, `.subgraphs.<name>` overrides per subgraph. [`mod.rs#L1375-L1386`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/configuration/mod.rs#L1375), shape from [`subgraph.rs#L77-L89`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/configuration/subgraph.rs#L77)
 - **`tls.connector.all.client_authentication.key`** and **`tls.connector.sources.<name>.client_authentication.key`** — same shape, for Apollo Connectors' outgoing mTLS. Note the field is `sources`, not `subgraphs`. [`connector.rs#L7-L20`](https://github.com/apollographql/router/blob/v2.17.0/apollo-router/src/configuration/connector.rs#L7)
+- **`telemetry.exporters.metrics.otlp.grpc.key`** and **`telemetry.exporters.tracing.otlp.grpc.key`** — the client private key for the OTLP exporter's gRPC TLS. Router 3 marks both `x-apollo-secret: true` in its configuration schema (checked at `v3.0.0-preview.0`). The value is a PEM block, so the rule below masks it without a field-specific pattern.
 
 **What's adjacent but not sensitive:** `tls.supergraph.certificate`/`.certificate_chain`, and `tls.{subgraph,connector}.*.certificate_authorities`. These are certificates and CA trust anchors — public by design, not private key material. See [What's deliberately left visible](#whats-deliberately-left-visible).
 
