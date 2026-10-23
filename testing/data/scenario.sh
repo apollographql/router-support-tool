@@ -343,6 +343,16 @@ if [ "$REDACTION" = "full" ]; then
   grep -q "x-sentinel-static" "$CONFIGMAP_JSON"       # header names survive
   grep -q "x-sentinel-frombody" "$CONFIGMAP_JSON"
   grep -q "x-sentinel-source-header" "$CONFIGMAP_JSON"
+
+  # Response cache invalidation shared_key (specs/collection/data_sanitization/response_cache_invalidation_key.md) -
+  # block-style, quoted, and flow-style values. Only redaction-testing-router-config.yaml carries
+  # these: response_cache doesn't exist in the older routers the base matrix covers.
+  if grep -qE "SENTINEL_RESPONSE_CACHE_SHARED_KEY" "$CONFIGMAP_JSON"; then
+    echo "response_cache invalidation shared_key sentinel found unredacted in bundle" >&2
+    exit 1
+  fi
+  grep -q "ttl: 120s" "$CONFIGMAP_JSON"  # non-secret sibling field survives
+  grep -q "invalidation:" "$CONFIGMAP_JSON"
 fi
 
 tar tzf /tmp/bundle.tar.gz > /tmp/bundle-contents.txt
