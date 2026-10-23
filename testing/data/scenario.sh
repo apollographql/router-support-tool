@@ -286,9 +286,18 @@ grep -qF 'name: \"accounts\"' "$CONFIGMAP_JSON"
 # @link pins the federation spec version, not a customer host - stays unredacted
 grep -qF 'specs.apollo.dev/link' "$CONFIGMAP_JSON"
 
-# TLS private keys - all three key locations masked, certificates/chains untouched.
+# TLS private keys - every private key in the fixture is masked, certificates/chains untouched.
+# The expected count is read from the variant's own expected-redacted config rather than
+# hardcoded, since variants carry different numbers of keys: three (supergraph, subgraph,
+# connector) everywhere, plus the OTLP gRPC client key in the Router 3 fixture. The positive
+# control comes first: an expected fixture with no masked keys would make the check vacuous.
+EXPECTED_KEY_COUNT=$(grep -c -- 'PRIVATE KEY-----\*\*\*HIDDEN\*\*\*-----END' "$EXPECTED_REDACTED_ROUTER_CONFIG" || true)
+test "$EXPECTED_KEY_COUNT" -ge 3
 KEY_COUNT=$(grep -o -- '-----BEGIN EC PRIVATE KEY-----[^-]*-----END EC PRIVATE KEY-----' "$CONFIGMAP_JSON" | grep -c '\*\*\*HIDDEN\*\*\*')
-test "$KEY_COUNT" -eq 3
+if [ "$KEY_COUNT" -ne "$EXPECTED_KEY_COUNT" ]; then
+  echo "expected $EXPECTED_KEY_COUNT masked private keys in the collected router.yaml, found $KEY_COUNT" >&2
+  exit 1
+fi
 grep -q -- "-----BEGIN CERTIFICATE-----" "$CONFIGMAP_JSON"
 
 # Operation bodies - the request/response bodies logged for the sentinel operation
@@ -334,6 +343,22 @@ if [ "$REDACTION" = "full" ]; then
     exit 1
   fi
 
+  # Response cache and OTLP gRPC key sentinels - only the Router 3 fixture
+  # (redaction-testing-router-config-v3.yaml) carries these; on other versions they are
+  # absent, so the check passes trivially.
+  if grep -qE "SENTINEL_RESPONSE_CACHE_URL_PASSWORD|SENTINEL_RESPONSE_CACHE_REDIS_USERNAME|SENTINEL_RESPONSE_CACHE_REDIS_PASSWORD|SENTINEL_INVALIDATION_SHARED_KEY" "$CONFIGMAP_JSON"; then
+    echo "Response cache credential sentinel found unredacted in bundle" >&2
+    exit 1
+  fi
+
+  # OTLP gRPC client key (telemetry.exporters.*.otlp.grpc.key) - only the Router 3 fixture
+  # carries it, with key material distinct from the three tls.* keys, so its absence here is
+  # evidence this key itself was masked rather than a copy of another masked key.
+  if grep -q "AwEHoUQDQgAEqU8Us1ADy03O5lJj0Cp25AbJGjD" "$CONFIGMAP_JSON"; then
+    echo "OTLP gRPC TLS private key found unredacted in bundle" >&2
+    exit 1
+  fi
+
   # Header values redaction tests - only redaction-testing-router-config.yaml carries these
   # (see base-router-config.yaml for why: this schema changed incompatibly across versions).
   if grep -qE "SENTINEL_HEADER_INSERT_VALUE|SENTINEL_HEADER_INSERT_DEFAULT|SENTINEL_HEADER_PROPAGATE_DEFAULT" "$CONFIGMAP_JSON"; then
@@ -345,13 +370,13 @@ if [ "$REDACTION" = "full" ]; then
   grep -q "x-sentinel-source-header" "$CONFIGMAP_JSON"
 
   # Response cache invalidation shared_key (specs/collection/data_sanitization/response_cache_invalidation_key.md) -
-  # block-style, quoted, and flow-style values. Only redaction-testing-router-config.yaml carries
-  # these: response_cache doesn't exist in the older routers the base matrix covers.
+  # block-style, quoted, and flow-style values, in redaction-testing-router-config.yaml. The Router 3
+  # fixture carries its own shared_key sentinel, checked above.
   if grep -qE "SENTINEL_RESPONSE_CACHE_SHARED_KEY" "$CONFIGMAP_JSON"; then
     echo "response_cache invalidation shared_key sentinel found unredacted in bundle" >&2
     exit 1
   fi
-  grep -q "ttl: 120s" "$CONFIGMAP_JSON"  # non-secret sibling field survives
+  grep -q "ttl: 60s" "$CONFIGMAP_JSON"  # non-secret sibling field survives (both fixtures set it on "all")
   grep -q "invalidation:" "$CONFIGMAP_JSON"
 fi
 
