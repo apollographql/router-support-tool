@@ -6,7 +6,7 @@ description: What has to be true for the GraphOS Router Support Tool to collect 
 
 import NodeMetricsRBAC from './resources/nodemetrics-rbac.mdx';
 
-A full Prometheus metrics snapshot, from **every matching router pod individually**, is one of the signals the base spec collects, through the [`http` collector](https://troubleshoot.sh/docs/collect/http) (`mode: job`) or a `hostCollectors.run` script (`mode: local`). This page covers everything specific to getting that signal: what has to be true on your router's side, how each mode reaches each pod, and what changes if you're running a service mesh.
+A full Prometheus metrics snapshot, from **every matching router pod individually**, is collected. Both modes collect it with a `hostCollectors.run` script named `router-metrics` that finds your router pods and scrapes each one. This page covers everything specific to getting that signal: what has to be true on your router's side, how each pod is reached, where the metrics land in the bundle, what to do when they're missing, and what changes if you're running a service mesh.
 To understand how this snapshot works alongside all other data the tool gathers, go to [Data Collected](/router-support-tool/data-collected).
 
 ## Prerequisites on the router's side
@@ -16,39 +16,72 @@ Two settings need to be in place:
 - **`telemetry.exporters.metrics.prometheus.enabled: true`** in `router.yaml`: turns the exporter on.
 - **`telemetry.exporters.metrics.prometheus.listen`** in `router.yaml`: The bind address. Binding the exporter to loopback means an external scrape can't reach the exporter, no matter what port the collector targets.
 
-If either is turned off or misconfigured, this section of the bundle returns empty, but the rest of the bundle is unaffected.
+If either is turned off or misconfigured, the bundle has no metrics files and says why instead. The rest of the bundle is unaffected. Go to [If metrics are missing](#if-metrics-are-missing) for how to read that explanation.
 
 ## Which pods get scraped
 
-`selector` controls which pods are targeted for metrics. It defaults to `app.kubernetes.io/name=router`, the official Apollo router chart's own label. Otherwise, the `selector` that Raw-manifest / custom deployments set is used. Override `metricsPort` if your exporter listens somewhere other than `9090`.
+`selector` controls which pods are scraped for metrics. It defaults to `app.kubernetes.io/name=router`, the official Apollo router chart's own label. Raw-manifest and custom deployments set their own `selector`. The same `selector` also decides which pods' logs are collected and, unless you set `configMapName`, which ConfigMap is collected. Override `metricsPort` if your exporter listens somewhere other than `9090`.
 
-If no pods match `selector` at collection time, no metrics collectors are emitted and this section is simply absent from the bundle.
+The pods are found **each time collection runs**. Each run lists the pods that currently match `selector` in your namespace and scrapes those:
+
+- Collection works the same whether you installed the chart with `helm install` or deployed it through ArgoCD or any other tool that only renders the chart's templates
+- Pods replaced since you installed the chart, for example by a rollout, are scraped under their new names
+
+### If your router's chart name was overridden
+
+On the official Apollo router Helm chart, setting `router.nameOverride`, or installing the chart under an alias, changes the value of the pod's `app.kubernetes.io/name` label, so the default `selector` no longer matches anything. To find the label your router pods actually carry:
+
+```bash
+kubectl get pods --namespace production --show-labels
+```
+
+and set `selector` to match it when you install this chart, for example `--set selector="app.kubernetes.io/name=my-router"`.
 
 ### `mode: job`
 
-The spec renders one `http` collector per matching pod, named `router-metrics-<pod-name>`, each hitting that pod's IP directly at `metricsPort` — no Service, no DNS resolution involved. Pod IPs are resolved once, at `helm install` time: a pod replaced between install and collection produces a connection error for that one pod's slot, which is an acceptable gap for the point-in-time snapshot this tool collects.
+The script runs inside the Job's pod. It lists the pods matching `selector` with `kubectl`, then requests `/metrics` from each pod's IP directly on `metricsPort`, with no port-forward, Service or DNS lookup involved. It scrapes ten pods at a time and gives each request up to 30 seconds, so even when many pods don't respond, collection takes about 30 seconds per ten pods. A matched pod that has no IP yet, for example one still 'Pending', isn't scraped.
+
+To list the pods, the Job needs `get` and `list` on `pods` in your namespace. The Role the chart creates for the Job already grants both, so there's nothing extra to set up. The Job image bundles `kubectl` and `curl` for this. For the full RBAC list, go to [`mode: job` Reference → Kubernetes RBAC](/router-support-tool/job-mode-details#kubernetes-rbac).
 
 ### `mode: local`
 
-The spec renders a single `hostCollectors.run` script (named `router-metrics`) that `support-bundle` executes directly on your machine. It:
+The script runs on your own machine, where pod IPs aren't reachable. It:
 
 1. Looks up every pod matching `selector` in your namespace (`kubectl get pods -l <selector>`).
 2. For each pod in turn: port-forwards straight to that pod (not a Service), scrapes `/metrics` to a file, then tears the port-forward down before moving to the next pod.
 
-Each pod's scrape lands in its own `<pod-name>.txt` file, but **not** under a top-level `router-metrics/` — troubleshoot.sh nests a host `run` collector's output under `host-collectors/run-host/<collectorName>/`:
+This needs `get` and `list` on `pods`, plus `create` on the `pods/portforward` subresource, in the router's namespace, all using your own kubectl credentials. Declining `pods/portforward` doesn't fail collection: no metrics are collected, and each pod's line in the bundle includes the port-forward error from `kubectl`.
+
+## Where metrics land in the bundle
+
+Each pod's scrape is written to its own `<pod-name>.txt` file, in Prometheus text format. troubleshoot.sh nests a `hostCollectors.run` collector's output under `host-collectors/run-host/<collectorName>/`:
 
 ```
 host-collectors/run-host/
 ├── router-metrics-info.json
+├── router-metrics.txt
+├── router-metrics-stderr.txt
 └── router-metrics/
     └── pods/
         ├── <pod-name>.txt
         └── <pod-2-name>.txt
 ```
 
-This is different from `mode: job`'s layout, where each pod gets its own top-level `router-metrics-<pod-name>/result.json` instead — worth knowing if you're scripting against bundle contents. This needs `create` on the `pods/portforward` subresource in the router's namespace; declining it doesn't fail collection, but no pod will respond and this section stays empty. If no pod responds, the script writes a plain explanation into the output instead of leaving it silently empty.
+`router-metrics.txt` holds the script's own output: one line for each pod it couldn't scrape, or for why it couldn't scrape any. Go to [If metrics are missing](#if-metrics-are-missing) for what each line means. `router-metrics-stderr.txt` holds the script's stderr, such as the error `kubectl` returned when it couldn't list pods. It is only present if the script wrote to stderr.
 
-A second file, `*-info.json`, is also written under `mode: local` and it's fully masked. troubleshoot.sh writes this diagnostic sidecar for every `hostCollectors.run` collector and it records the full exec invocation, including the process environment of the machine `collect.sh` ran on. Two things limit what ends up in your bundle: the chart sets `ignoreParentEnvs: true`, which narrows that captured environment down to just `PATH`/`KUBECONFIG`/`PWD` before the file is even written and a redactor masks the entire file's contents.
+A second file, `router-metrics-info.json`, is fully masked. troubleshoot.sh writes this diagnostic sidecar for every `hostCollectors.run` collector and it records the full exec invocation, including the process environment collection ran with: your own shell under `mode: local`, or the Job's container under `mode: job`. Two things limit what ends up in your bundle: the chart sets `ignoreParentEnvs: true`, which narrows that captured environment down to just `PATH`/`KUBECONFIG`/`PWD` before the file is even written, and a redactor masks the entire file's contents.
+
+## If metrics are missing
+
+When a pod has no file under `router-metrics/pods/`, `host-collectors/run-host/router-metrics.txt` says why, with one of these lines:
+
+| Line in `router-metrics.txt` | What happened | What to do |
+| --- | --- | --- |
+| `metrics not collected: could not list pods matching selector <selector> in namespace <namespace>` | The tool couldn't ask Kubernetes for the pod list. Either the identity running collection lacks `get`/`list` on pods (the Job's Role under `mode: job`, your own credentials under `mode: local`), or Kubernetes API server couldn't be reached. This isn't a `selector` problem. | Read `host-collectors/run-host/router-metrics-stderr.txt` for the error `kubectl` returned. Under `mode: job`, confirm the chart's Role and RoleBinding are still in place. Under `mode: local`, confirm `kubectl get pods --namespace <namespace>` works with your credentials. |
+| `metrics not collected: no pods matched selector <selector> in namespace <namespace>` | The pod list came back empty. `selector` or `namespace` doesn't match your router's pods. | Run `kubectl get pods --namespace <namespace> --show-labels` and set `selector` (and `namespace`, if needed) to match. Go to [If your router's chart name was overridden](#if-your-routers-chart-name-was-overridden). |
+| `metrics not collected for pod <pod-name>: no response on port <metricsPort>` | That one pod's exporter didn't answer: it may be down, restarting, or blocked by a service mesh. Other pods' files are unaffected. Under `mode: local`, the line can end with `— kubectl port-forward: <error>`. That means the port-forward to the pod itself failed, for example with a `forbidden` error naming `pods/portforward`, or because the local port was already in use. | If the line ends with a port-forward error, confirm you have `create` on `pods/portforward` in the router's namespace, and that nothing else on your machine is using port `<metricsPort>`. Otherwise, check that pod's status and logs in the same bundle. If every pod shows this line, read the last row. |
+| `metrics not collected for pod <pod-name>: pod has no IP yet` | `mode: job` only. The pod hadn't been given an IP yet, usually because it was still `Pending` or starting, so there was nothing to scrape. This isn't an exporter problem, and other pods' files are unaffected. Under `mode: local`, a pod in this state gets the "no response" line with a port-forward error instead. | Collect again once the pod is `Running`. If it stays `Pending`, check its events in `cluster-resources/events/<namespace>.json` in the same bundle. |
+| `metrics not collected: no pod responded on port <metricsPort> — prometheus may not be enabled` | Pods were scraped, but none of them answered. Under `mode: local`, each pod's own line above says whether its port-forward failed. This line isn't written when no matched pod had an IP to scrape; the per-pod lines already say why. | If those lines end with a port-forward error, fix that first, as in the previous row. Otherwise, check the [prerequisites](#prerequisites-on-the-routers-side) above, that `metricsPort` matches the port in your `listen` address, and, if you run a service mesh, [Running a service mesh?](#running-a-service-mesh) below. |
 
 ## If Prometheus isn't set up yet
 
