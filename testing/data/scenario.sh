@@ -371,17 +371,19 @@ if [ "$REDACTION" = "full" ]; then
 
   # Response cache invalidation shared_key (specs/collection/data_sanitization/response_cache_invalidation_key.md) -
   # block-style, quoted, and flow-style values, in redaction-testing-router-config.yaml. The Router 3
-  # fixture carries its own shared_key sentinel, checked above.
+  # fixture carries block-style and quoted sentinels and an empty key, in its own byte-diffed block.
   if grep -qE "SENTINEL_RESPONSE_CACHE_SHARED_KEY" "$CONFIGMAP_JSON"; then
     echo "response_cache invalidation shared_key sentinel found unredacted in bundle" >&2
     exit 1
   fi
   grep -q "ttl: 60s" "$CONFIGMAP_JSON"  # non-secret sibling field survives (both fixtures set it on "all")
   grep -q "invalidation:" "$CONFIGMAP_JSON"
-  # Each of the four set keys (block, quoted, flow, and last line with no trailing newline) must
-  # carry the mask, spliced in where the value was.
+  # Every set key must carry the mask, spliced in where the value was. The expected count is read
+  # from the variant's own fixture, since each carries a different number of sentinel keys (the
+  # v2.17.0 one has four shapes: block, quoted, flow, and last line with no trailing newline).
+  EXPECTED_MASKED_KEYS=$(grep -oE 'shared_key: "?SENTINEL' "$ROUTER_CONFIG_CONFIGMAP" | wc -l)
   MASKED_KEYS=$(grep -oE 'shared_key: (\\")?\*\*\*HIDDEN\*\*\*' "$CONFIGMAP_JSON" | wc -l)
-  [ "$MASKED_KEYS" -eq 4 ] || { echo "expected 4 masked shared_keys, got $MASKED_KEYS" >&2; exit 1; }
+  [ "$MASKED_KEYS" -eq "$EXPECTED_MASKED_KEYS" ] || { echo "expected $EXPECTED_MASKED_KEYS masked shared_keys, got $MASKED_KEYS" >&2; exit 1; }
   # The sibling `enabled` survives next to a masked block-style key.
   grep -qE 'invalidation:\\n +enabled: true\\n +shared_key: \*\*\*HIDDEN\*\*\*' "$CONFIGMAP_JSON"
   # An empty shared_key is the schema default and means "unset", so it must not be mangled.

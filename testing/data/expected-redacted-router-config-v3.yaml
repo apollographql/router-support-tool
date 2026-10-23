@@ -60,6 +60,8 @@ apq:
 # Disabled so the router doesn't open a Redis pool or the invalidation listener in RTF;
 # redaction only needs the keys to be present in the collected config. The plugin still
 # validates its config at startup when disabled, hence the ttl below.
+# The accounts override also carries a quoted shared_key, and products an empty one that
+# must be left alone (the schema default, meaning unset).
 response_cache:
   enabled: false
   invalidation:
@@ -84,6 +86,11 @@ response_cache:
           username: ***HIDDEN***
           password: ***HIDDEN***
           required_to_start: false
+        invalidation:
+          enabled: true
+          shared_key: "***HIDDEN***"
+      products:
+        invalidation: { enabled: true, shared_key: "" }
 
 # Tests specs/collection/data_sanitization/header_values.md
 headers:
