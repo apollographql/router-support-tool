@@ -47,6 +47,18 @@
       datasourceTemplate: 'github-releases',
       extractVersionTemplate: '^v(?<version>.*)$',
     },
+    {
+      description: "collect-integration-test.yaml's ROUTER_3_CHART_VERSION pins the Router 3 preview that exercise_router_3_preview installs from the official chart. Chart and image versions match the Router release tag.",
+      managerFilePatterns: [
+        '/^\\.github/workflows/collect-integration-test\\.yaml$/',
+      ],
+      matchStrings: [
+        'ROUTER_3_CHART_VERSION: "(?<currentValue>[^"]+)"',
+      ],
+      depNameTemplate: 'apollographql/router',
+      datasourceTemplate: 'github-releases',
+      extractVersionTemplate: '^v(?<version>.*)$',
+    },
   ],
   packageRules: [
     {
@@ -55,6 +67,12 @@
       groupName: 'Job image apk packages',
       groupSlug: 'job-image-apk',
       minimumReleaseAge: null,
+    },
+    {
+      description: 'Keep the Router 3 preview pin on the 3.x line so it is not proposed a Router 2 release.',
+      matchFileNames: ['.github/workflows/collect-integration-test.yaml'],
+      matchDepNames: ['apollographql/router'],
+      allowedVersions: '/^3\\./',
     },
     {
       description: "Keep each file's explicit helm_version matrix entries each pinned within their own major version.",
