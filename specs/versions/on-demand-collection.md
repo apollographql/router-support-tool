@@ -1,8 +1,8 @@
-# On Demand Collection (v1 and v2)
+# On-demand collection
 
-What v1 and v2 of the Router Support Tool is, and what it deliberately is not.
+What the shipped releases of the Router Support Tool (1.x and 2.x) are, and what they deliberately are not.
 
-v1/2 deliver **one spec, collected on demand, stored wherever the customer runs it.** Kubernetes only. Scheduled and threshold-triggered collection are v2 (`specs/trigger/`).
+These releases deliver **one spec, collected on demand, stored wherever the customer runs it.** Kubernetes only. Scheduled and threshold-triggered collection are not shipped in any release (`specs/trigger/`).
 
 Detail lives with the layer it belongs to:
 
@@ -44,11 +44,11 @@ Useful entry points into their documentation:
 | Discovering specs already in the cluster | https://troubleshoot.sh/docs/support-bundle/discover-cluster-specs/ |
 | Collector reference — validate every field against this | https://troubleshoot.sh/docs/collect/ |
 | Redactor reference | https://troubleshoot.sh/docs/redact/ |
-| Analyzer reference (**not used in v1**, see below) | https://troubleshoot.sh/docs/analyze/ |
+| Analyzer reference (**not used**, see below) | https://troubleshoot.sh/docs/analyze/ |
 
-A SupportBundle spec has three parts. v1 uses two of them:
+A SupportBundle spec has three parts. The tool uses two of them:
 
-| Part | v1 | What it does |
+| Part | Used | What it does |
 | --- | --- | --- |
 | **Collectors** | **Used** | Gather data — pods, logs, config, kubelet metrics, HTTP endpoints |
 | **Redactors** | **Used** | Strip sensitive values after collection, before packaging. Their built-ins plus Apollo's custom rules |
@@ -56,20 +56,20 @@ A SupportBundle spec has three parts. v1 uses two of them:
 
 Validate any field against the collector reference above rather than assuming it exists.
 
-### Analyzers are out of scope for v1
+### Analyzers are out of scope
 
 troubleshoot.sh supports [analyzers](https://troubleshoot.sh/docs/analyze/): declarative rules that read what the collectors gathered and emit a pass, warn, or fail result. A `clusterResource` analyzer could, for instance, read the collected pod JSON and state outright *"router pod X was OOM-killed, 4 restarts"* rather than leaving support to find `lastState.terminated.reason` themselves.
 
-**v1 ships no analyzers.** This is a deliberate scope decision, not an oversight.
+**No release ships analyzers.** This is a deliberate scope decision, not an oversight.
 
 The reasoning:
 
-- **v1's job is to get the routine data into support's hands, not to diagnose.**
-- **Analyzers are a second body of authored content with its own review burden.** Each one encodes a diagnostic opinion — what counts as too many restarts, which log line indicates a real fault — and a wrong or stale opinion is worse than none, because it tells a support engineer something confident and incorrect. That warrants its own review cycle rather than riding along with v1.
+- **The tool's job is to get the routine data into support's hands, not to diagnose.**
+- **Analyzers are a second body of authored content with its own review burden.** Each one encodes a diagnostic opinion — what counts as too many restarts, which log line indicates a real fault — and a wrong or stale opinion is worse than none, because it tells a support engineer something confident and incorrect. That warrants its own review cycle rather than riding along with the collection spec.
 - **Nothing about deferring them is costly.** Analyzers read data that is already in the bundle. Adding them later requires no change to what is collected, no new permissions, and no change to the chart — so there is no compounding cost to waiting, and no rework created by it.
 
-**What this means in practice:** a v1 bundle is raw material. It answers "what was the state of this router".
+**What this means in practice:** a bundle is raw material. It answers "what was the state of this router".
 
 ## Storage
 
-Only customer-provided object storage (`specs/storage/object_storage.md`) is in scope for v1, and only for `mode: job`. `mode: local` needs nothing from this tool to reach object storage: the bundle already lands as a plain file the customer holds and they can push it wherever they like with their own tooling.
+Only customer-provided object storage (`specs/storage/object_storage.md`) is in scope, and only for `mode: job`. `mode: local` needs nothing from this tool to reach object storage: the bundle already lands as a plain file the customer holds and they can push it wherever they like with their own tooling.

@@ -35,7 +35,7 @@ specs/
 └── deployment/               # Execution location, RBAC, deployment tiers
 ```
 
-**`specs/versions/`** is the authority on what's actually shipped in a given release — the layer specs above describe the design across versions, including parts that may not exist yet. Check the relevant version file (for example, `specs/versions/v1.md`) before assuming a capability is present.
+**`specs/versions/`** is the authority on what's actually shipped in a given release — the layer specs above describe the design across versions, including parts that may not exist yet. Check the relevant version file (for example, `specs/versions/on-demand-collection.md`) before assuming a capability is present.
 
 ## How specs work
 

@@ -2,7 +2,7 @@
 
 This file is the technical reference for the `router-diagnostics-chart` chart — deployment tiers, RBAC, and cluster footprint. For the step-by-step customer-facing setup flow, see `specs/user_experience.md`.
 
-v1 deploys on-demand (flare-style) support bundle collection for Kubernetes deployments only.
+The tool deploys on-demand (flare-style) support bundle collection for Kubernetes deployments only.
 
 ## Deployment tiers
 
@@ -270,4 +270,4 @@ This applies to both modes — neither `mode: local` (the customer's own machine
 
 The fix is on the router's side: the customer exempts its metrics port from mTLS — Istio's `PeerAuthentication: PERMISSIVE` scoped to that port (or `traffic.sidecar.istio.io/excludeInboundPorts`), Linkerd's `config.linkerd.io/skip-inbound-ports`. This is platform-team guidance to apply once, not a chart setting.
 
-If a platform team won't grant that then retrieving metrics will not be possible in v1. The only in-mesh alternative is an `exec`-based scrape from inside the router's own pod and `exec` collectors are deliberately excluded from the base spec and v1.
+If a platform team won't grant that then retrieving metrics will not be possible. The only in-mesh alternative is an `exec`-based scrape from inside the router's own pod and `exec` collectors are deliberately excluded from the base spec.

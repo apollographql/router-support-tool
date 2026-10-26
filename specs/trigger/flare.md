@@ -10,7 +10,7 @@ This is the trigger-layer spec for flare (on-demand) trigger. This is distinct f
 
 - **No schedule.** No CronJob, no periodic collection, no "every N hours" cadence. A collection happens exactly as many times as a human runs the command.
 
-- **No threshold.** No component in v1 watches memory, CPU, restart counts, or any other signal and decides on its own that a collection is warranted. There is no watcher process to watch anything with.
+- **No threshold.** No shipped component watches memory, CPU, restart counts, or any other signal and decides on its own that a collection is warranted. There is no watcher process to watch anything with.
 
 ## What this doc does not cover
 
