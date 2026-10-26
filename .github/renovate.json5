@@ -48,6 +48,7 @@
       extractVersionTemplate: '^v(?<version>.*)$',
     },
     {
+      customType: 'regex',
       description: "collect-integration-test.yaml's ROUTER_3_CHART_VERSION pins the Router 3 preview that exercise_router_3_preview installs from the official chart. Chart and image versions match the Router release tag.",
       managerFilePatterns: [
         '/^\\.github/workflows/collect-integration-test\\.yaml$/',
@@ -63,25 +64,37 @@
   packageRules: [
     {
       description: "The Job image's pinned apk versions (the repology-sourced '# renovate:' ARGs in router-diagnostics-job-image/Dockerfile) get no release-age wait. Alpine drops a package's previous version from the branch the moment a new one lands, so any delay in proposing the bump leaves the exact pin unresolvable and the image build failing until it merges. They are also grouped into one PR: when Alpine updates several pinned packages at once, a PR per package would each fail the image build on the others' stale pins and none could merge alone.",
-      matchDatasources: ['repology'],
+      matchDatasources: [
+        'repology',
+      ],
       groupName: 'Job image apk packages',
       groupSlug: 'job-image-apk',
       minimumReleaseAge: null,
     },
     {
       description: 'Keep the Router 3 preview pin on the 3.x line so it is not proposed a Router 2 release.',
-      matchFileNames: ['.github/workflows/collect-integration-test.yaml'],
-      matchDepNames: ['apollographql/router'],
+      matchFileNames: [
+        '.github/workflows/collect-integration-test.yaml',
+      ],
+      matchDepNames: [
+        'apollographql/router',
+      ],
       allowedVersions: '/^3\\./',
     },
     {
       description: "Keep each file's explicit helm_version matrix entries each pinned within their own major version.",
-      matchFileNames: ['.github/workflows/static-checks.yaml', '.github/workflows/collect-integration-test.yaml'],
+      matchFileNames: [
+        '.github/workflows/static-checks.yaml',
+        '.github/workflows/collect-integration-test.yaml',
+      ],
       matchCurrentValue: '/^3\\./',
       allowedVersions: '<4.0.0',
     },
     {
-      matchFileNames: ['.github/workflows/static-checks.yaml', '.github/workflows/collect-integration-test.yaml'],
+      matchFileNames: [
+        '.github/workflows/static-checks.yaml',
+        '.github/workflows/collect-integration-test.yaml',
+      ],
       matchCurrentValue: '/^4\\./',
       allowedVersions: '>=4.0.0 <5.0.0',
     },
