@@ -1,4 +1,4 @@
-# Used for router_version's prior to v2.17.0 in the RTF test plan's matrix.
+# Used for every Router 2 router_version before v2.19.0 in the RTF test plan's matrix.
 # redaction-testing-router-config.yaml exhaustively exercises every redaction rule, but its schema
 # isn't stable across the whole router_version range. For example, headers.all.request's shape
 # changed between v2.4.0 and v2.17.0 with no syntax valid on both (confirmed via

@@ -178,9 +178,11 @@ authentication:
 # Tests specs/collection/data_sanitization/response_cache_invalidation_key.md - the
 # invalidation shared_key in block style (all), quoted (per-subgraph override), and flow
 # style (per-subgraph override), plus a subgraph with the key set to "" (must be left
-# alone) and one whose shared_key is the last line of the file. Placed after override_subgraph_url so it is excluded from
-# the byte-diff and checked by sentinel instead. The ttl is a non-secret sibling that must
+# alone) and a `reviews` subgraph with a block-style key. The last line of the file is the
+# connector block's quoted shared_key, further down. Placed after override_subgraph_url so it
+# is excluded from the byte-diff and checked by sentinel instead. The ttl is a non-secret sibling that must
 # survive.
+# Needs Router 2.19.0+
 response_cache:
   enabled: true
   subgraph:
@@ -208,3 +210,35 @@ response_cache:
         invalidation:
           enabled: true
           shared_key: SENTINEL_RESPONSE_CACHE_SHARED_KEY_LAST
+
+  # Router 2.19.0+ only
+  # Tests the connector counterpart of the subgraph keys above: an
+  # invalidation shared_key (block style on all, quoted on a source) and Redis credentials as
+  # a URL-embedded password on all and as separate username/password fields on a source (one
+  # shape per scope: the router rejects both on one cache). all.ttl and
+  # all.cache_key_headers are required by the router at startup. Sources are named
+  # <subgraph>.<source>.
+  connector:
+    all:
+      enabled: true
+      ttl: 60s
+      cache_key_headers: []
+      redis:
+        urls:
+          - "redis://cacheuser:SENTINEL_RESPONSE_CACHE_CONNECTOR_URL_PASSWORD@localhost:6395"
+        required_to_start: false
+      invalidation:
+        enabled: true
+        shared_key: SENTINEL_RESPONSE_CACHE_CONNECTOR_SHARED_KEY
+    sources:
+      accounts.rest_api:
+        ttl: 120s
+        redis:
+          urls:
+            - "redis://localhost:6396"
+          username: SENTINEL_RESPONSE_CACHE_CONNECTOR_REDIS_USERNAME
+          password: SENTINEL_RESPONSE_CACHE_CONNECTOR_REDIS_PASSWORD
+          required_to_start: false
+        invalidation:
+          enabled: true
+          shared_key: "SENTINEL_RESPONSE_CACHE_CONNECTOR_SHARED_KEY_QUOTED"
