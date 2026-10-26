@@ -228,6 +228,11 @@ jobs:
       - name: Run test-metrics-fallback
         run: mise run test-metrics-fallback
 
+      # This exists because RTF can't test the raw quoted shape
+      # for example, `shared_key: "x"`:
+      - name: Run test-shared-key-redactor
+        run: mise run test-shared-key-redactor
+
   check_changeset:
     name: "Verify Changeset Present"
     if: >-

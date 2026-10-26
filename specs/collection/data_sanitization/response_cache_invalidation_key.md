@@ -19,24 +19,24 @@ Single-line `regex` with a `mask` capture group. Three patterns, one per shape t
 - name: router-response-cache-invalidation-shared-key
   removals:
     regex:
-      - redactor: '(shared_key:\s*(?:\\?")?)(?P<mask>[^"\\\s][^"\\]*)(\\?"?)'
+      - redactor: '(shared_key:\s*(?:\\*")?)(?P<mask>[^"\\\s][^"\\]*)(\\*"?)'
       - redactor: '("shared_key":\s*")(?P<mask>[^"\\]+)(")'
       - redactor: '(\\"shared_key\\":\s*\\")(?P<mask>[^"\\]+)(\\")'
 ```
 
 | Pattern | Shape it matches | Where it shows up |
 | --- | --- | --- |
-| 1 | YAML text: `shared_key: x` or `shared_key: "x"`, either raw or inside a JSON-escaped string (`\"x\"`) | `router.yaml` in `cluster-resources/configmaps/*.json` and `configmaps/*/*.json`; `helm/*.json` once a `yamlPath` rule has re-serialized it as YAML |
-| 2 | Pretty or compact JSON: `"shared_key": "x"` | Structured JSON output, such as the `helm` collector's values |
+| 1 | YAML text: `shared_key: x` or `shared_key: "x"`, either raw or inside a JSON-escaped string (`\"x\"`) | `router.yaml` in `cluster-resources/configmaps/*.json` and `configmaps/*/*.json`. The raw quoted form (`shared_key: "x"`) is not emitted by any collector today. |
+| 2 | Pretty or compact JSON: `"shared_key": "x"` | Standalone JSON output. No collector emits this today; it covers a future collector that does. |
 | 3 | JSON inside a JSON string: `\"shared_key\":\"x\"` | The `kubectl.kubernetes.io/last-applied-configuration` annotation |
 
 ### Notes
 
-- **Deliberately has no `fileSelector` so it runs against every file in the bundle.** This matches `redis_credentials.md`'s URL rule and `secret_shaped_env_vars.md`, and is what reaches the `helm` collector's output and the annotation without enumerating those paths. `shared_key` appears exactly once in the `v3.0.0-preview.0` config schema, so over-redaction is unlikely. A `shared_key:` in unrelated output, such as a CRD schema example, is masked the same as a real one.
+- **Deliberately has no `fileSelector` so it runs against every file in the bundle.** This matches `redis_credentials.md`'s URL rule and `secret_shaped_env_vars.md`, and is what reaches the annotation without enumerating paths, and any collector added later. `shared_key` appears exactly once in the `v3.0.0-preview.0` config schema, so over-redaction is unlikely. A `shared_key:` in unrelated output, such as a CRD schema example, is masked the same as a real one.
 
 - **One pattern covers block and flow style.** The mask stops at the first `"` or `\`, so it ends at a closing quote or at the literal `\n` that ends a block-style line, and needs no key-order modelling. Flow style still matches. The value does not need to be followed by a newline, so a `router.yaml` whose last line is the `shared_key` (a `|-` block scalar strips the trailing newline) is masked.
 
-- **A quoted value is masked whether the quotes are plain or JSON-escaped.** The optional opening quote is `\\?"`, so both `shared_key: "x"` (YAML re-serialized, where a serializer quotes values that look like numbers or booleans) and `shared_key: \"x\"` (inside a JSON string, the `router.yaml` ConfigMap form) match.
+- **A quoted value is masked however many times its quotes are escaped.** The optional opening quote is `\\*"`, any number of backslashes then a quote. That covers `shared_key: "x"` (plain; no v1 collector emits it, so `mise run test-shared-key-redactor` is its only coverage), `shared_key: \"x\"` (inside a JSON string, the `router.yaml` ConfigMap form) and `shared_key: \\\"x\\\"` (the `last-applied-configuration` annotation, where that JSON string is itself nested inside a JSON string). A single optional backslash missed the last form, so a quoted key leaked through the annotation in `cluster-resources/configmaps/*.json`.
 
 - **An empty or absent key is left alone.** `shared_key: ""` (the schema default), `"shared_key": ""` and a bare `shared_key:` do not match, in any of the three patterns. A bundle whose `invalidation` block shows `shared_key: ""` means no key was set.
 
@@ -55,7 +55,7 @@ Collect against a router (Router 2.x and the 3.0 preview) with `response_cache` 
 - a case with `shared_key` as the last line of `router.yaml` with no trailing newline,
 - another subgraph with the key unset or `""`.
 
-Confirm every sentinel is absent, the other `invalidation` fields (`enabled`, `indexes`) survive in the block-style cases, and the unset subgraph is not mangled (no mask spliced into `shared_key: ""`). Also confirm masking on each non-ConfigMap surface: the `helm` collector's output (set the key through the official chart's `values.yaml`) and the `last-applied-configuration` annotation (deploy with `kubectl apply`). Run the `helm` check with the redactors in both orders, since a `yamlPath` rule rewrites that file from JSON to YAML and the surviving shape decides whether pattern 1 or 2 fires.
+Confirm every sentinel is absent, the other `invalidation` fields (`enabled`, `indexes`) survive in the block-style cases, and the unset subgraph is not mangled (no mask spliced into `shared_key: ""`). Also confirm masking on the non-ConfigMap surface: the `last-applied-configuration` annotation (deploy with `kubectl apply`), by searching the whole extracted bundle for the sentinels. The base spec has no `helm` collector, so there is no `helm/*.json` surface to check.
 
 Also confirm `redactUri` reports a positive `CharactersRemoved` for this rule (`overview.md` → Knowing whether a redactor fired).
 
