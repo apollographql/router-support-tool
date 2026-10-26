@@ -1,8 +1,8 @@
-# On-demand collection
+# Scope
 
-What the shipped releases of the Router Support Tool (1.x and 2.x) are, and what they deliberately are not.
+What the Router Support Tool ships today, and what it deliberately does not. This describes the current state, not a release: what changed between releases belongs in the changesets and release notes.
 
-These releases deliver **one spec, collected on demand, stored wherever the customer runs it.** Kubernetes only. Scheduled and threshold-triggered collection are not shipped in any release (`specs/trigger/`).
+The tool delivers **one spec, collected on demand, stored wherever the customer runs it.** Kubernetes only. Scheduled and threshold-triggered collection are not shipped (`specs/trigger/`).
 
 Detail lives with the layer it belongs to:
 

@@ -28,14 +28,14 @@ specs/
 ├── user_experience.md       # Customer-facing flows and invocation
 ├── artifact-distribution.md # How the chart/image/collect script are built and published
 ├── release-process.md       # Versioning across those artifacts, and how to cut a release
-├── versions/                # What each version ships, and what it deliberately does not
+├── scope.md                 # What the tool ships today, and what it deliberately does not
 ├── collection/               # What is collected and how it is sanitized
 ├── trigger/                  # What causes collection to happen
 ├── storage/                  # Where bundles land
 └── deployment/               # Execution location, RBAC, deployment tiers
 ```
 
-**`specs/versions/`** is the authority on what's actually shipped in a given release — the layer specs above describe the design across versions, including parts that may not exist yet. Check the relevant version file (for example, `specs/versions/on-demand-collection.md`) before assuming a capability is present.
+**`specs/scope.md`** is the authority on what the tool actually ships today and what it deliberately does not — the layer specs above describe the design, including parts that may not exist yet. Check it before assuming a capability is present.
 
 ## How specs work
 
