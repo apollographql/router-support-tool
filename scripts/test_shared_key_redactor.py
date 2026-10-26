@@ -16,6 +16,7 @@ CASES = [
     ("raw quoted", r'shared_key: "SECRET"', r'shared_key: "***HIDDEN***"'),
     ("raw quoted, looks like a number", r'shared_key: "12345678"', r'shared_key: "***HIDDEN***"'),
     ("json-escaped quoted", r'shared_key: \"SECRET\"\n', r'shared_key: \"***HIDDEN***\"\n'),
+    ("quoted, in the last-applied-configuration annotation (escaped twice)", r'shared_key: \\\"SECRET\\\"\\n', r'shared_key: \\\"***HIDDEN***\\\"\\n'),
     ("json-escaped block, more keys follow", r'shared_key: SECRET\n    next: 1', r'shared_key: ***HIDDEN***\n    next: 1'),
     ("last line of router.yaml, no trailing newline", r'shared_key: SECRET"', r'shared_key: ***HIDDEN***"'),
     ("flow style (the closing brace is masked too, as documented)", r'{ enabled: true, shared_key: SECRET }\n', r'{ enabled: true, shared_key: ***HIDDEN***\n'),
