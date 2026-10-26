@@ -177,8 +177,10 @@ authentication:
 
 # Tests specs/collection/data_sanitization/response_cache_invalidation_key.md - the
 # invalidation shared_key in block style (all), quoted (per-subgraph override), and flow
-# style (per-subgraph override). Placed after override_subgraph_url so it is excluded from
-# the byte-diff and checked by sentinel instead. The ttl is a non-secret sibling that must
+# style (per-subgraph override), plus a subgraph with the key set to "" (must be left
+# alone) and a `reviews` subgraph with a block-style key. The last line of the file is the
+# connector block's quoted shared_key, further down. Placed after override_subgraph_url so it
+# is excluded from the byte-diff and checked by sentinel instead. The ttl is a non-secret sibling that must
 # survive.
 response_cache:
   enabled: true
@@ -201,6 +203,12 @@ response_cache:
           shared_key: "SENTINEL_RESPONSE_CACHE_SHARED_KEY_QUOTED"
       inventory:
         invalidation: { enabled: true, shared_key: SENTINEL_RESPONSE_CACHE_SHARED_KEY_FLOW }
+      products:
+        invalidation: { enabled: true, shared_key: "" }
+      reviews:
+        invalidation:
+          enabled: true
+          shared_key: SENTINEL_RESPONSE_CACHE_SHARED_KEY_LAST
 
   # Router 2.19.0+ only: response_cache.connector doesn't exist before it, and the router
   # rejects unknown fields. Tests the connector counterpart of the subgraph keys above: an

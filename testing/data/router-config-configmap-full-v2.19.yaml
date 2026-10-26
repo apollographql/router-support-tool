@@ -10,7 +10,7 @@ metadata:
   labels:
     app: router
 data:
-  router.yaml: |
+  router.yaml: |-
     supergraph:
       listen: 0.0.0.0:4000
       # Tests specs/collection/data_sanitization/redis_credentials.md - URL-embedded credentials
@@ -188,9 +188,10 @@ data:
 
     # Tests specs/collection/data_sanitization/response_cache_invalidation_key.md - the
     # invalidation shared_key in block style (all), quoted (per-subgraph override), and flow
-    # style (per-subgraph override). Placed after override_subgraph_url so it is excluded from
-    # the byte-diff and checked by sentinel instead. The ttl is a non-secret sibling that must survive redaction.
-    # Needs a Router version with response_cache.
+    # style (per-subgraph override), plus a subgraph with the key set to "" (must be left
+    # alone) and a `reviews` subgraph with a block-style key. Placed after override_subgraph_url 
+    # so it is excluded from the byte-diff and checked by sentinel instead. The ttl is a 
+    # non-secret sibling that must survive redaction. Needs a Router version with response_cache.
     response_cache:
       enabled: true
       subgraph:
@@ -212,6 +213,12 @@ data:
               shared_key: "SENTINEL_RESPONSE_CACHE_SHARED_KEY_QUOTED"
           inventory:
             invalidation: { enabled: true, shared_key: SENTINEL_RESPONSE_CACHE_SHARED_KEY_FLOW }
+          products:
+            invalidation: { enabled: true, shared_key: "" }
+          reviews:
+            invalidation:
+              enabled: true
+              shared_key: SENTINEL_RESPONSE_CACHE_SHARED_KEY_LAST
 
       # Router 2.19.0+ only: response_cache.connector doesn't exist before it, and the router
       # rejects unknown fields. Tests the connector counterpart of the subgraph keys above: an
@@ -244,6 +251,7 @@ data:
             invalidation:
               enabled: true
               shared_key: "SENTINEL_RESPONSE_CACHE_CONNECTOR_SHARED_KEY_QUOTED"
+
   supergraph.graphql: |
     schema
         @link(url: "https://specs.apollo.dev/link/v1.0")
