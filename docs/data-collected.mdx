@@ -48,8 +48,8 @@ If more than one ConfigMap in your namespace matches, every one of them is colle
 
 - **A collected `router.yaml` isn't verified to be the one your router actually loaded.** Treat a populated `configmaps/` section as "a matching ConfigMap exists," not "confirmed active."
 - **Config may not be collected at all**, if your router reads `router.yaml` from somewhere this tool doesn't look, for example, mounted from a Secret, pulled by an init container, or mounted from a PVC.
-- **Environment-variable secrets are masked by name only.** For example, if `response_cache`’s `shared_key` is set as `${env.INVALIDATION_KEY}`, the router reads the real value from the pod’s environment. If that variable is a literal pod-spec value, it’s collected with the pod spec and is masked only when its name ends in `KEY` or `PASS`.
-- **An empty `shared_key` (`shared_key: ""`) is left as it is.** That's the router's default and it means no invalidation key was set.
+- **Environment-variable secrets are masked by name only.** For example, if Apollo Connectors' `shared_key` is set as `${env.INVALIDATION_KEY}`, the router reads the real value from the pod’s environment. If that variable is a literal pod-spec value, it’s collected with the pod spec and is masked only when its name ends in `KEY` or `PASS`.
+- **An empty `shared_key` (`shared_key: ""`) is left as it is.** This is the router's default and means no invalidation key was set.
 - **If you set `override_subgraph_url` with a normal URL (one with a path, e.g. `/graphql`), the section of your `router.yaml` immediately following it may be missing its key name in the collected bundle.** This is over-redaction, not a leak due to a troubleshoot.sh built-in redactor that matches more than it should past that URL and consumes the next line's key name before stopping, leaving that section's contents intact but orphaned under the wrong parent. If a section of your config looks like it's missing a heading, check for this before assuming your config is broken or wasn't collected.
 
 ### Schema collection

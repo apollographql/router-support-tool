@@ -1,13 +1,11 @@
 ---
 title: Getting Started
 subtitle: Choose how you'll run the GraphOS Router Support Tool
-description: Pick between mode local and mode job, and confirm what your Helm values need to supply based on how you deployed the router.
+description: Pick between mode local and mode job, and confirm what your Helm values need to supply based on how you deployed the router. The tool supports GraphOS Router v2.4.0 through v3.0.0 preview.
 ---
 This guide steps through generating your own on-demand support bundle collection from any Kubernetes-hosted router deployment.
 
 Generating a support bundle is done through a single Helm chart, `router-diagnostics-chart`, with a `mode` value controlling how collection runs. Both modes collect the same information, only how and where the tool runs and where the bundle lands differ.
-
-The tool supports GraphOS Router 2.4.0 through 3.0.0 preview. For the versions tested and what that does and doesn't cover, see the [overview](/router-support-tool#supported-router-versions).
 
 There are two independent things you need to determine before installing anything:
 
