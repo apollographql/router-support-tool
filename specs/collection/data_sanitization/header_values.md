@@ -22,10 +22,10 @@ Single-line `regex` with a `mask` capture group. Six patterns: block-style and f
       - "configmaps/*/*.json"
   removals:
     regex:
-      - redactor: '(insert:\\n(?:\s*name:\s*\\?"?[^"\\\n]*\\?"?\\n)*\s*value:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
-      - redactor: '(insert:\s*\{(?:[^}\\]|\\")*?value:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?(?:[^}\\]|\\")*?\})'
-      - redactor: '(insert:\\n(?:\s*(?:name|path):\s*\\?"?[^"\\\n]*\\?"?\\n)*\s*default:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
-      - redactor: '(insert:\s*\{(?:[^}\\]|\\")*?default:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?(?:[^}\\]|\\")*?\})'
+      - redactor: '(insert:\\+n(?:\s*name:\s*\\*"?[^"\\\n]*\\*"?\\+n)*\s*value:\s*\\*"?)(?P<mask>[^"\\\n]+)(\\*"?)'
+      - redactor: '(insert:\s*\{(?:[^}\\]|\\+")*?value:\s*\\*"?)(?P<mask>[^",}\\]+)(\\*"?(?:[^}\\]|\\+")*?\})'
+      - redactor: '(insert:\\+n(?:\s*(?:name|path):\s*\\*"?[^"\\\n]*\\*"?\\+n)*\s*default:\s*\\*"?)(?P<mask>[^"\\\n]+)(\\*"?)'
+      - redactor: '(insert:\s*\{(?:[^}\\]|\\+")*?default:\s*\\*"?)(?P<mask>[^",}\\]+)(\\*"?(?:[^}\\]|\\+")*?\})'
 - name: router-headers-propagate-default
   fileSelector:
     files:
@@ -33,8 +33,8 @@ Single-line `regex` with a `mask` capture group. Six patterns: block-style and f
       - "configmaps/*/*.json"
   removals:
     regex:
-      - redactor: '(propagate:\\n(?:\s*(?:named|rename):\s*\\?"?[^"\\\n]*\\?"?\\n)*\s*default:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
-      - redactor: '(propagate:\s*\{(?:[^}\\]|\\")*?default:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?(?:[^}\\]|\\")*?\})'
+      - redactor: '(propagate:\\+n(?:\s*(?:named|rename):\s*\\*"?[^"\\\n]*\\*"?\\+n)*\s*default:\s*\\*"?)(?P<mask>[^"\\\n]+)(\\*"?)'
+      - redactor: '(propagate:\s*\{(?:[^}\\]|\\+")*?default:\s*\\*"?)(?P<mask>[^",}\\]+)(\\*"?(?:[^}\\]|\\+")*?\})'
 ```
 
 **Notes:**

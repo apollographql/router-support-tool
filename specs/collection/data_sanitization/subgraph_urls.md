@@ -28,7 +28,7 @@ This surface masks the **whole block**, keys included — RE2 has no lookbehind,
       - "configmaps/*/*.json"
   removals:
     regex:
-      - redactor: '(override_subgraph_url:)(?P<mask>(?:\\n\s+[\w.-]+:\s*(?:\\"[^"\\]*\\"|[^\\@"]+))+)'
+      - redactor: '(override_subgraph_url:)(?P<mask>(?:\\+n\s+[\w.-]+:\s*(?:\\+"[^"\\]*\\+"|[^\\@"]+))+)'
 ```
 
 Each entry's mask is anchored on its own closing delimiter. Two shapes per entry:
@@ -60,8 +60,8 @@ That schema is collected whenever the customer sets `.Values.supergraphFile` —
       - "configmaps/*/*.json"
   removals:
     regex:
-      - redactor: '(@join__graph\([^)]*url:\s*\\?")(?P<mask>[^"\\]*)(\\?")'
-      - redactor: '(baseURL:\s*\\?")(?P<mask>[^"\\]*)(\\?")'
+      - redactor: '(@join__graph\([^)]*url:\s*\\*")(?P<mask>[^"\\]*)(\\*")'
+      - redactor: '(baseURL:\s*\\*")(?P<mask>[^"\\]*)(\\*")'
 ```
 
 **Notes:**

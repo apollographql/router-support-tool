@@ -37,8 +37,8 @@ troubleshoot.sh's built-in redactors don't cover this shape, so it needs its own
       - "configmaps/*/*.json"
   removals:
     regex:
-      - redactor: '(username:\s*\\?"?)(?P<mask>[^"\\\n]+?)(\\?"?\\n)'
-      - redactor: '(password:\s*\\?"?)(?P<mask>[^"\\\n]+?)(\\?"?\\n)'
+      - redactor: '(username:\s*\\*"?)(?P<mask>[^"\\\n]+?)(\\*"?\\+n)'
+      - redactor: '(password:\s*\\*"?)(?P<mask>[^"\\\n]+?)(\\*"?\\+n)'
 ```
 
 ### Notes

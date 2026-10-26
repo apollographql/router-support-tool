@@ -19,8 +19,8 @@ Single-line `regex` with a `mask` capture group:
       - "configmaps/*/*.json"
   removals:
     regex:
-      - redactor: '(name:\s*\\?"?[^"\\\n]*\\?"?\\n\s*value:\s*\\?"?)(?P<mask>[^"\\\n]+)(\\?"?)'
-      - redactor: '(\{(?:[^}\\]|\\")*?value:\s*\\?"?)(?P<mask>[^",}\\]+)(\\?"?)'
+      - redactor: '(name:\s*\\*"?[^"\\\n]*\\*"?\\+n\s*value:\s*\\*"?)(?P<mask>[^"\\\n]+)(\\*"?)'
+      - redactor: '(\{(?:[^}\\]|\\+")*?value:\s*\\*"?)(?P<mask>[^",}\\]+)(\\*"?)'
 - name: router-subgraph-aws-sigv4-hardcoded
   fileSelector:
     files:
