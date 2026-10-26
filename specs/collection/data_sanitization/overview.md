@@ -101,10 +101,12 @@ These rules follow:
 
 - **Match YAML, not JSON.** The config was never converted — it is YAML text in a string, as above. `\"name\":\"x-api-key\"` matches nothing.
 - **Assume nothing the author controls** — block vs. flow style, key order, and quoting are all the customer's choice. A field may need more than one pattern.
-- **A quote is two bytes here: `\"` — never write a bare `"?`.** A bare `"?` matches the unquoted form and fails *completely* on the quoted one.
+- **A quote is at least two bytes here: `\"` — never write a bare `"?`.** A bare `"?` matches the unquoted form and fails *completely* on the quoted one.
 
-  - `\\?"?` — an optional delimiter
-  - `(?:[^}\\]|\\")*?` — a class that must scan across a quoted value
+  - `\\*"?` — an optional delimiter, with any number of backslashes (see the next rule)
+  - `(?:[^}\\]|\\+")*?` — a class that must scan across a quoted value
+
+- **The same `router.yaml` is collected at more than one escaping depth.** The `data` copy is escaped once (`\"`, `\n`). A ConfigMap created with `kubectl apply` also carries a copy in its `kubectl.kubernetes.io/last-applied-configuration` annotation, which is a JSON string holding JSON that holds the `router.yaml` string, so it is escaped twice (`\\\"`, `\\n`). That annotation lands in `cluster-resources/configmaps/<namespace>.json`, a file most checks don't read. A pattern that allows exactly one backslash masks the first copy and silently leaves the second. Write `\\*"` for a quote and `\\+n` for a newline, not `\\?"` and `\n`, and keep the character class `[^"\\\n]` for the value. Verify a new rule against both depths.
 
   YAML requires quoting for values containing `: ` or starting with `*`, `&`, `#`, so quoted is the normal case for API keys and `Bearer ` tokens.
 

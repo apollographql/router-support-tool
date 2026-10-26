@@ -388,11 +388,18 @@ if [ "$REDACTION" = "full" ]; then
   grep -qE 'invalidation:\\n +enabled: true\\n +shared_key: \*\*\*HIDDEN\*\*\*' "$CONFIGMAP_JSON"
   # An empty shared_key is the schema default and means "unset", so it must not be mangled.
   grep -qF 'shared_key: \"\"' "$CONFIGMAP_JSON"
-  # The redactor has no fileSelector so we look everywhere.
-  LEAKED_IN=$(grep -rlE "SENTINEL_(RESPONSE_CACHE_SHARED_KEY|INVALIDATION_SHARED_KEY)" "$BUNDLE_DIR" || true)
-  if [ -n "$LEAKED_IN" ]; then
-    echo "response_cache shared_key sentinel found unredacted in:" >&2
-    echo "$LEAKED_IN" >&2
+
+  # Sweep the whole bundle for every secret this fixture plants, not just the dedicated configMap
+  # collector's file.
+  LEAKS=""
+  for SENTINEL in $(grep -ohE 'SENTINEL_[A-Z0-9_]+' "$ROUTER_CONFIG_CONFIGMAP" | sort -u); do
+    FOUND_IN=$(grep -rlF "$SENTINEL" "$BUNDLE_DIR" || true)
+    [ -z "$FOUND_IN" ] || LEAKS="$LEAKS
+$SENTINEL found unredacted in:
+$FOUND_IN"
+  done
+  if [ -n "$LEAKS" ]; then
+    echo "unredacted sentinels found in the bundle:$LEAKS" >&2
     exit 1
   fi
 fi
