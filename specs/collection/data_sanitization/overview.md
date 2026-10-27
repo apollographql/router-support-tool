@@ -9,7 +9,7 @@ This directory is where Apollo's custom redactors are specified, one file per se
 | GraphQL operation bodies reaching router logs | `operation_bodies.md` |
 | Subgraph routing URLs | `subgraph_urls.md` |
 | Redis credentials embedded in cache URLs | `redis_credentials.md` |
-| Response cache invalidation shared key (`response_cache.subgraph.*.invalidation.shared_key`) | `response_cache_invalidation_key.md` |
+| Response cache invalidation shared key (`response_cache.{subgraph,connector}.*.invalidation.shared_key`) | `response_cache_invalidation_key.md` |
 | TLS private keys (`tls.supergraph`, `tls.subgraph.*`, `tls.connector.*`, and the OTLP gRPC client `key`) | `tls_private_keys.md` |
 | `APOLLO_KEY` and GraphOS-key-shaped values in pod specs | `secret_shaped_env_vars.md` |
 | The collecting operator's own machine environment via a host-collector's diagnostic sidecar | `host_collector_diagnostics.md` |

@@ -1,8 +1,8 @@
-# v1
+# On Demand Collection (v1 and v2)
 
-What v1 of the Router Support Tool is, and what it deliberately is not.
+What v1 and v2 of the Router Support Tool is, and what it deliberately is not.
 
-v1 delivers **one spec, collected on demand, stored wherever the customer runs it.** Kubernetes only. Scheduled and threshold-triggered collection are v2 (`specs/trigger/`).
+v1/2 deliver **one spec, collected on demand, stored wherever the customer runs it.** Kubernetes only. Scheduled and threshold-triggered collection are v2 (`specs/trigger/`).
 
 Detail lives with the layer it belongs to:
 
@@ -18,6 +18,17 @@ Detail lives with the layer it belongs to:
 | Apollo Operator specifics | Coming soon |
 
 ---
+
+## Supported router versions
+
+Apollo Router **2.4.0 through 3.0.0 preview** (`v3.0.0-preview.0`) are supported. The versions the RTF plan runs against are the evidence: 2.4.0, 2.10.1, 2.13.0, 2.17.0, 2.19.0, and 3.0 preview, listed in `testing/test-plan.yaml`. The plan is the source of truth for what is tested, so a version bump there is a version-support change and updates this section.
+
+What this does **not** claim:
+
+- Versions older than 2.4.0 are untested.
+- Versions between the tested ones (for example 2.5 through 2.9) are covered only by being between versions that pass. They are not run individually.
+- The 3.0 preview is a pre-release. Support for it means the tested preview behaves correctly, not that later 3.0 preview or release builds are verified until the plan is updated (Renovate proposes the preview pin bump).
+- A redactor targets a config field that exists only in some versions (for example `response_cache`, which only newer routers have), and has nothing to match on versions without it. That is not a gap.
 
 ## Use of troubleshoot.sh
 

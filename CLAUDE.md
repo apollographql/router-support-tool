@@ -2,7 +2,7 @@
 
 An external diagnostic tool that collects a sanitized, point-in-time snapshot of Apollo Router and Kubernetes cluster state without requiring a router restart.
 
-The tool is built on [troubleshoot.sh](https://troubleshoot.sh). **We author SupportBundle specs and custom redactors — we do not build collection, packaging, or redaction logic.** If a task seems to call for writing collection machinery, check whether troubleshoot.sh already provides it. v1 uses their collectors and redactors only; **analyzers are out of scope** — see `specs/versions/v1.md`.
+The tool is built on [troubleshoot.sh](https://troubleshoot.sh). **We author SupportBundle specs and custom redactors — we do not build collection, packaging, or redaction logic.** If a task seems to call for writing collection machinery, check whether troubleshoot.sh already provides it. We use their collectors and redactors only; **analyzers are out of scope** — see `specs/versions/on-demand-collection.md`.
 
 What's ours to build is everything *around* their engine:
 
@@ -17,7 +17,7 @@ What's ours to build is everything *around* their engine:
 
 Read `specs/architecture.md` before working on anything in this repo. It defines the layer model that the directory structure follows.
 
-Then read the version file for the milestone you are working on — `specs/versions/v1.md` for v1. The architecture describes the design across versions; the version file is what says which parts of it are actually in scope now.
+Then read the version file for the milestone you are working on — `specs/versions/on-demand-collection.md` for the shipped releases (1.x and 2.x). The architecture describes the design across versions; the version file is what says which parts of it are actually in scope now.
 
 ---
 
@@ -26,8 +26,8 @@ Then read the version file for the milestone you are working on — `specs/versi
 Three layers, each varying independently:
 
 - **Collection** — what data is collected, and how it is sanitized. The SupportBundle spec plus its redactors. Redaction is *part of this layer*, not separate: redactors ship in the same artifact and version with it. They are a separate `kind: Redactor` document, delivered under its own `data` key on the same ConfigMap — a packaging detail of the engine, not a layer boundary.
-- **Trigger** — what causes a collection to happen. On-demand (v1); scheduled and threshold-triggered (v2).
-- **Storage** — where the bundle lands. Local disk (v1); customer-provided S3/GCS (v2).
+- **Trigger** — what causes a collection to happen. On-demand today; scheduled and threshold-triggered are not shipped.
+- **Storage** — where the bundle lands. The customer's local disk, or customer-provided object storage (S3, GCS) with `mode: job`.
 
 **Deployment is not a layer.** Where collection runs (local plugin vs. in-cluster Job/CronJob), RBAC, cluster footprint, and deployment tier are deployment concerns. Execution location adds no new capability — it is the same function relocated. See the reasoning in `specs/architecture.md`.
 
@@ -54,11 +54,11 @@ specs/
 
 ### `specs/versions/` — start here for anything version-specific
 
-**Every version of the tool has exactly one file in `specs/versions/`, and that file is the authority on what that version ships.** v1 is `specs/versions/v1.md`; v2 gets `specs/versions/v2.md`, and so on.
+**Every version of the tool is covered by a file in `specs/versions/`, and that file is the authority on what that version ships.** Files are named for what they ship, not for a version number, and one file can cover more than one release. For example, 1.x and 2.x are both `specs/versions/on-demand-collection.md`. Releases are numbered for what changed for customers, and roadmap items carry no release number.
 
-Read the relevant version file before answering "does the tool do X?" — the layer specs describe designs across versions, so they will happily describe a v2 trigger or a future spec as though it exists. The version file is what says whether a capability is actually in the milestone you are being asked about. `specs/versions/v1.md` also records our use of troubleshoot.sh — which parts of the engine v1 uses, and that analyzers are out of scope.
+Read the relevant version file before answering "does the tool do X?" — the layer specs describe designs across versions, so they will happily describe a future trigger or spec as though it exists. The version file is what says whether a capability is actually in the milestone you are being asked about. `specs/versions/on-demand-collection.md` also records our use of troubleshoot.sh — which parts of the engine the tool uses, and that analyzers are out of scope.
 
-When a new version is planned, create its file in this directory first. It states what the version ships, what it deliberately excludes, and where the detail lives; the layer specs then carry the detail. A version file that only lists inclusions is incomplete — **the exclusions are the more useful half**, because they are what stops a later reader assuming a capability exists.
+When a new version is planned, create or extend its file in this directory first. It states what the version ships, what it deliberately excludes, and where the detail lives; the layer specs then carry the detail. A version file that only lists inclusions is incomplete — **the exclusions are the more useful half**, because they are what stops a later reader assuming a capability exists.
 
 ---
 
@@ -91,8 +91,8 @@ These are load-bearing. Violating any of them is a correctness problem, not a st
 - **The tool must be safe to run against a degraded router.** Collection gathers signal externally wherever possible — k8s API, cAdvisor, external HTTP endpoints. Anything that runs *inside* the router container consumes its cgroup allocation and needs justification.
 - **`exec` collectors only run against one pod.** troubleshoot.sh's `exec` collector executes in a single arbitrarily-selected pod when a selector matches several. It is not fleet-wide; `logs` does not have this limitation.
 - **Bundles never go to Apollo.** Storage is customer-owned. Apollo has access only when a customer explicitly shares a bundle during a support engagement.
-- **v1 is Kubernetes-only.** ECS, Fargate, and standalone VM deployments are out of scope.
-- **v1 ships one spec, on-demand only.** Additional specs and automated triggers are later milestones. Do not assume they exist. `specs/versions/v1.md` is the authority on v1's scope — check it before assuming a capability is present.
+- **The tool is Kubernetes-only.** ECS, Fargate, and standalone VM deployments are out of scope.
+- **The tool ships one spec, on-demand only.** Additional specs and automated triggers are later milestones. Do not assume they exist. `specs/versions/on-demand-collection.md` is the authority on what ships — check it before assuming a capability is present.
 
 ---
 
@@ -113,7 +113,7 @@ Scenarios to validate against. Not exhaustive — add cases as failure modes are
 - **All routers misbehaving** — the "safe to run at any time" claim holds under genuinely degraded conditions, and a bundle is still produced even when some collectors return empty.
 - **Routers under-resourced** — the negligible-resource-consumption claim holds when the container is already near its CPU or memory cgroup limit. This is where an in-container collector does damage if one is ever added.
 - **Router recently restarted** — previous-container logs are captured (the `logs` collector always requests them, writing `<name>-previous.log`) and startup errors appear in the bundle.
-- **OOM in progress** — for v2, that danger-zone suppression works and the tool does not trigger collection that would worsen the situation.
+- **OOM in progress** — once automated triggers ship, that danger-zone suppression works and the tool does not trigger collection that would worsen the situation.
 
 ### What every run must confirm, not just the happy path
 
@@ -134,6 +134,20 @@ Both paths are Apollo-pinned: `mode: job`'s image tag, and `mode: local`'s `rout
 - **When a bundle looks wrong, check `version.yaml` first.** Every bundle carries it, written by troubleshoot.sh with the version that produced it — so the support-bundle version behind any bundle is always knowable without asking the customer. Compare it against the pinned version in `meta.json`.
 
 See `specs/deployment/on-demand-collection.md` for where each pin lives.
+
+### Router versions and testing with RTF
+
+RTF runs one **Router 2 `full` redaction variant**: the newest Router 2 release, using `redaction-testing-router-config.yaml` and `router-config-configmap-full.yaml`. Every other Router 2 version in `testing/test-plan.yaml` runs the schema-stable `base` config and the Router 3 preview has its own `full` fixtures. Earlier routers reject config fields they don't know, which is why only one version can carry the newest fields.
+
+**When a new Router 2 release is adopted**, move the `full` variant to it and update everything that names the old one:
+
+- `testing/test-plan.yaml`: the new version takes the `full` entry and the "latest Apollo Router release as of <date>" comment. The previous `full` version drops to `base` with the `base` fixture paths.
+- The `full` fixtures: add any new config the release introduces that can hold a secret, so a redactor is tested against it. Update the "Needs Router X or newer" comments, and the `base-router-config.yaml` header ("before vX").
+- Comments in `testing/data/scenario.sh` that name a version or a fixture. The sentinel counts are read from the fixture, so they don't need editing.
+- `specs/versions/on-demand-collection.md` and `docs/index.mdx`, if the supported or tested versions change, and the matching `specs/verification_plan.md` row if a new redactor scenario is needed.
+- A `test` changeset.
+
+A new config field that carries a secret is also a spec change first: add it to the relevant `specs/collection/data_sanitization/` file before the fixture.
 
 ---
 

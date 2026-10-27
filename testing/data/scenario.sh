@@ -378,9 +378,9 @@ if [ "$REDACTION" = "full" ]; then
   fi
   grep -q "ttl: 60s" "$CONFIGMAP_JSON"  # non-secret sibling field survives (both fixtures set it on "all")
   grep -q "invalidation:" "$CONFIGMAP_JSON"
-  # Every set key must carry the mask, spliced in where the value was. The expected count is read
-  # from the variant's own fixture, since each carries a different number of sentinel keys (the
-  # v2.17.0 one has four shapes: block, quoted, flow, and last line with no trailing newline).
+  # Every shared_key the fixture sets must show the mask in place of its value. The expected count
+  # is read from the fixture rather than written here, because the Router 2 and Router 3 fixtures
+  # set different numbers of keys. The shapes each one covers are described in its own comments.
   EXPECTED_MASKED_KEYS=$(grep -oE 'shared_key: "?SENTINEL' "$ROUTER_CONFIG_CONFIGMAP" | wc -l)
   MASKED_KEYS=$(grep -oE 'shared_key: (\\")?\*\*\*HIDDEN\*\*\*' "$CONFIGMAP_JSON" | wc -l)
   [ "$MASKED_KEYS" -eq "$EXPECTED_MASKED_KEYS" ] || { echo "expected $EXPECTED_MASKED_KEYS masked shared_keys, got $MASKED_KEYS" >&2; exit 1; }
@@ -401,6 +401,13 @@ $FOUND_IN"
   if [ -n "$LEAKS" ]; then
     echo "unredacted sentinels found in the bundle:$LEAKS" >&2
     exit 1
+  fi
+
+  # Router 2.19.0 adds response_cache.connector (the Router 2 full fixture, redaction-testing-router-config.yaml). Its
+  # shared_key and Redis credential sentinels are covered by the sweep above; this only checks
+  # that the non-secret source name survives. It is absent from every other fixture.
+  if grep -q "SENTINEL_RESPONSE_CACHE_CONNECTOR" "$ROUTER_CONFIG_CONFIGMAP"; then
+    grep -q "accounts.rest_api" "$CONFIGMAP_JSON"
   fi
 fi
 
