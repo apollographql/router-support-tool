@@ -117,26 +117,26 @@ What causes collection to occur.
 
 Triggers are independent mechanisms that invoke the SupportBundle spec. Each can be added without modifying the spec it invokes.
 
-| Trigger | Milestone | Mechanism |
+| Trigger | Status | Mechanism |
 | --- | --- | --- |
-| On-demand (flare) | v1 | User invokes collection directly |
-| Scheduled base spec | v2 | CronJob on a configurable interval |
-| Threshold-triggered | v2 | Watcher Deployment polling metrics against threshold rules |
-| Scheduled additional specs | v3 | CronJob on an independent cadence per spec |
+| On-demand (flare) | Shipped | User invokes collection directly |
+| Scheduled base spec | Not shipped | CronJob on a configurable interval |
+| Threshold-triggered | Not shipped | Watcher Deployment polling metrics against threshold rules |
+| Scheduled additional specs | Not shipped, after scheduled base spec | CronJob on an independent cadence per spec |
 
 See `specs/trigger/` for more information.
 
-### On-demand (v1)
+### On-demand (shipped)
 
 The user invokes a collection. No standing compute workload is required — nothing polls or runs between invocations, unlike the CronJob and watcher below. Getting the spec into the cluster still leaves a small footprint (the spec ConfigMap, and for restricted-access clusters a Job); see [Deployment model](#deployment-model) below.
 
-### Scheduled (v2)
+### Scheduled (not shipped)
 
 A CronJob invoking the base spec on a configurable interval, building a continuous timeline of lightweight signal. The timeline is the primary tool for diagnosing slow degradation — memory creeping up over hours, gradual error rate increase — because it enables "good router vs. bad router" comparison.
 
 Truly continuous collection was considered and deliberately excluded. Scheduled collection at an interval provides the diagnostic baseline value without the standing resource overhead, and discrete bundles are easier for customers to inspect and audit before sharing.
 
-### Threshold-triggered (v2)
+### Threshold-triggered (not shipped)
 
 A small watcher Deployment polls the k8s metrics API or Prometheus on a configurable interval and fires or suppresses collection based on threshold rules.
 
@@ -174,7 +174,7 @@ Deployment concerns include:
 - **Cluster footprint** — ranges from a persistent ConfigMap (on-demand, chart-based invocation) to standing workloads (scheduled/threshold collection), depending on execution location
 - **Deployment tier** — how the customer deployed the router, which determines how much the tool can infer versus what the customer must supply
 
-Which tiers are supported, what each requires from the customer, and how execution location and deployment tier are actually implemented (the `router-diagnostics-chart` chart and its values) is specified per version rather than here — see `specs/deployment/on-demand-collection.md` for v1's answer to all of the above.
+Which tiers are supported, what each requires from the customer, and how execution location and deployment tier are actually implemented (the `router-diagnostics-chart` chart and its values) is specified per capability set rather than here — see `specs/deployment/on-demand-collection.md` for the shipped releases' answer to all of the above.
 
 Future delivery mechanisms belong here too. Ground Control's ClusterManager, for instance, is a way of delivering and managing these components in-cluster. This is another deployment mechanism, not a new layer.
 

@@ -36,9 +36,9 @@ Support has: router version, sanitized config, metrics
 
 ### Which path applies to you
 
-The tool supports three deployment tiers in v1:
+The tool supports three deployment tiers:
 
-| Deployment | Support in v1 | What you supply |
+| Deployment | Support | What you supply |
 | --- | --- | --- |
 | **Official Apollo router Helm chart** | Full support | `namespace` only |
 | **Raw manifests / custom deployment** | Supported | `namespace`, `selector`, `configMapName` |

@@ -2,7 +2,7 @@
 
 An external diagnostic tool that collects a sanitized, point-in-time snapshot of Apollo Router and Kubernetes cluster state without requiring a router restart.
 
-The tool is built on [troubleshoot.sh](https://troubleshoot.sh). **We author SupportBundle specs and custom redactors — we do not build collection, packaging, or redaction logic.** If a task seems to call for writing collection machinery, check whether troubleshoot.sh already provides it. We use their collectors and redactors only; **analyzers are out of scope** — see `specs/versions/on-demand-collection.md`.
+The tool is built on [troubleshoot.sh](https://troubleshoot.sh). **We author SupportBundle specs and custom redactors — we do not build collection, packaging, or redaction logic.** If a task seems to call for writing collection machinery, check whether troubleshoot.sh already provides it. We use their collectors and redactors only; **analyzers are out of scope** — see `specs/scope.md`.
 
 What's ours to build is everything *around* their engine:
 
@@ -17,7 +17,7 @@ What's ours to build is everything *around* their engine:
 
 Read `specs/architecture.md` before working on anything in this repo. It defines the layer model that the directory structure follows.
 
-Then read the version file for the milestone you are working on — `specs/versions/on-demand-collection.md` for the shipped releases (1.x and 2.x). The architecture describes the design across versions; the version file is what says which parts of it are actually in scope now.
+Then read `specs/scope.md`. The architecture describes the design, including parts that don't exist yet; the scope file is what says which parts of it are actually in scope now.
 
 ---
 
@@ -45,20 +45,20 @@ specs/
 ├── user_experience.md       # The customer-facing flow, as a spec — not the literal public docs (those are drafted from this file separately)
 ├── artifact-distribution.md # How the chart/image/plugin are built and published
 ├── release-process.md       # Versioning across those artifacts, and how to cut a release
-├── versions/                # What each version ships, and what it deliberately does not
+├── scope.md                 # What the tool ships today, and what it deliberately does not
 ├── collection/              # What is collected and how it is sanitized
 ├── trigger/                 # What causes collection to happen
 ├── storage/                 # Where bundles land
 └── deployment/              # Execution location, RBAC, deployment tiers
 ```
 
-### `specs/versions/` — start here for anything version-specific
+### `specs/scope.md` — start here for what the tool ships
 
-**Every version of the tool is covered by a file in `specs/versions/`, and that file is the authority on what that version ships.** Files are named for what they ship, not for a version number, and one file can cover more than one release. For example, 1.x and 2.x are both `specs/versions/on-demand-collection.md`. Releases are numbered for what changed for customers, and roadmap items carry no release number.
+**`specs/scope.md` is the single authority on what the tool ships today and what it deliberately does not.** It lists what is in scope, the supported router versions, our use of troubleshoot.sh, and the exclusions: no analyzers, Kubernetes only, no scheduled or threshold-triggered collection. It describes the current state, not a release. Releases are numbered for what changed for customers, so what changed between releases belongs in the changesets and release notes, and roadmap items carry no release number.
 
-Read the relevant version file before answering "does the tool do X?" — the layer specs describe designs across versions, so they will happily describe a future trigger or spec as though it exists. The version file is what says whether a capability is actually in the milestone you are being asked about. `specs/versions/on-demand-collection.md` also records our use of troubleshoot.sh — which parts of the engine the tool uses, and that analyzers are out of scope.
+Read it before answering "does the tool do X?" — the layer specs describe the design, including parts that may not exist yet, so they will happily describe a future trigger or spec as though it exists. The scope file is what says whether a capability is actually shipped.
 
-When a new version is planned, create or extend its file in this directory first. It states what the version ships, what it deliberately excludes, and where the detail lives; the layer specs then carry the detail. A version file that only lists inclusions is incomplete — **the exclusions are the more useful half**, because they are what stops a later reader assuming a capability exists.
+When what ships changes, update `specs/scope.md` first. It states what is in scope, what is deliberately excluded and where the detail lives; the layer specs then carry the detail. A scope file that only lists inclusions is incomplete — **the exclusions are the more useful half**, because they are what stops a later reader assuming a capability exists.
 
 ---
 
@@ -92,7 +92,7 @@ These are load-bearing. Violating any of them is a correctness problem, not a st
 - **`exec` collectors only run against one pod.** troubleshoot.sh's `exec` collector executes in a single arbitrarily-selected pod when a selector matches several. It is not fleet-wide; `logs` does not have this limitation.
 - **Bundles never go to Apollo.** Storage is customer-owned. Apollo has access only when a customer explicitly shares a bundle during a support engagement.
 - **The tool is Kubernetes-only.** ECS, Fargate, and standalone VM deployments are out of scope.
-- **The tool ships one spec, on-demand only.** Additional specs and automated triggers are later milestones. Do not assume they exist. `specs/versions/on-demand-collection.md` is the authority on what ships — check it before assuming a capability is present.
+- **The tool ships one spec, on-demand only.** Additional specs and automated triggers are later milestones. Do not assume they exist. `specs/scope.md` is the authority on what ships — check it before assuming a capability is present.
 
 ---
 
@@ -144,7 +144,7 @@ RTF runs one **Router 2 `full` redaction variant**: the newest Router 2 release,
 - `testing/test-plan.yaml`: the new version takes the `full` entry and the "latest Apollo Router release as of <date>" comment. The previous `full` version drops to `base` with the `base` fixture paths.
 - The `full` fixtures: add any new config the release introduces that can hold a secret, so a redactor is tested against it. Update the "Needs Router X or newer" comments, and the `base-router-config.yaml` header ("before vX").
 - Comments in `testing/data/scenario.sh` that name a version or a fixture. The sentinel counts are read from the fixture, so they don't need editing.
-- `specs/versions/on-demand-collection.md` and `docs/index.mdx`, if the supported or tested versions change, and the matching `specs/verification_plan.md` row if a new redactor scenario is needed.
+- `specs/scope.md` and `docs/index.mdx`, if the supported or tested versions change, and the matching `specs/verification_plan.md` row if a new redactor scenario is needed.
 - A `test` changeset.
 
 A new config field that carries a secret is also a spec change first: add it to the relevant `specs/collection/data_sanitization/` file before the fixture.
