@@ -118,9 +118,7 @@ invokes `support-bundle --load-cluster-specs --namespace <namespace>`:
 
    If the script can't list pods, no pod matches `selector`, or a matched pod doesn't respond, the script writes a plain
    explanation into the bundle instead of leaving the section silently empty (see
-   `specs/collection/base_spec.md` → Per-pod metrics collection for each case). `nodeMetrics` remains available as a fallback for container-level
-   memory/CPU signal regardless (see `specs/collection/base_spec.md` → `nodeMetrics` is a
-   fallback, not the preferred path).
+   `specs/collection/base_spec.md` → Per-pod metrics collection for each case). `nodeMetrics` is the only source of container-level memory/CPU figures regardless, since the router's Prometheus endpoint does not serve them (see `specs/collection/base_spec.md` → footnote \[2\]).
 
    `mode: job` runs the same script, resolving pods the same way at collection time, but inside
    the Job's pod. That pod is already inside the cluster network, so the script requests each
@@ -248,9 +246,9 @@ Additionally requires creating a Job, a namespace-scoped ServiceAccount, a Role/
 - **`nodes/proxy` (get)** — required unconditionally by the API server for any request matching the `/nodes/{name}/proxy/{path}` URL pattern. This is a broad grant: Kubernetes' own RBAC good-practices documentation states it "provides access to privileged kubelet APIs that can retrieve container logs or execute and attach to pod processes... bypasses audit logging and admission control," and is explicitly "not a read-only permission." What this tool does with it is read-only, but the grant itself authorizes more than that one use, and it cannot be scoped to just the router's nodes.
 - **`nodes/stats` (get)** — required separately by the kubelet's own authorization check, layered on top of `nodes/proxy`, not a substitute for it.
 
-Declining `nodes/proxy`/`nodes/stats` still leaves `nodes` access (node pressure conditions) and everything `clusterResources` provides — OOM kill occurrences and last state, restart counts, configured limits. What's lost is container memory/CPU trajectory over time — but `nodeMetrics` is a fallback for that signal, not the preferred path: enabling the Prometheus exporter gets the same container-level usage-over-time signal without any of these grants, so customers should be pointed toward Prometheus first. See `specs/collection/base_spec.md` → `nodeMetrics` is a fallback, not the preferred path.
+Declining only `nodes/proxy`/`nodes/stats` (possible when you manage the RBAC yourself) still leaves `nodes` access (node pressure conditions) and everything `clusterResources` provides — OOM kill occurrences and last state, restart counts, configured limits. What's lost is container memory and CPU usage, and the router's own Prometheus endpoint serves jemalloc memory gauges but no container RSS, working-set or CPU figures, so it is not a substitute. See `specs/collection/base_spec.md` → footnote \[2\].
 
-The chart currently only supports declining all three grants together, via `job.collectNodeMetrics: false` at install time. This skips creating the ClusterRole/ClusterRoleBinding entirely and the `nodeMetrics` collector itself then comes back empty rather than the install failing.
+The chart currently only supports declining all three grants together, via `job.collectNodeMetrics: false` at install time. This skips creating the ClusterRole/ClusterRoleBinding entirely and the `nodeMetrics` collector itself then comes back empty rather than the install failing. Node pressure conditions then come back empty too, since the `nodes` list grant is part of that ClusterRole.
 
 See `specs/collection/base_spec.md` for the rest of the permission set the collectors need.
 

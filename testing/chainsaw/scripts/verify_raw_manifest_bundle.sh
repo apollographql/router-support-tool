@@ -11,6 +11,7 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/assert_host_collector_diagnostics_redacted.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/assert_documented_memory_cpu_signals.sh"
 
 NAMESPACE=$1
 RESOURCE_FILE=$2
@@ -54,6 +55,10 @@ while IFS= read -r f; do
   grep -q "apollo_router_" "$f" && FOUND=true && break
 done < <(find "$EXPECTED_METRICS_DIR" -maxdepth 1 -name "*.txt" -type f 2>/dev/null)
 [ "$FOUND" = true ] || fail "router-metrics: no per-pod metrics file contains apollo_router_ metrics"
+
+# Every memory/CPU signal the spec documents (specs/collection/base_spec.md, "Memory and CPU
+# information collected") must actually be in the bundle.
+assert_documented_memory_cpu_signals "$DIR"
 
 # Check host-collector diagnostic sidecar: present and fully redacted (see
 # specs/collection/data_sanitization/host_collector_diagnostics.md)

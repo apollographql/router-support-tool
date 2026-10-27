@@ -52,7 +52,7 @@ A second file, `*-info.json`, is also written under `mode: local` and it's fully
 
 ## If Prometheus isn't set up yet
 
-The `nodeMetrics` collector (by way of the kubelet Summary API) gets you container-level memory and CPU usage over time without touching your router at all, but it costs three cluster-scoped RBAC grants that enabling Prometheus doesn't. The `nodeMetrics` collector exists for the case where you haven't configured the exporter yet and isn't recommended long term. For more information, go to [Data Collected → Memory and CPU information collected](/router-support-tool/data-collected#memory-and-cpu-information-collected).
+The `nodeMetrics` collector (by way of the kubelet Summary API) gets you container-level memory and CPU usage (a single sample per collection) without touching your router at all. It costs three cluster-scoped RBAC grants that the Prometheus scrape doesn't. It isn't interchangeable with the scrape: the router's Prometheus endpoint serves its own jemalloc memory gauges but no container RSS, working-set or CPU figures, so those only come from `nodeMetrics`. For more information, go to [Data Collected → Memory and CPU information collected](/router-support-tool/data-collected#memory-and-cpu-information-collected).
 
 <NodeMetricsRBAC />
 
