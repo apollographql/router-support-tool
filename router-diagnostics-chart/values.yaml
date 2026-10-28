@@ -40,11 +40,22 @@ job:
   # Only needed if you've overridden `job.image.repository` to point at a private mirror.
   imagePullSecrets: []
   # -- Optional. Set false to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding
-  # that grants the nodeMetrics collector its nodes/nodes-proxy/nodes-stats access and to
-  # decline that collector's data entirely up front.
-  # Declining also loses node pressure conditions and container memory/CPU figures.
-  # Defaults to true.
+  # and the kubelet read. The metrics API is still tried so container working-set memory
+  # and CPU still arrive where metrics-server is installed. Declining loses RSS, page faults,
+  # pressure stall data and node pressure conditions. Not allowed with
+  # `nodeStatsSource: apiServer`. Defaults to true.
   collectNodeMetrics: true
+  # -- Optional. Where container memory and CPU come from. `kubelet` reads the kubelet
+  # directly from the Job's pod with `nodes/stats` only, falling back per node to the metrics
+  # API. `apiServer` reads through the API server's proxy with the nodeMetrics collector,
+  # which needs `nodes/proxy`, writes every pod on the node and has no fallback. Defaults to
+  # kubelet.
+  nodeStatsSource: kubelet
+  # -- Optional. Also read the kubelet's cAdvisor endpoint (CPU throttling, OOM and
+  # memory-limit counters) for the router's pods. Adds `nodes/metrics` to the ClusterRole.
+  # Ignored when collectNodeMetrics is false or nodeStatsSource is apiServer. Defaults to
+  # false.
+  collectCadvisorMetrics: false
   # -- Annotations merged onto the Job's pod template. Customer-supplied keys win over
   # the defaults below (sidecar.istio.io/inject: "false", linkerd.io/inject: disabled)
   # rather than replacing them wholesale.

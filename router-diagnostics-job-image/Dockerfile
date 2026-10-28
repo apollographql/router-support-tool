@@ -13,11 +13,14 @@ ARG AWS_CLI_VERSION="2.34.63-r0"
 ARG CURL_VERSION="8.23.0-r0"
 # renovate: datasource=repology depName=alpine_3_24/kubectl versioning=loose
 ARG KUBECTL_VERSION="1.36.1-r2"
+# renovate: datasource=repology depName=alpine_3_24/python3 versioning=loose
+ARG PYTHON3_VERSION="3.14.10-r1"
 RUN apk add --no-cache \
     ca-certificates="${CA_CERTIFICATES_VERSION}" \
     aws-cli="${AWS_CLI_VERSION}" \
     curl="${CURL_VERSION}" \
-    kubectl="${KUBECTL_VERSION}"
+    kubectl="${KUBECTL_VERSION}" \
+    python3="${PYTHON3_VERSION}"
 
 COPY --from=gcloud-sdk /google-cloud-sdk /google-cloud-sdk
 ENV PATH="/google-cloud-sdk/bin:$PATH"
