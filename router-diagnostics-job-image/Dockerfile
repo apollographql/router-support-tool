@@ -10,7 +10,7 @@ ARG CA_CERTIFICATES_VERSION="20261020-r0"
 # renovate: datasource=repology depName=alpine_3_24/aws-cli versioning=loose
 ARG AWS_CLI_VERSION="2.34.63-r0"
 # renovate: datasource=repology depName=alpine_3_24/curl versioning=loose
-ARG CURL_VERSION="8.22.0-r0"
+ARG CURL_VERSION="8.23.0-r0"
 # renovate: datasource=repology depName=alpine_3_24/kubectl versioning=loose
 ARG KUBECTL_VERSION="1.36.1-r2"
 RUN apk add --no-cache \
