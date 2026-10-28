@@ -248,7 +248,7 @@ Additionally requires creating a Job, a namespace-scoped ServiceAccount, a Role/
 
 Declining only `nodes/proxy`/`nodes/stats` (possible when you manage the RBAC yourself) still leaves `nodes` access (node pressure conditions) and everything `clusterResources` provides — OOM kill occurrences and last state, restart counts, configured limits. What's lost is container memory and CPU usage, and the router's own Prometheus endpoint serves jemalloc memory gauges but no container RSS, working-set or CPU figures, so it is not a substitute. See `specs/collection/base_spec.md` → footnote \[2\].
 
-The chart currently only supports declining all three grants together, via `job.collectNodeMetrics: false` at install time. This skips creating the ClusterRole/ClusterRoleBinding entirely and the `nodeMetrics` collector itself then comes back empty rather than the install failing. Node pressure conditions then come back empty too, since the `nodes` list grant is part of that ClusterRole.
+The chart currently only supports declining all three grants together via `job.collectNodeMetrics: false` at install time. This skips creating the ClusterRole/ClusterRoleBinding entirely and the `nodeMetrics` collector itself then comes back empty rather than the install failing. Node pressure conditions then come back empty too since the `nodes` list grant is part of that ClusterRole.
 
 See `specs/collection/base_spec.md` for the rest of the permission set the collectors need.
 
