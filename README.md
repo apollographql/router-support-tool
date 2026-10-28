@@ -24,11 +24,11 @@ Deployment — where collection runs, what permissions it needs, and how the cus
 
 ```
 specs/
-├── architecture.md          # Layer model — start here
-├── user_experience.md       # Customer-facing flows and invocation
-├── artifact-distribution.md # How the chart/image/collect script are built and published
-├── release-process.md       # Versioning across those artifacts, and how to cut a release
-├── scope.md                 # What the tool ships today, and what it deliberately does not
+├── architecture.md           # Layer model — start here
+├── user_experience.md        # Customer-facing flows and invocation
+├── artifact-distribution.md  # How the chart/image/collect script are built and published
+├── release-process.md        # Versioning across those artifacts, and how to cut a release
+├── scope.md                  # What the tool ships today, and what it deliberately does not
 ├── collection/               # What is collected and how it is sanitized
 ├── trigger/                  # What causes collection to happen
 ├── storage/                  # Where bundles land
