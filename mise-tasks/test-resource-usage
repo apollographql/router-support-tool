@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Unit-test the router-resource-usage collector against stubbed kubelet and API server responses"
+#
+# The collector (router-diagnostics-chart/files/router-resource-usage.py) is standard-library
+# Python. These tests replace its HTTP calls, so they cover which lines and files it produces
+# for each case in specs/collection/base_spec.md -> Kubelet stats collection, not what a real
+# kubelet returns (the chainsaw tests cover that).
+set -euo pipefail
+
+python3 -I -m unittest discover -s testing/unit -v
