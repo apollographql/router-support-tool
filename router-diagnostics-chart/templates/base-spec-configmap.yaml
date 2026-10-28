@@ -45,8 +45,10 @@ data:
             {{- end }}
             includeAllData: true
 
+        {{- if eq (include "router-diagnostics-chart.useNodeMetricsCollector" .) "true" }}
         - nodeMetrics:
             collectorName: router-resource-usage
+        {{- end }}
 
         - data:
             name: meta.json
@@ -74,6 +76,21 @@ data:
               - -c
               - |
                 {{- tpl (.Files.Get "files/router-metrics-collect.sh") . | nindent 16 }}
+        {{- if eq (include "router-diagnostics-chart.useNodeMetricsCollector" .) "false" }}
+        # mode: job, nodeStatsSource: kubelet. Reads the kubelet from the Job's pod, so the
+        # API server's nodes/proxy grant is not needed.
+        - run:
+            collectorName: router-resource-usage
+            outputDir: nodes
+            ignoreParentEnvs: true
+            command: sh
+            args:
+              - -c
+              - |
+                NAMESPACE={{ include "router-diagnostics-chart.shellQuote" .Values.namespace }} SELECTOR={{ include "router-diagnostics-chart.shellQuote" (.Values.selector | default "app.kubernetes.io/name=router") }} KUBELET_DECLINED={{ if .Values.job.collectNodeMetrics }}0{{ else }}1{{ end }} CADVISOR={{ if and .Values.job.collectNodeMetrics .Values.job.collectCadvisorMetrics }}1{{ else }}0{{ end }} exec python3 -I - <<'PY'
+                {{- .Files.Get "files/router-resource-usage.py" | nindent 16 }}
+                PY
+        {{- end }}
   redactor-spec: |
     apiVersion: troubleshoot.sh/v1beta2
     kind: Redactor
@@ -209,6 +226,7 @@ data:
             files:
               - "host-collectors/run-host/*-info.json"
               - "router-metrics/*-info.json"
+              - "router-resource-usage/*-info.json"
           removals:
             regex:
               - redactor: '(?P<mask>.+)'
