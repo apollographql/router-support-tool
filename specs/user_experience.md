@@ -183,17 +183,22 @@ Installing with `mode: local` requires permission to create a ConfigMap in the t
 
 Installing with `mode: job` requires more: creating a Job, a ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
 
-Collection itself needs read access in the router's namespace to pods, pod logs, ConfigMaps, and deployments — standard permissions for anyone managing a k8s workload — plus three separate cluster-scoped grants, deliberately kept independent so you can decline the more sensitive ones without losing the others:
+Collection itself needs read access in the router's namespace to pods, pod logs, ConfigMaps, and deployments — standard permissions for anyone managing a k8s workload — plus cluster-scoped read grants for container memory and CPU, kept to the narrowest the kubelet's own authorization allows.
 
-- **`list`/`get` on `nodes`** — an ordinary, low-risk read of node objects. This is what surfaces node pressure conditions (`MemoryPressure`, `DiskPressure`).
-- **`get` on `nodes/proxy`** — required by the API server for any request proxied through it to a kubelet, regardless of what's being asked for. This is a broader grant than it may look: Kubernetes' own documentation notes that `nodes/proxy` "provides access to privileged kubelet APIs that can retrieve container logs or execute and attach to pod processes... This access bypasses audit logging and admission control," and is explicitly "not a read-only permission." What this tool actually does with it is read-only — it only ever asks for the kubelet's stats endpoint — but the grant itself authorizes more than that one use.
-- **`get` on `nodes/stats`** — required separately by the kubelet's own authorization check specifically for the stats endpoint. This is what actually narrows what the kubelet will serve once `nodes/proxy` gets the request there; it does not replace `nodes/proxy`.
+Under `mode: job`, the chart creates one ClusterRole holding:
 
-Node access alone is the only one of the three that reaches outside the namespace with no other caveats. All three are read-only in what this tool does with them.
+- **`get` on `nodes/stats`** — what the kubelet requires for its stats endpoint. The Job reads the kubelet directly from inside the cluster, so the broad `nodes/proxy` grant is not needed.
+- **`list` on `nodes`** — an ordinary, low-risk read of node objects. This is what surfaces node pressure conditions (`MemoryPressure`, `DiskPressure`).
+- **`get` on `nodes/metrics`** — only if you turn on `job.collectCadvisorMetrics`, to read the kubelet's cAdvisor endpoint (CPU throttling, OOM and memory-limit counters).
+
+`nodes/proxy` is not required. Kubernetes' documentation notes that `get` on `nodes/proxy` is "not a read-only permission" and authorizes executing commands in any container on the node, which is why this tool avoids needing it. The Job keeps only your router pods' entries from what the kubelet returns, so other workloads on the same nodes don't end up in the bundle.
+
+Under `mode: local`, `collect.sh` reads the same data through the API server's proxy using your own kubectl credentials, which needs `nodes`, `nodes/proxy` and `nodes/stats`. Whether that works depends on your own access.
+If the Job's pod can't reach a node's kubelet on port 10250, or the kubelet refuses it, the Job falls back to the metrics API for that node's pods on its own, which needs metrics-server installed and gives working-set memory and CPU but not RSS or pressure data. If neither works, install with `job.nodeStatsSource: apiServer` to read through the API server's proxy instead. That needs `nodes/proxy`, with the risk described above, and writes every pod on the node.
 
 **`pods/exec` is not required** — nothing runs inside your router container.
 
-If you'd rather not grant `nodes/proxy`/`nodes/stats`, you can decline both and keep `nodes` access: you'll still get OOM kills, restart counts, configured limits, and node pressure conditions, but you'll lose container memory and CPU usage. Enabling the router's Prometheus exporter doesn't make up for this: it exposes the router's own jemalloc memory figures, but no container RSS, working-set or CPU numbers. `nodes/proxy` and `nodes/stats` are only useful together — declining either one loses the same capability, so there's no reason to grant one without the other. Declining through the chart (`job.collectNodeMetrics: false`) turns off all three grants so node pressure conditions are lost along with the memory and CPU figures.
+If you'd rather not grant the cluster-scoped access under `mode: job`, install with `job.collectNodeMetrics: false`. You'll still get container working-set memory and CPU from the metrics API where metrics-server is installed, plus OOM kills, restart counts and configured limits. You'll lose RSS, page faults, pressure data and node pressure conditions, and the bundle says what was declined or missing. Enabling the router's Prometheus exporter doesn't make up for this: it exposes the router's own jemalloc memory figures, but no container RSS, working-set or CPU numbers.
 
 ### Sharing with support
 

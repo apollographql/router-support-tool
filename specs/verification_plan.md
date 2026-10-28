@@ -35,7 +35,7 @@ These tests validate that an empty section is always attributable to a specific,
 |  | Scenario | What it validates |
 | --- | --- | --- |
 | 1 | **Metrics/observability not configured** | Router deployed with Prometheus scraping disabled. Confirms the bundle still collects, no per-pod metrics files are written, and `router-metrics`'s output names each pod plus the overall reason (`no pod responded on port <metricsPort> — prometheus may not be enabled`). |
-| 2 | **RBAC permission declined for a collector** | Environment's ServiceAccount/Role deliberately omits a permission a collector needs (e.g. `nodes/proxy` for `nodeMetrics`, or read access to the router's ConfigMap). The affected collector degrades to empty/an attributable error rather than crashing the whole bundle.
+| 2 | **RBAC permission declined for a collector** | Environment's ServiceAccount/Role deliberately omits a permission a collector needs (e.g. `nodes/stats` for the kubelet stats collector, or read access to the router's ConfigMap). The affected collector degrades to empty/an attributable error rather than crashing the whole bundle.
 | 3 | **One router's metrics endpoint not responding** | One router's exporter is disabled while its neighbors stay healthy. Confirms the healthy pods still get their own `<pod-name>.txt` and the silent pod gets its own `metrics not collected for pod <pod-name>: no response on port <metricsPort>` line, so a single missing file is attributable to that pod. |
 | 4 | **Selector matches no router pods** | The chart's `selector` doesn't match the router's pod labels, which is what an official-chart install with `router.nameOverride` (or an aliased release) looks like when `selector` is left at its default. Confirms `router-metrics`'s output says `no pods matched selector <selector> in namespace <namespace>`, naming the selector to fix, instead of an empty section. |
 
@@ -84,7 +84,7 @@ Everything that makes a test case *not* healthy happens after that, from the Sce
 
 The environment itself is the same across every test case, and so is the Scenario's `command`. What varies is the matrix's scenario value, passed into that same script via `env_vars` (e.g. `SCENARIO: "{{ scenario }}"`). The script branches internally on that value to put the environment into whatever shape the test case needs, then runs the actual collection/verification commands. "All routers healthy" is simply the no-op branch.
 
-The environment does differ for the Routers under-resourced test case, where `resources.limits` will be set tight from the start. We can verify this by reading `node-metrics/*.json` and the per-pod files under `host-collectors/run-host/router-metrics/pods/` (raw Prometheus text, one `<pod-name>.txt` per pod) against `resources.limits`. Note: the `pods/` files only appear if the router's Prometheus exporter is enabled in this scenario's config and its worth checking whether the router can prioritize serving `/metrics` even under memory pressure, so this signal doesn't just go dark exactly when it matters most.
+The environment does differ for the Routers under-resourced test case, where `resources.limits` will be set tight from the start. We can verify this by reading the kubelet stats (`node-metrics/*.json` under `mode: local` or `job.nodeStatsSource: apiServer`, `host-collectors/run-host/router-resource-usage/nodes/*/stats-summary.json` under `mode: job`) and the per-pod files under `host-collectors/run-host/router-metrics/pods/` (raw Prometheus text, one `<pod-name>.txt` per pod) against `resources.limits`. Note: the `pods/` files only appear if the router's Prometheus exporter is enabled in this scenario's config and its worth checking whether the router can prioritize serving `/metrics` even under memory pressure, so this signal doesn't just go dark exactly when it matters most.
 
 #### Applying the collector attribution scenarios to RTF
 
@@ -96,7 +96,7 @@ These are also just matrix dimension values on the same templated manifests. Eve
 
 - **Selector matches no router pods** — the `selector-mismatch` condition installs the chart with `selector` unset, so its default `app.kubernetes.io/name=router` misses the environment's `app: router` pods. `router-logs` and `configMap` share that selector, so the checks that read them are skipped. It asserts the `no pods matched` line and the absence of per-pod files, and still runs the checks that read `clusterResources` (which is collected by namespace) and the `APOLLO_KEY` absence check.
 
-- **RBAC permission declined** — the RTF environment cannot be granted the cluster-scoped permissions `nodeMetrics` needs so this will be declined across all runs.
+- **RBAC permission declined** — the RTF environment cannot be granted the cluster-scoped permissions the kubelet stats collector needs (`nodes/stats`, and `nodes` for node conditions), so this will be declined across all runs. The positive control for those signals therefore lives in the chainsaw tests (`specs/collection/base_spec.md` → Kubelet stats collection → Required before this is considered done).
 
 #### Redaction verification technique
 

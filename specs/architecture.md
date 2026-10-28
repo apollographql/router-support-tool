@@ -85,7 +85,7 @@ Collection degrades gracefully. A collector whose target does not exist, such as
 | Pod status, restart counts, resource limits | `clusterResources` |
 | Router version (container image tag) | `clusterResources` |
 | Runtime logs (all containers in the pod) | `logs` |
-| Container CPU and memory metrics | `nodeMetrics` (kubelet Summary API) |
+| Container CPU and memory metrics | `hostCollectors.run` (`router-resource-usage`, a script that reads the kubelet's Summary API directly) under `mode: job`, falling back per node to the metrics API; `nodeMetrics` (the same API through the API server's proxy) under `mode: local`, or under `mode: job` with `job.nodeStatsSource: apiServer` |
 | Prometheus metrics snapshot | `hostCollectors.run` (`router-metrics`, a script that scrapes each router pod's metrics endpoint over HTTP) |
 | `router.yaml` configuration | `configMap` |
 | `APOLLO_GRAPH_REF`, `APOLLO_ROUTER_OFFICIAL_HELM_CHART` (from the pod spec) | `clusterResources` |
