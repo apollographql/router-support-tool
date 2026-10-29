@@ -88,8 +88,7 @@ host-collectors/run-host/
     └── nodes/
         └── <node-name>/
             ├── stats-summary.json
-            ├── metrics-api.json
             └── cadvisor.txt
 ```
 
-One directory per node that runs a router pod. `stats-summary.json` is the kubelet's `/stats/summary` response reduced to the node-level figures and the router's pods. `cadvisor.txt` is present only when `job.collectCadvisorMetrics` is `true`: the kubelet's `/metrics/cadvisor` response reduced to the router's pods, in Prometheus text format. `metrics-api.json` is present instead of `stats-summary.json` when that node's kubelet read failed or was declined and the metrics API was used: the router pods' `containers[].usage` entries on that node, with their timestamp and window. A node with no file was not read; `router-resource-usage.txt` carries the line saying why (`specs/collection/base_spec.md` → Kubelet stats collection lists each case). As with `router-metrics`, this path is pinned to the troubleshoot.sh version the chart bundles. Under `mode: local`, or with `job.nodeStatsSource: apiServer`, there is no such directory: `node-metrics/<node-name>.json` holds the data.
+One directory per node that runs a router pod. `stats-summary.json` is the kubelet's `/stats/summary` response reduced to the node-level figures and the router's pods. `cadvisor.txt` is present only when `job.collectCadvisorMetrics` is `true`: the kubelet's `/metrics/cadvisor` response reduced to the router's pods, in Prometheus text format. A node with no file was not read; `router-resource-usage.txt` carries the line saying why (`specs/collection/base_spec.md` → Kubelet stats collection lists each case). As with `router-metrics`, this path is pinned to the troubleshoot.sh version the chart bundles. Under `mode: local`, or with `job.nodeStatsSource: apiServer`, there is no such directory: `node-metrics/<node-name>.json` holds the data.

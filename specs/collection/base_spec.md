@@ -107,20 +107,19 @@ What the base spec collects is sufficient to **detect, confirm, and characterize
 | `memory.usageBytes`, `memory.availableBytes` | kubelet Summary API | `router-resource-usage` collector \[2\] | Usage, and headroom remaining against the limit | `nodes/stats` RBAC grant (`mode: job`), see \[2\] | kubelet CPU (plus API server CPU in `mode: local`) | Cluster network → kubelet (`mode: job`); k8s control plane → kubelet (`mode: local`) | \[1\] |
 | `memory.pageFaults`, `memory.majorPageFaults` | kubelet Summary API | `router-resource-usage` collector \[2\] | Major faults indicate real paging pressure rather than growth alone | `nodes/stats` RBAC grant (`mode: job`), see \[2\] | kubelet CPU (plus API server CPU in `mode: local`) | Cluster network → kubelet (`mode: job`); k8s control plane → kubelet (`mode: local`) | \[1\] |
 | `cpu.usageNanoCores`, `cpu.usageCoreNanoSeconds` | kubelet Summary API | `router-resource-usage` collector \[2\] | CPU consumed by the router container | `nodes/stats` RBAC grant (`mode: job`), see \[2\] | kubelet CPU (plus API server CPU in `mode: local`) | Cluster network → kubelet (`mode: job`); k8s control plane → kubelet (`mode: local`) | \[1\] |
-| `containers[].usage.cpu`, `containers[].usage.memory` (working set) | metrics API (`metrics.k8s.io`) | `router-resource-usage` collector \[2\], fallback, `mode: job` only | CPU rate and working-set memory when the kubelet can't be read | namespaced `get`/`list` on `pods` in `metrics.k8s.io`, and metrics-server installed | metrics-server and API server CPU | Cluster network → API server | Only the router pods on nodes whose kubelet read failed or was declined. Less detail than the kubelet: no RSS, page faults or pressure stall data. |
 | `cpu.psi`, `memory.psi` (pressure stall information) | kubelet Summary API | `router-resource-usage` collector \[2\] | Whether the container is *stalling* on CPU or memory | `nodes/stats` RBAC grant (`mode: job`), see \[2\], plus the `KubeletPSI` feature gate on the cluster | kubelet CPU (plus API server CPU in `mode: local`) | Cluster network → kubelet (`mode: job`); k8s control plane → kubelet (`mode: local`) | |
 | `container_cpu_cfs_throttled_periods_total`, `container_cpu_cfs_throttled_seconds_total` | kubelet cAdvisor endpoint | `router-resource-usage` collector \[2\], `mode: job` only | Whether the container is being throttled against its CPU limit, and for how long | `nodes/metrics` RBAC grant and `job.collectCadvisorMetrics: true` | kubelet CPU | Cluster network → kubelet | Router pods' series only. Opt-in. |
 | `container_oom_events_total`, `container_memory_failcnt` | kubelet cAdvisor endpoint | `router-resource-usage` collector \[2\], `mode: job` only | How often the kernel recorded the container hitting its memory limit or an OOM event, counted since the container started | `nodes/metrics` RBAC grant and `job.collectCadvisorMetrics: true` | kubelet CPU | Cluster network → kubelet | Router pods' series only. Opt-in. |
 
 **\[1\]** The Summary API reports per node, per pod, and per container. This assumes one router process per container.
 
-**\[2\]** Container memory and CPU come from the kubelet, never from inside the router container. `mode: job` needs the `nodes/stats` grant and falls back to the metrics API; `mode: local` uses `nodeMetrics` through the API server's proxy, which needs `nodes` and `nodes/proxy` on the invoking user's credentials. Node pressure conditions (`clusterResources`) also need `nodes` (list). The router's Prometheus exporter needs none of this but serves only jemalloc gauges, not CPU or container RSS. See [Kubelet stats collection](#kubelet-stats-collection-mode-job).
+**\[2\]** Container memory and CPU come from the kubelet, never from inside the router container. `mode: job` needs the `nodes/stats` grant; `mode: local` uses `nodeMetrics` through the API server's proxy, which needs `nodes` and `nodes/proxy` on the invoking user's credentials. Node pressure conditions (`clusterResources`) also need `nodes` (list). The router's Prometheus exporter needs none of this but serves only jemalloc gauges, not CPU or container RSS. See [Kubelet stats collection](#kubelet-stats-collection-mode-job).
 
 #### Kubelet stats collection (`mode: job`)
 
 Container memory and CPU come from the kubelet.
 
-- **`mode: job`**: `router-resource-usage`, a `hostCollectors.run` collector, reads the kubelet directly from the Job's pod. It is a standard-library Python script embedded in the spec ConfigMap. Because it calls the kubelet itself, the kubelet's own authorization applies and the broad `nodes/proxy` grant isn't needed (`specs/deployment/on-demand-collection.md` → Kubelet stats RBAC). `job.nodeStatsSource: apiServer` swaps it for `nodeMetrics`; see [Sources and fallback](#sources-and-fallback).
+- **`mode: job`**: `router-resource-usage`, a `hostCollectors.run` collector, reads the kubelet directly from the Job's pod. It is a standard-library Python script embedded in the spec ConfigMap. Because it calls the kubelet itself, the kubelet's own authorization applies and the broad `nodes/proxy` grant isn't needed (`specs/deployment/on-demand-collection.md` → Kubelet stats RBAC). `job.nodeStatsSource: apiServer` swaps it for `nodeMetrics`; see [Sources](#sources).
 
 Nodes are found when collection runs so `helm template` renderers such as ArgoCD produce the same spec. Each run lists the pods matching `selector` in `namespace`, takes each pod's `status.hostIP`, and asks each distinct node's kubelet once, ten at a time:
 
@@ -130,35 +129,29 @@ Nodes are found when collection runs so `helm template` renderers such as ArgoCD
 
 
 **Credentials sent to the kubelet.** The script sends the Job's ServiceAccount token to each router node's kubelet. By default it doesn't verify the kubelet's TLS certificate.
-The risk is that anyone who can intercept or spoof the pod-to-node path on port 10250 could capture the token and replay it until it expires. The token gives read-only access: pods in the namespace, `metrics.k8s.io` pod metrics, and `nodes/stats` and `nodes` across the cluster. Two controls limit and close that risk:
+The risk is that anyone who can intercept or spoof the pod-to-node path on port 10250 could capture the token and replay it until it expires. The token gives read-only access: pods in the namespace, and `nodes/stats` and `nodes` across the cluster. Two controls limit and close that risk:
 
 - Short-lived token: The Job's pod doesn't use the default auto-mounted token. It uses a projected token with `expirationSeconds: 600`. A bound token is also rejected once its pod object is deleted, but a finished Job's pod is kept for `job.ttlSecondsAfterFinished` (default one hour), so expiry, not deletion, bounds replay.
-- Optional verification: `job.kubeletCA.configMapName` names a ConfigMap holding a CA bundle, under the key `job.kubeletCA.key` (default `ca.crt`). When it is set, the script verifies each kubelet's certificate against it, and the certificate must be valid for the node's IP. A node that fails verification is sent no token: the script falls back to the metrics API and writes a named reason. When it is unset, nothing is verified. A customer whose kubelet certificates are signed by the cluster CA can point `configMapName` at `kube-root-ca.crt`.
+- Optional verification: `job.kubeletCA.configMapName` names a ConfigMap holding a CA bundle, under the key `job.kubeletCA.key` (default `ca.crt`). When it is set, the script verifies each kubelet's certificate against it, and the certificate must be valid for the node's IP. A node that fails verification is sent no token, and the script writes a named reason. When it is unset, nothing is verified. A customer whose kubelet certificates are signed by the cluster CA can point `configMapName` at `kube-root-ca.crt`.
 
-#### Sources and fallback
+#### Sources
 
-For each node the script tries the kubelet first then the metrics API. A pod with no node yet is not retried.
+For each node the script tries its sources in order and keeps the first that yields data. The kubelet is the only source today: it needs `nodes/stats` (get), cluster-scoped, and `nodes/metrics` too for opt-in cAdvisor. Another source is another entry in that order, with its own output file and named reasons; the ordering, the batching and the reason lines don't change. A pod with no node yet is not retried.
 
-| Level | Used when | Needs |
+A node ends with `stats-summary.json` or a named reason, never both.
+
+| Signal | Kubelet read | Node not read |
 | --- | --- | --- |
-| **1. Kubelet** (`stats-summary.json`) | The node's kubelet can be read. | `nodes/stats` (get), cluster-scoped. `nodes/metrics` too for opt-in cAdvisor. |
-| **2. Metrics API** (`metrics-api.json`) | The kubelet read failed with *could not reach* or *refused*, or was declined at install. It goes through the API server, so it doesn't depend on reaching the node. | `get`/`list` on `pods` in `metrics.k8s.io` (namespaced, from the Job's Role), and metrics-server installed. |
-| **3. Neither** | The metrics API is unavailable too, or has no entry for the pod. | Nothing. A named reason is written (see below). |
+| Working-set memory | yes | no |
+| CPU usage | rate and cumulative | no |
+| RSS, usage, available (headroom) | yes | no |
+| Page faults, major faults | yes | no |
+| Pressure stall (PSI) | if the `KubeletPSI` gate is on | no |
+| CPU throttling, OOM counters (cAdvisor) | opt-in | no |
 
-| Signal | Kubelet | Metrics API | Neither |
-| --- | --- | --- | --- |
-| Working-set memory | yes | yes | no |
-| CPU usage | rate and cumulative | rate only | no |
-| RSS, usage, available (headroom) | yes | no | no |
-| Page faults, major faults | yes | no | no |
-| Pressure stall (PSI) | if the `KubeletPSI` gate is on | no | no |
-| CPU throttling, OOM counters (cAdvisor) | opt-in | no | no |
+At every outcome, `clusterResources` still provides configured limits and requests, OOM kill occurrences and last state, and restart counts. Node pressure conditions also need `nodes` (list), lost only with `job.collectNodeMetrics: false`.
 
-At every level, `clusterResources` still provides configured limits and requests, OOM kill occurrences and last state, and restart counts. Node pressure conditions also need `nodes` (list), lost only with `job.collectNodeMetrics: false`.
-
-A node ends with `stats-summary.json`, `metrics-api.json`, or a named reason and neither, never both.
-
-`job.nodeStatsSource: apiServer` replaces the script with `nodeMetrics`, as in `mode: local`. It has no fallback and writes every pod on the node to `node-metrics/<node-name>.json`. It is for clusters where the Job's pod can't reach the kubelet and metrics-server isn't installed, and for customers who accept `nodes/proxy`. `job.collectNodeMetrics: false` skips the ClusterRole: the script writes the "declined at install" line and uses the metrics API alone. With `apiServer`, the chart refuses to render.
+`job.nodeStatsSource: apiServer` replaces the script with `nodeMetrics`, as in `mode: local`. It writes every pod on the node to `node-metrics/<node-name>.json`. It is for clusters where the Job's pod can't reach the kubelet, and for customers who accept `nodes/proxy`. `job.collectNodeMetrics: false` skips the ClusterRole: the script writes the "declined at install" line and collects nothing from the kubelet. With `apiServer`, the chart refuses to render.
 
 **Missing data always has a named reason**, one line in the script's output per case:
 
@@ -168,19 +161,17 @@ A node ends with `stats-summary.json`, `metrics-api.json`, or a named reason and
 | No pod matches | `kubelet stats not collected: no pods matched selector <selector> in namespace <namespace>` | A wrong `selector` or `namespace`. |
 | Declined at install | `kubelet stats not collected: declined at install (job.collectNodeMetrics is false)` | A render-time fact, not a failure. |
 | Pod has no node yet | `kubelet stats not collected for pod <pod-name>: pod has no node yet` | The pod is `Pending`. |
-| Kubelet unreachable | `kubelet stats not collected for node <node-name>: could not reach the kubelet at <hostIP>:10250` | The network path (NetworkPolicy, firewall, non-default port), not RBAC. Falls back. |
-| Certificate not verified | `kubelet stats not collected for node <node-name>: the kubelet's certificate could not be verified against job.kubeletCA.configMapName` | The CA doesn't match the kubelet's serving certificate, or the certificate isn't valid for the node IP. No token is sent. Falls back. |
-| Kubelet refused | `kubelet stats not collected for node <node-name>: kubelet returned HTTP <code>` | `401`/`403`: missing `nodes/stats`, usually because the ClusterRole wasn't created. Falls back. The cAdvisor read says `kubelet cadvisor metrics not collected …` and needs `nodes/metrics`. |
+| Kubelet unreachable | `kubelet stats not collected for node <node-name>: could not reach the kubelet at <hostIP>:10250` | The network path (NetworkPolicy, firewall, non-default port), not RBAC. |
+| Certificate not verified | `kubelet stats not collected for node <node-name>: the kubelet's certificate could not be verified against job.kubeletCA.configMapName` | The CA doesn't match the kubelet's serving certificate, or the certificate isn't valid for the node IP. No token is sent. |
+| Kubelet refused | `kubelet stats not collected for node <node-name>: kubelet returned HTTP <code>` | `401`/`403`: missing `nodes/stats`, usually because the ClusterRole wasn't created. The cAdvisor read says `kubelet cadvisor metrics not collected …` and needs `nodes/metrics`. |
 | Response unreadable | `kubelet stats not collected for node <node-name>: the kubelet's response could not be read` | A `200` that isn't Summary API JSON. Not retried. |
 | Pod missing from node's stats | `kubelet stats not collected for pod <pod-name>: not in node <node-name>'s stats` | Replaced or deleted between listing and reading. |
-| Metrics API failed | `metrics API not available: <reason>` | `metrics.k8s.io not found` (`404`, metrics-server isn't installed), `service unavailable` (`503`), `forbidden` (the Role lacks `get`/`list` on `pods` in `metrics.k8s.io`), `response could not be read`, or `HTTP <code>`. The response is in the stderr file. |
-| No metrics entry for a pod | `metrics API has no entry for pod <pod-name>` | metrics-server hasn't scraped it yet. |
 
 **What the script needs:**
 
 - `python3` in the Job image, pinned (`specs/deployment/on-demand-collection.md` → The Job image). No `kubectl` or `curl`.
-- `get`/`list` on pods in `namespace` and, for the fallback, on `pods` in `metrics.k8s.io` (both from the Job's Role), plus the cluster-scoped grants in Kubelet stats RBAC.
-- A network path to each router node's IP on port `10250`. Without it, the script falls back to the metrics API.
+- `get`/`list` on pods in `namespace` (from the Job's Role), plus the cluster-scoped grants in Kubelet stats RBAC.
+- A network path to each router node's IP on port `10250`. Without it, that node has no stats and the script writes the "could not reach" line; `job.nodeStatsSource: apiServer` is the alternative.
 - `ignoreParentEnvs: true`, as for `router-metrics`. It reaches the API server at `kubernetes.default.svc` using the Job's mounted ServiceAccount CA and token.
 - The token never appears in the output, stderr or the diagnostic sidecar (redacted wholesale, `specs/collection/data_sanitization/host_collector_diagnostics.md`).
 
