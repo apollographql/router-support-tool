@@ -111,7 +111,7 @@ What the base spec collects is sufficient to **detect, confirm, and characterize
 
 **\[1\]** The Summary API reports per node, per pod, and per container. This assumes one router process per container.
 
-**\[2\]** Container memory and CPU come from the kubelet, never from inside the router container. `mode: job` needs the `nodes/stats` grant; `mode: local` uses `nodeMetrics` through the API server's proxy, which needs `nodes` and `nodes/proxy` on the invoking user's credentials. Node pressure conditions (`clusterResources`) also need `nodes` (list). See [Kubelet stats collection](#kubelet-stats-collection-mode-job).
+**\[2\]** Container memory and CPU come from the kubelet. `mode: job` needs the `nodes/stats` grant and `mode: local` uses `nodeMetrics` through the API server's proxy which needs `nodes` and `nodes/proxy` on the invoking user's credentials. `nodeMetrics` can't be narrowed to the router: it writes every pod on every node in the cluster to `node-metrics/<node-name>.json`. Node pressure conditions (`clusterResources`) also need `nodes` (list). See [Kubelet stats collection](#kubelet-stats-collection-mode-job).
 
 #### Kubelet stats collection (`mode: job`)
 
