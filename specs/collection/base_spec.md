@@ -117,22 +117,16 @@ What the base spec collects is sufficient to **detect, confirm, and characterize
 
 #### Kubelet stats collection (`mode: job`)
 
-Container memory and CPU come from the kubelet.
+`router-resource-usage`, a `hostCollectors.run` Python script, reads the kubelet directly from the Job's pod, so the kubelet's own authorization applies and `nodes/proxy` isn't needed (`specs/deployment/on-demand-collection.md` → Kubelet stats RBAC). `job.nodeStatsSource: apiServer` swaps it for `nodeMetrics`; see [Sources](#sources).
 
-- **`mode: job`**: `router-resource-usage`, a `hostCollectors.run` collector, reads the kubelet directly from the Job's pod. It is a standard-library Python script embedded in the spec ConfigMap. Because it calls the kubelet itself, the kubelet's own authorization applies and the broad `nodes/proxy` grant isn't needed (`specs/deployment/on-demand-collection.md` → Kubelet stats RBAC). `job.nodeStatsSource: apiServer` swaps it for `nodeMetrics`; see [Sources](#sources).
+- Nodes are found when collection runs, from the `status.hostIP` of the pods matching `selector` in `namespace`, so `helm template` renderers such as ArgoCD produce the same spec.
+- Only the router pods' entries are kept, so other workloads on the node never reach the bundle.
+- `/metrics/cadvisor` is read only with `job.collectCadvisorMetrics: true`, because it returns far more data per node.
 
-Nodes are found when collection runs so `helm template` renderers such as ArgoCD produce the same spec. Each run lists the pods matching `selector` in `namespace`, takes each pod's `status.hostIP`, and asks each distinct node's kubelet once, ten at a time:
+**Credentials sent to the kubelet.** The script sends the Job's ServiceAccount token to each router node's kubelet and by default doesn't verify its TLS certificate, so anyone who can intercept the pod-to-node path could capture the token until it expires. The token is read-only: pods in the namespace, and `nodes/stats` and `nodes` across the cluster. Two controls limit the risk:
 
-1. `GET https://<hostIP>:10250/stats/summary` with the Job's ServiceAccount token.
-2. Keep the node-level figures and only the router pods' entries, so other workloads on the node never reach the bundle.
-3. With `job.collectCadvisorMetrics: true`, also `GET /metrics/cadvisor`, keeping only the router pods' series. It returns far more data per node, so it is opt-in.
-
-
-**Credentials sent to the kubelet.** The script sends the Job's ServiceAccount token to each router node's kubelet. By default it doesn't verify the kubelet's TLS certificate.
-The risk is that anyone who can intercept or spoof the pod-to-node path on port 10250 could capture the token and replay it until it expires. The token gives read-only access: pods in the namespace, and `nodes/stats` and `nodes` across the cluster. Two controls limit and close that risk:
-
-- Short-lived token: The Job's pod doesn't use the default auto-mounted token. It uses a projected token with `expirationSeconds: 600`. A bound token is also rejected once its pod object is deleted, but a finished Job's pod is kept for `job.ttlSecondsAfterFinished` (default one hour), so expiry, not deletion, bounds replay.
-- Optional verification: `job.kubeletCA.configMapName` names a ConfigMap holding a CA bundle, under the key `job.kubeletCA.key` (default `ca.crt`). When it is set, the script verifies each kubelet's certificate against it, and the certificate must be valid for the node's IP. A node that fails verification is sent no token, and the script writes a named reason. When it is unset, nothing is verified. A customer whose kubelet certificates are signed by the cluster CA can point `configMapName` at `kube-root-ca.crt`.
+- The Job's pod uses a projected token with `expirationSeconds: 600`, not the default token. Expiry, not pod deletion, bounds replay, since a finished Job's pod is kept for `job.ttlSecondsAfterFinished`.
+- `job.kubeletCA.configMapName` (key `job.kubeletCA.key`, default `ca.crt`) turns on verification against that CA, and the certificate must be valid for the node's IP. A node that fails is sent no token and gets a named reason. Unset, nothing is verified. A cluster whose cluster CA signs its kubelet certificates can use `kube-root-ca.crt`.
 
 The token is never written to the script's output, its stderr or the diagnostic sidecar.
 
