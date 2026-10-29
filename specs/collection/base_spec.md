@@ -111,7 +111,7 @@ What the base spec collects is sufficient to **detect, confirm, and characterize
 
 **\[1\]** The Summary API reports per node, per pod, and per container. This assumes one router process per container.
 
-**\[2\]** Container memory and CPU come from the kubelet, never from inside the router container. `mode: job` needs the `nodes/stats` grant; `mode: local` uses `nodeMetrics` through the API server's proxy, which needs `nodes` and `nodes/proxy` on the invoking user's credentials. Node pressure conditions (`clusterResources`) also need `nodes` (list). The router's Prometheus exporter needs none of this but serves only jemalloc gauges, not CPU or container RSS. See [Kubelet stats collection](#kubelet-stats-collection-mode-job).
+**\[2\]** Container memory and CPU come from the kubelet, never from inside the router container. `mode: job` needs the `nodes/stats` grant; `mode: local` uses `nodeMetrics` through the API server's proxy, which needs `nodes` and `nodes/proxy` on the invoking user's credentials. Node pressure conditions (`clusterResources`) also need `nodes` (list). See [Kubelet stats collection](#kubelet-stats-collection-mode-job).
 
 #### Kubelet stats collection (`mode: job`)
 
@@ -120,13 +120,11 @@ What the base spec collects is sufficient to **detect, confirm, and characterize
 - Nodes are found when collection runs, from the `status.hostIP` of the pods matching `selector` in `namespace`, so `helm template` renderers such as ArgoCD produce the same spec.
 - Only the router pods' entries are kept, so other workloads on the node never reach the bundle.
 
-**Credentials sent to the kubelet.** The script sends the Job's ServiceAccount token to each router node's kubelet and doesn't verify its TLS certificate, because kubelet certificates are commonly self-signed or signed by a CA other than the cluster's. Anyone who can intercept the pod-to-node path could capture the token, so the Job's pod uses a projected token with `expirationSeconds: 600` instead of the default one. The token is read-only: pods in the namespace, and `nodes/stats` and `nodes` across the cluster. It is never written to the script's output, its stderr or the diagnostic sidecar.
+**Credentials sent to the kubelet.** The script sends the Job's ServiceAccount token to each router node's kubelet and doesn't verify its TLS certificate, because kubelet certificates are commonly self-signed or signed by a CA other than the cluster's. Anyone who can intercept the pod-to-node path could capture the token, so the Job's pod uses a projected token with `expirationSeconds: 600` instead of the default one. The token is read-only and carries everything the Job can read: the namespace's pods, pod logs, ConfigMaps and deployments, plus `nodes/stats` and `nodes` across the cluster. It is never written to the script's output, its stderr or the diagnostic sidecar.
 
-#### Sources
+#### Named reasons for missing data
 
-The kubelet is the only source. A node it can't read gets a named reason and loses only the usage figures: `clusterResources` still provides limits and requests, OOM kills and restart counts.
-
-**Missing data always has a named reason**, one line in the script's output per case:
+A node the script can't read loses only the usage figures: `clusterResources` still provides limits and requests, OOM kills and restart counts. Missing data always has a named reason, one line in the script's output per case:
 
 | Case | Line written | Points to |
 | --- | --- | --- |

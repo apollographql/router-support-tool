@@ -27,9 +27,9 @@ The file is a single physical line of JSON (`{"command": "...", "exitCode": "0",
 ### Notes
 
 - **A single `mask` group spanning the whole line, no prefix/suffix groups** — since the file is one physical line and the entire thing is being replaced, there's nothing to preserve. The result is a file containing only `***HIDDEN***`.
-- **Two `fileSelector` paths** `specs/collection/output.md` documents that `hostCollectors.run`'s bundle layout is troubleshoot.sh-version-dependent (`router-metrics/` vs. `host-collectors/run-host/<collectorName>/`).
+- **Three `fileSelector` paths** because `specs/collection/output.md` documents that `hostCollectors.run`'s bundle layout is troubleshoot.sh-version-dependent. The newer layout nests each collector under `host-collectors/run-host/<collectorName>/`, and the first path matches every collector there. The older layout writes `<collectorName>/` at the top level, so each collector (`router-metrics/`, `router-resource-usage/`) needs its own path.
 - **Scoped specifically to this collector's diagnostic sidecar, not host-collector output generally**: `host-collectors/run-host/router-metrics/pods/*.txt` (the actual scraped metrics) is left untouched and only the `*-info.json` exec-metadata file is targeted.
 
 ### Applies to every `hostCollectors.run` collector
 
-`router-resource-usage` (`mode: job`, `specs/collection/base_spec.md` → Kubelet stats collection) is a second `hostCollectors.run` collector, so it has the same diagnostic sidecar, sets `ignoreParentEnvs: true` for the same reason, and is covered by the same redactor: `host-collectors/run-host/*-info.json` already matches it, and the alternate-layout path is listed above. Its scraped output (`host-collectors/run-host/router-resource-usage/nodes/*/`) is, like the `router-metrics` files, left untouched.
+`router-resource-usage` (`mode: job`, `specs/collection/base_spec.md` → Kubelet stats collection) is a second `hostCollectors.run` collector, so it has the same diagnostic sidecar, sets `ignoreParentEnvs: true` for the same reason, and is covered by the same redactor: `host-collectors/run-host/*-info.json` already matches it, and its alternate-layout path (`router-resource-usage/*-info.json`) is listed above. Its scraped output (`host-collectors/run-host/router-resource-usage/nodes/*/`) is, like the `router-metrics` files, left untouched.
