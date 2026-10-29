@@ -57,7 +57,7 @@ support-bundle-2026-08-11T14_23_00/
 ```
 
 Notes: 
-- `stats-summary.json` holds the kubelet's node-level figures and the entries for the router's pods only, written by the `router-resource-usage` script (`specs/collection/base_spec.md` → Kubelet stats collection). Under `mode: local`, or `mode: job` with `job.nodeStatsSource: apiServer`, the `nodeMetrics` collector writes `node-metrics/<node-name>.json` instead, with every pod on the node, and there is no `router-resource-usage/` directory.
+- `stats-summary.json` holds the kubelet's node-level figures and the entries for the router's pods only, written by the `router-resource-usage` script (`specs/collection/base_spec.md` → Kubelet stats collection). Under `mode: local`, the `nodeMetrics` collector writes `node-metrics/<node-name>.json` instead, with every pod on every node in the cluster, and there is no `router-resource-usage/` directory.
 - If more than one ConfigMap matched the label selector in `production`, the last entry becomes multiple files — one per ConfigMap, named after that ConfigMap's own Kubernetes name, not a Helm release (a raw-manifest or custom deployment has no Helm release of the router at all; this only coincides with a release name on the official Apollo router Helm chart).
 
 - `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace (schema is found here). `configmaps/production/<configmap-name>.json` is the dedicated `configMap` collector's own output, one file per matched ConfigMap.
@@ -87,8 +87,7 @@ host-collectors/run-host/
 └── router-resource-usage/
     └── nodes/
         └── <node-name>/
-            ├── stats-summary.json
-            └── cadvisor.txt
+            └── stats-summary.json
 ```
 
-One directory per node that runs a router pod. `stats-summary.json` is the kubelet's `/stats/summary` response reduced to the node-level figures and the router's pods. `cadvisor.txt` is present only when `job.collectCadvisorMetrics` is `true`: the kubelet's `/metrics/cadvisor` response reduced to the router's pods, in Prometheus text format. A node with no file was not read; `router-resource-usage.txt` carries the line saying why (`specs/collection/base_spec.md` → Kubelet stats collection lists each case). As with `router-metrics`, this path is pinned to the troubleshoot.sh version the chart bundles. Under `mode: local`, or with `job.nodeStatsSource: apiServer`, there is no such directory: `node-metrics/<node-name>.json` holds the data.
+One directory per node that runs a router pod. `stats-summary.json` is the kubelet's `/stats/summary` response reduced to the node-level figures and the router's pods. A node with no file was not read; `router-resource-usage.txt` carries the line saying why (`specs/collection/base_spec.md` → Kubelet stats collection lists each case). As with `router-metrics`, this path is pinned to the troubleshoot.sh version the chart bundles. Under `mode: local`, there is no such directory: `node-metrics/<node-name>.json` holds the data.

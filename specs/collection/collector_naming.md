@@ -23,7 +23,7 @@ Every collector gets a name, engine-fixed or not — for the engine-fixed rows b
 | `router-logs` | Runtime logs, all containers in the pod | `logs` | Only a symlink — see below |
 | `router-metrics` | Prometheus metrics snapshot, one file per matching pod| `run` (`hostCollectors.run`) | Via explicit `outputDir`, not the name — see `specs/collection/base_spec.md` → Per-pod metrics collection |
 | `router-config-rendered` | Rendered `router.yaml` | `configMap` | No — engine-fixed |
-| `router-resource-usage` | Container CPU and memory from the kubelet: the router's pods only under `mode: job` (script), every pod on the node under `mode: local` and `job.nodeStatsSource: apiServer` | `run` (`hostCollectors.run`) under `mode: job` with `nodeStatsSource: kubelet`; `nodeMetrics` otherwise | `run`: via explicit `outputDir`, not the name — see `specs/collection/base_spec.md` → Kubelet stats collection. `nodeMetrics`: No — engine-fixed |
+| `router-resource-usage` | Container CPU and memory from the kubelet: the router's pods only under `mode: job` (script), every pod on every node under `mode: local` | `run` (`hostCollectors.run`) under `mode: job`; `nodeMetrics` under `mode: local` | `run`: via explicit `outputDir`, not the name — see `specs/collection/base_spec.md` → Kubelet stats collection. `nodeMetrics`: No — engine-fixed |
 | `cluster-resources` | Pod status, router version, env vars, OOM events, node pressure | `clusterResources` | No — engine-fixed |
 
 ## Name-controlled via symlink: `logs`
