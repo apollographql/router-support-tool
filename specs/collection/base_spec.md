@@ -111,7 +111,7 @@ What the base spec collects is sufficient to **detect, confirm, and characterize
 
 **\[1\]** The Summary API reports per node, per pod, and per container. This assumes one router process per container.
 
-**\[2\]** `nodeMetrics` reads the router container's memory and CPU from the kubelet and needs cluster-scoped RBAC grants (`nodes`, `nodes/proxy`, `nodes/stats`). The router's Prometheus exporter (`telemetry.exporters.metrics.prometheus.enabled: true`) needs no grant, but it only gives the router's own jemalloc memory figures: no CPU, and no container RSS or working set. Declining the grants therefore loses those figures and node pressure conditions as well since `nodes` is one of the three. See `specs/deployment/on-demand-collection.md` → Permissions for what the grants are and what they cost.
+**\[2\]** `nodeMetrics` reads the router container's memory and CPU from the kubelet and needs cluster-scoped RBAC grants (`nodes`, `nodes/proxy`, `nodes/stats`). The router's Prometheus exporter (`telemetry.exporters.metrics.prometheus.enabled: true`) needs no grant, but it only gives the router's own jemalloc memory figures: no CPU, and no container RSS or working set. `nodeMetrics` also can't be narrowed to the router: it accepts only node names and node labels and it writes every pod on every node in the cluster to `node-metrics/<node-name>.json`. Declining the grants therefore loses those figures and node pressure conditions as well since `nodes` is one of the three. See `specs/deployment/on-demand-collection.md` → Permissions for what the grants are and what they cost.
 
 ## Service mesh and proxy environments
 

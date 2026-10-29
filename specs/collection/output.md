@@ -57,6 +57,8 @@ support-bundle-2026-08-11T14_23_00/
 Notes: 
 - If more than one ConfigMap matched the label selector in `production`, the last entry becomes multiple files — one per ConfigMap, named after that ConfigMap's own Kubernetes name, not a Helm release (a raw-manifest or custom deployment has no Helm release of the router at all; this only coincides with a release name on the official Apollo router Helm chart).
 
+- `node-metrics/<node-name>.json` is written for every node in the cluster and each file lists every pod on that node. `nodeMetrics` accepts only node names and node labels so the router's `selector` and `namespace` don't narrow it. Other workloads' pod names, namespaces and container CPU and memory figures are therefore in the bundle.
+
 - `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace (schema is found here). `configmaps/production/<configmap-name>.json` is the dedicated `configMap` collector's own output, one file per matched ConfigMap.
 
 ## `router-metrics` layout

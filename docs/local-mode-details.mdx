@@ -96,6 +96,7 @@ support-bundle-2026-08-11T14_23_00/
       ├── <configmap-1-name>.json
       └── <configmap-2-name>.json
   ```
+- **`node-metrics/<node-name>.json`** — one file for every node in the cluster, not only the nodes that run router pods. `nodeMetrics` ignores your `selector` and `namespace` so each file lists every pod on that node. The files contain pod names, namespaces, and container CPU and memory usage, but no logs, configuration, or secrets.
 - `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace. `configmaps/production/<configmap-name>.json` is the dedicated `configMap` collector's own output.
 
 <Note>
