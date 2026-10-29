@@ -134,24 +134,15 @@ The risk is that anyone who can intercept or spoof the pod-to-node path on port 
 - Short-lived token: The Job's pod doesn't use the default auto-mounted token. It uses a projected token with `expirationSeconds: 600`. A bound token is also rejected once its pod object is deleted, but a finished Job's pod is kept for `job.ttlSecondsAfterFinished` (default one hour), so expiry, not deletion, bounds replay.
 - Optional verification: `job.kubeletCA.configMapName` names a ConfigMap holding a CA bundle, under the key `job.kubeletCA.key` (default `ca.crt`). When it is set, the script verifies each kubelet's certificate against it, and the certificate must be valid for the node's IP. A node that fails verification is sent no token, and the script writes a named reason. When it is unset, nothing is verified. A customer whose kubelet certificates are signed by the cluster CA can point `configMapName` at `kube-root-ca.crt`.
 
+The token is never written to the script's output, its stderr or the diagnostic sidecar.
+
 #### Sources
 
-For each node the script tries its sources in order and keeps the first that yields data. The kubelet is the only source today: it needs `nodes/stats` (get), cluster-scoped, and `nodes/metrics` too for opt-in cAdvisor. Another source is another entry in that order, with its own output file and named reasons; the ordering, the batching and the reason lines don't change. A pod with no node yet is not retried.
+For each node the script tries its sources in order and keeps the first that yields data. The kubelet is the only source today; another would be a new entry in that order, with its own file and named reasons. A node ends with `stats-summary.json` or a named reason, never both. A pod with no node yet is not retried.
 
-A node ends with `stats-summary.json` or a named reason, never both.
+When a node isn't read, only the usage figures are lost: `clusterResources` still provides limits and requests, OOM kills and restart counts. Node pressure conditions need `nodes` (list), so `job.collectNodeMetrics: false` loses them too.
 
-| Signal | Kubelet read | Node not read |
-| --- | --- | --- |
-| Working-set memory | yes | no |
-| CPU usage | rate and cumulative | no |
-| RSS, usage, available (headroom) | yes | no |
-| Page faults, major faults | yes | no |
-| Pressure stall (PSI) | if the `KubeletPSI` gate is on | no |
-| CPU throttling, OOM counters (cAdvisor) | opt-in | no |
-
-At every outcome, `clusterResources` still provides configured limits and requests, OOM kill occurrences and last state, and restart counts. Node pressure conditions also need `nodes` (list), lost only with `job.collectNodeMetrics: false`.
-
-`job.nodeStatsSource: apiServer` replaces the script with `nodeMetrics`, as in `mode: local`. It writes every pod on the node to `node-metrics/<node-name>.json`. It is for clusters where the Job's pod can't reach the kubelet, and for customers who accept `nodes/proxy`. `job.collectNodeMetrics: false` skips the ClusterRole: the script writes the "declined at install" line and collects nothing from the kubelet. With `apiServer`, the chart refuses to render.
+`job.nodeStatsSource: apiServer` replaces the script with `nodeMetrics`, as in `mode: local`. It is for clusters where the Job's pod can't reach the kubelet, and for customers who accept `nodes/proxy`. It writes every pod on every node in the cluster to `node-metrics/<node-name>.json`. `job.collectNodeMetrics: false` skips the ClusterRole, and the script writes only the "declined at install" line. With `apiServer`, the chart refuses to render.
 
 **Missing data always has a named reason**, one line in the script's output per case:
 
@@ -166,14 +157,6 @@ At every outcome, `clusterResources` still provides configured limits and reques
 | Kubelet refused | `kubelet stats not collected for node <node-name>: kubelet returned HTTP <code>` | `401`/`403`: missing `nodes/stats`, usually because the ClusterRole wasn't created. The cAdvisor read says `kubelet cadvisor metrics not collected …` and needs `nodes/metrics`. |
 | Response unreadable | `kubelet stats not collected for node <node-name>: the kubelet's response could not be read` | A `200` that isn't Summary API JSON. Not retried. |
 | Pod missing from node's stats | `kubelet stats not collected for pod <pod-name>: not in node <node-name>'s stats` | Replaced or deleted between listing and reading. |
-
-**What the script needs:**
-
-- `python3` in the Job image, pinned (`specs/deployment/on-demand-collection.md` → The Job image). No `kubectl` or `curl`.
-- `get`/`list` on pods in `namespace` (from the Job's Role), plus the cluster-scoped grants in Kubelet stats RBAC.
-- A network path to each router node's IP on port `10250`. Without it, that node has no stats and the script writes the "could not reach" line; `job.nodeStatsSource: apiServer` is the alternative.
-- `ignoreParentEnvs: true`, as for `router-metrics`. It reaches the API server at `kubernetes.default.svc` using the Job's mounted ServiceAccount CA and token.
-- The token never appears in the output, stderr or the diagnostic sidecar (redacted wholesale, `specs/collection/data_sanitization/host_collector_diagnostics.md`).
 
 ## Service mesh and proxy environments
 
