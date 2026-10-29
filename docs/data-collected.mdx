@@ -80,7 +80,7 @@ The data collected with the support tool is sufficient to detect, confirm, and c
 
 **[1]** The kubelet Summary API reports per node, per pod, and per container — this assumes one router process per container.
 
-**[2]** `nodeMetrics` reads the router container's memory and CPU from the kubelet and needs cluster-scoped RBAC grants. Router's Prometheus exporter needs none, but it only gives the router's own jemalloc memory figures, not container RSS, working set or CPU. `nodeMetrics` also can't be narrowed to your router: it ignores your `selector` and `namespace`. Therefore, `node-metrics/` lists every pod on every node in the cluster, including other workloads' pod names, namespaces and container CPU and memory figures. Declining the grants (`job.collectNodeMetrics: false`) loses those container figures and node pressure conditions. See [`nodeMetrics` RBAC](#nodemetrics-rbac) to learn exactly what these grants authorize.
+**[2]** `nodeMetrics` reads the router container's memory and CPU from the kubelet and needs cluster-scoped RBAC grants. The Router's Prometheus exporter needs no grant and provides the Router's own jemalloc memory data, but not container RSS, working set, or CPU. `nodeMetrics` also can't be narrowed to your router: it ignores your `selector` and `namespace`, so `node-metrics/` lists every pod on every node in the cluster, including other workloads' pod names, namespaces, and container CPU and memory usage. If you decline the grants (`job.collectNodeMetrics: false`), you lose container memory and CPU data and node pressure conditions. For what these grants authorize, see [`nodeMetrics` RBAC](#nodemetrics-rbac).
 
 ### `nodeMetrics` RBAC
 
