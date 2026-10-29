@@ -64,26 +64,6 @@ router-diagnostics-storage-credentials
 {{- end -}}
 
 {{/*
-Whether container memory and CPU are read with the nodeMetrics collector: always under
-mode: local, and under mode: job only when job.nodeStatsSource is apiServer. Renders "true"
-or "false", and refuses a value or combination that has no meaning.
-*/}}
-{{- define "router-diagnostics-chart.useNodeMetricsCollector" -}}
-{{- $source := .Values.job.nodeStatsSource | default "kubelet" }}
-{{- if not (has $source (list "kubelet" "apiServer")) }}
-{{- fail (printf "job.nodeStatsSource must be kubelet or apiServer, got %q" $source) }}
-{{- end }}
-{{- if and (eq .Values.mode "job") (eq $source "apiServer") (not .Values.job.collectNodeMetrics) }}
-{{- fail "job.nodeStatsSource: apiServer needs job.collectNodeMetrics: true -- the nodeMetrics collector has nothing to fall back to." }}
-{{- end }}
-{{- if or (ne .Values.mode "job") (eq $source "apiServer") -}}
-true
-{{- else -}}
-false
-{{- end -}}
-{{- end -}}
-
-{{/*
 Wraps a value in single quotes for the router-metrics shell script, escaping any single
 quote inside it. Helm's squote alone leaves an embedded ' unescaped, which would end the
 quoted string early.

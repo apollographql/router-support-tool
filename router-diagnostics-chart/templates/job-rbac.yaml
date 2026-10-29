@@ -1,6 +1,6 @@
 # Only rendered for mode: job. The namespace-scoped Role covers everything
 # clusterResources/logs/configMap/router-metrics/router-resource-usage need within
-# .Values.namespace, including the metrics API fallback.
+# .Values.namespace.
 # The ClusterRole below is only for the cluster-scoped kubelet grants and is independently
 # gated by job.collectNodeMetrics, since the installing identity may not be grantable
 # cluster-scoped RBAC.
@@ -68,11 +68,6 @@ rules:
     resources:
       - leases
     verbs: ["get", "list"]
-  # The router-resource-usage fallback when a node's kubelet can't be read.
-  - apiGroups: ["metrics.k8s.io"]
-    resources:
-      - pods
-    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -99,22 +94,11 @@ rules:
   - apiGroups: [""]
     resources: ["nodes"]
     verbs: ["list"]
-  {{- if eq (include "router-diagnostics-chart.useNodeMetricsCollector" .) "true" }}
-  # nodeStatsSource: apiServer. nodes/proxy is not read-only (Kubernetes' documentation).
-  - apiGroups: [""]
-    resources: ["nodes/proxy", "nodes/stats"]
-    verbs: ["get"]
-  {{- else }}
-  # The kubelet authorizes /stats/* as nodes/stats and /metrics/* as nodes/metrics.
+  # The kubelet authorizes /stats/* as nodes/stats. nodes/proxy is not read-only
+  # (Kubernetes' documentation), so it is not granted.
   - apiGroups: [""]
     resources: ["nodes/stats"]
     verbs: ["get"]
-  {{- if .Values.job.collectCadvisorMetrics }}
-  - apiGroups: [""]
-    resources: ["nodes/metrics"]
-    verbs: ["get"]
-  {{- end }}
-  {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
