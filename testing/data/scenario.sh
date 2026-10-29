@@ -18,7 +18,7 @@ curl -sk -X POST "https://router.${NAMESPACE}.svc.cluster.local:4000/" \
 
 # job.collectNodeMetrics=false because the scenario service account can't be granted
 # the cluster-scoped ClusterRole/ClusterRoleBinding this collector needs.
-# We decline it up front rather than fail the whole install (Prometheus is preferred).
+# We decline it up front rather than fail the whole install.
 #
 # selector=app=router: our own manifests use "app: router" (raw-manifest/custom tier),
 # not the official chart's "app.kubernetes.io/name: router" convention that the chart's

@@ -26,7 +26,7 @@ The image bundles a pinned version of troubleshoot's `support-bundle` binary as 
 | `job.image.repository` | No | `apollograph/router-diagnostics` | The Job's container image, published by Apollo. Override only to pin an older version or point at a private mirror. |
 | `job.image.tag` | No | Matches this chart's release version | The troubleshoot.sh version it bundles is a separate, independently-pinned detail, recorded in a collected bundle's `meta.json`. Override only to pin an older release or point at a private mirror. |
 | `job.image.pullPolicy` | No | `IfNotPresent` | Standard Kubernetes image pull policy |
-| `job.collectNodeMetrics` | No | `true` | Set `false` to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding entirely and decline `nodeMetrics` data up front. For more information, go to [Collecting Metrics → If Prometheus isn't set up yet](/router-support-tool/collecting-metrics#if-prometheus-isnt-set-up-yet) |
+| `job.collectNodeMetrics` | No | `true` | Set `false` to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding entirely and decline `nodeMetrics` data up front. For more information, go to [Data Collected → Memory and CPU information collected](/router-support-tool/data-collected#memory-and-cpu-information-collected). |
 | `job.podAnnotations` | No | `{sidecar.istio.io/inject: "false", linkerd.io/inject: disabled}` | Annotations merged onto the Job's pod template—customer values win over these defaults. For more information, go to [Job Mode → Service mesh environments](/router-support-tool/getting-started/job-mode#service-mesh-environments) |
 | `job.podLabels` | No | `{}` | Arbitrary labels merged onto the Job's pod template |
 | `job.ttlSecondsAfterFinished` | No | `3600` | Maps to the Job's `ttlSecondsAfterFinished`—how long after completion Kubernetes automatically deletes the Job and its pod |
@@ -51,7 +51,7 @@ Collection itself runs using a namespace-scoped ServiceAccount the chart creates
 - **`discovery.k8s.io`**: `endpointslices`
 - **`coordination.k8s.io`**: `leases`
 
-On top of this, three separate cluster-scoped grants apply for `nodeMetrics`, deliberately kept independent so you can decline the more sensitive ones without losing the others. Go to [Collecting Metrics → If Prometheus isn't set up yet](/router-support-tool/collecting-metrics#if-prometheus-isnt-set-up-yet) for exactly what those three grants are and what each authorizes.
+Three separate cluster-scoped grants apply for `nodeMetrics`, deliberately kept independent so you can decline the more sensitive ones without losing the others. What each grant permits is listed in [Data Collected → `nodeMetrics` RBAC](/router-support-tool/data-collected#nodemetrics-rbac).
 
 **`pods/exec` is not required**: nothing this tool does runs inside your router container.
 

@@ -6,12 +6,14 @@ on:
     paths-ignore:
       - .changeset/**
       - docs/**
+      - specs/**
   push:
     branches:
       - main
     paths-ignore:
       - .changeset/**
       - docs/**
+      - specs/**
 
 jobs:
   build_job_image:

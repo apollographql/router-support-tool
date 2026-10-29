@@ -46,6 +46,10 @@ while IFS= read -r f; do
 done < <(find "$EXPECTED_METRICS_DIR" -maxdepth 1 -name "*.txt" -type f 2>/dev/null)
 [ "$FOUND" = true ] || fail "router-metrics: no per-pod metrics file contains apollo_router_ metrics, despite serviceMonitor.enabled=false and no Service patch - collection may still depend on the Service"
 
+# Every memory/CPU signal the spec documents (specs/collection/base_spec.md, "Memory and CPU
+# information collected") must actually be in the bundle.
+"$(dirname "${BASH_SOURCE[0]}")/assert_documented_memory_cpu_signals.py" "$DIR"
+
 # Check for specs/collection/data_sanitization/host_collector_diagnostics.md:
 assert_host_collector_diagnostics_redacted "$DIR"
 
