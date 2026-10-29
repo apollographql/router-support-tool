@@ -193,7 +193,8 @@ Under `mode: job`, the chart creates one ClusterRole holding:
 `nodes/proxy` is not required. Kubernetes' documentation notes that `get` on `nodes/proxy` is "not a read-only permission" and authorizes executing commands in any container on the node, which is why this tool avoids needing it. The Job keeps only your router pods' entries from what the kubelet returns, so other workloads on the same nodes don't end up in the bundle.
 
 Under `mode: local`, `collect.sh` reads the same data through the API server's proxy using your own kubectl credentials, which needs `nodes` and `nodes/proxy`. Whether that works depends on your own access.
-If the Job's pod can't reach a node's kubelet on port 10250, or the kubelet refuses it, that node's container memory and CPU aren't collected and the bundle says why. `mode: local` reads the same data through the API server's proxy instead.
+
+If the Job's pod can't reach a node's kubelet on port 10250, or the kubelet refuses it, that node's container memory and CPU aren't collected and the bundle says why.
 
 **`pods/exec` is not required** — nothing runs inside your router container.
 

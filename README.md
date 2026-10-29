@@ -43,7 +43,7 @@ Specifications in `specs/` describe current intended behavior. They are reviewed
 
 Git history is the decision record. To understand why something is the way it is, read the PR that introduced it.
 
-Where a design choice involved rejecting a viable alternative, the spec records it in a **Rejected alternatives** section — not as history, but because knowing what was ruled out and why is part of understanding the current design. If you are considering an approach listed there, engage with the recorded reasoning rather than re-proposing it.
+Specs record decisions, not the alternatives that were rejected. The reasoning for a choice, including what was ruled out, belongs in the description of the PR that made it.
 
 ## Local checks and git hooks
 

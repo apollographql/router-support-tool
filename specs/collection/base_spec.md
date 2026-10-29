@@ -120,9 +120,7 @@ What the base spec collects is sufficient to **detect, confirm, and characterize
 - Nodes are found when collection runs, from the `status.hostIP` of the pods matching `selector` in `namespace`, so `helm template` renderers such as ArgoCD produce the same spec.
 - Only the router pods' entries are kept, so other workloads on the node never reach the bundle.
 
-**Credentials sent to the kubelet.** The script sends the Job's ServiceAccount token to each router node's kubelet and doesn't verify its TLS certificate, so anyone who can intercept the pod-to-node path could capture the token until it expires. The token is read-only: pods in the namespace, and `nodes/stats` and `nodes` across the cluster. To limit the exposure, the Job's pod uses a projected token with `expirationSeconds: 600`, not the default token. Expiry, not pod deletion, bounds replay, since a finished Job's pod is kept for `job.ttlSecondsAfterFinished`. Verifying the kubelet's certificate is not offered.
-
-The token is never written to the script's output, its stderr or the diagnostic sidecar.
+**Credentials sent to the kubelet.** The script sends the Job's ServiceAccount token to each router node's kubelet and doesn't verify its TLS certificate, because kubelet certificates are commonly self-signed or signed by a CA other than the cluster's. Anyone who can intercept the pod-to-node path could capture the token, so the Job's pod uses a projected token with `expirationSeconds: 600` instead of the default one. The token is read-only: pods in the namespace, and `nodes/stats` and `nodes` across the cluster. It is never written to the script's output, its stderr or the diagnostic sidecar.
 
 #### Sources
 

@@ -76,9 +76,7 @@ Specs describe current intended behavior. They are reviewed and merged like code
 
 Git history is the decision record. To understand why something is the way it is, read the PR that introduced it. Do not create parallel decision-log files; the reasoning belongs in the PR, and the outcome belongs in the spec.
 
-**Where a spec has a "Rejected alternatives" section, treat it as binding.** Those approaches were evaluated and ruled out, and the reasoning is recorded because knowing what was rejected is part of understanding the current design. If a task points toward one of them, engage with the recorded reasoning rather than re-proposing the approach.
-
-When a design question arises that the specs do not answer, propose a spec change in a PR rather than deciding silently in an implementation. If the choice involved rejecting a viable alternative, add it to that spec's Rejected alternatives section in the same PR.
+When a design question arises that the specs do not answer, propose a spec change in a PR rather than deciding silently in an implementation. Specs record the decision, not the alternatives that were rejected; the reasoning, including what was ruled out, belongs in the PR description.
 
 ---
 
