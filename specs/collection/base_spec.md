@@ -132,24 +132,22 @@ The token is never written to the script's output, its stderr or the diagnostic 
 
 #### Sources
 
-For each node the script tries its sources in order and keeps the first that yields data. The kubelet is the only source today; another would be a new entry in that order, with its own file and named reasons. A node ends with `stats-summary.json` or a named reason, never both. A pod with no node yet is not retried.
+The kubelet is the only source. A node it can't read gets a named reason and loses only the usage figures: `clusterResources` still provides limits and requests, OOM kills and restart counts.
 
-When a node isn't read, only the usage figures are lost: `clusterResources` still provides limits and requests, OOM kills and restart counts. Node pressure conditions need `nodes` (list), so `job.collectNodeMetrics: false` loses them too.
-
-`job.nodeStatsSource: apiServer` replaces the script with `nodeMetrics`, as in `mode: local`. It is for clusters where the Job's pod can't reach the kubelet, and for customers who accept `nodes/proxy`. It writes every pod on every node in the cluster to `node-metrics/<node-name>.json`. `job.collectNodeMetrics: false` skips the ClusterRole, and the script writes only the "declined at install" line. With `apiServer`, the chart refuses to render.
+`job.nodeStatsSource: apiServer` replaces the script with `nodeMetrics`, as in `mode: local`, for clusters where the Job's pod can't reach the kubelet and for customers who accept `nodes/proxy`. It writes every pod on every node in the cluster to `node-metrics/<node-name>.json`.
 
 **Missing data always has a named reason**, one line in the script's output per case:
 
-| Case | Line written | What it points to |
+| Case | Line written | Points to |
 | --- | --- | --- |
-| Can't list pods | `kubelet stats not collected: could not list pods matching selector <selector> in namespace <namespace>` | Missing `get`/`list` on pods, or an unreachable API server. The status and message are in `host-collectors/run-host/router-resource-usage-stderr.txt`. |
+| Can't list pods | `kubelet stats not collected: could not list pods matching selector <selector> in namespace <namespace>` | Missing `get`/`list` on pods, or an unreachable API server. Details in `host-collectors/run-host/router-resource-usage-stderr.txt`. |
 | No pod matches | `kubelet stats not collected: no pods matched selector <selector> in namespace <namespace>` | A wrong `selector` or `namespace`. |
-| Declined at install | `kubelet stats not collected: declined at install (job.collectNodeMetrics is false)` | A render-time fact, not a failure. |
+| Declined at install | `kubelet stats not collected: declined at install (job.collectNodeMetrics is false)` | `job.collectNodeMetrics: false`. Not a failure. |
 | Pod has no node yet | `kubelet stats not collected for pod <pod-name>: pod has no node yet` | The pod is `Pending`. |
-| Kubelet unreachable | `kubelet stats not collected for node <node-name>: could not reach the kubelet at <hostIP>:10250` | The network path (NetworkPolicy, firewall, non-default port), not RBAC. |
-| Certificate not verified | `kubelet stats not collected for node <node-name>: the kubelet's certificate could not be verified against job.kubeletCA.configMapName` | The CA doesn't match the kubelet's serving certificate, or the certificate isn't valid for the node IP. No token is sent. |
-| Kubelet refused | `kubelet stats not collected for node <node-name>: kubelet returned HTTP <code>` | `401`/`403`: missing `nodes/stats`, usually because the ClusterRole wasn't created. The cAdvisor read says `kubelet cadvisor metrics not collected …` and needs `nodes/metrics`. |
-| Response unreadable | `kubelet stats not collected for node <node-name>: the kubelet's response could not be read` | A `200` that isn't Summary API JSON. Not retried. |
+| Kubelet unreachable | `kubelet stats not collected for node <node-name>: could not reach the kubelet at <hostIP>:10250` | The network path (NetworkPolicy, firewall, port), not RBAC. |
+| Certificate not verified | `kubelet stats not collected for node <node-name>: the kubelet's certificate could not be verified against job.kubeletCA.configMapName` | The CA doesn't match, or the certificate isn't valid for the node IP. No token is sent. |
+| Kubelet refused | `kubelet stats not collected for node <node-name>: kubelet returned HTTP <code>` | `401`/`403`: missing `nodes/stats`. The cAdvisor read says `kubelet cadvisor metrics not collected …` and needs `nodes/metrics`. |
+| Response unreadable | `kubelet stats not collected for node <node-name>: the kubelet's response could not be read` | A `200` that isn't Summary API JSON. |
 | Pod missing from node's stats | `kubelet stats not collected for pod <pod-name>: not in node <node-name>'s stats` | Replaced or deleted between listing and reading. |
 
 ## Service mesh and proxy environments
