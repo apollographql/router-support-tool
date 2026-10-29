@@ -193,6 +193,8 @@ Node access alone is the only one of the three that reaches outside the namespac
 
 **`pods/exec` is not required** — nothing runs inside your router container.
 
+**The node stats cover the whole cluster, not only your router.** The container memory and CPU read returns every pod on every node. `node-metrics/` in the bundle therefore holds other workloads' pod names, namespaces and container CPU and memory figures. It holds no logs, config or secrets. Review that directory before sharing.
+
 If you'd rather not grant `nodes/proxy`/`nodes/stats`, you can decline both and keep `nodes` access: you'll still get OOM kills, restart counts, configured limits, and node pressure conditions, but you'll lose container memory and CPU usage. Enabling the router's Prometheus exporter doesn't make up for this: it exposes the router's own jemalloc memory figures, but no container RSS, working-set or CPU numbers. `nodes/proxy` and `nodes/stats` are only useful together — declining either one loses the same capability, so there's no reason to grant one without the other. Declining through the chart (`job.collectNodeMetrics: false`) turns off all three grants so node pressure conditions are lost along with the memory and CPU figures.
 
 ### Sharing with support

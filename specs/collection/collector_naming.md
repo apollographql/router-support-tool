@@ -23,7 +23,7 @@ Every collector gets a name, engine-fixed or not — for the engine-fixed rows b
 | `router-logs` | Runtime logs, all containers in the pod | `logs` | Only a symlink — see below |
 | `router-metrics` | Prometheus metrics snapshot, one file per matching pod| `run` (`hostCollectors.run`) | Via explicit `outputDir`, not the name — see `specs/collection/base_spec.md` → Per-pod metrics collection |
 | `router-config-rendered` | Rendered `router.yaml` | `configMap` | No — engine-fixed |
-| `router-resource-usage` | Node, pod, and container CPU/memory from the kubelet | `nodeMetrics` | No — engine-fixed |
+| `router-resource-usage` | Node, pod, and container CPU/memory from the kubelet for every pod on every node. | `nodeMetrics` | No — engine-fixed |
 | `cluster-resources` | Pod status, router version, env vars, OOM events, node pressure | `clusterResources` | No — engine-fixed |
 
 ## Name-controlled via symlink: `logs`
