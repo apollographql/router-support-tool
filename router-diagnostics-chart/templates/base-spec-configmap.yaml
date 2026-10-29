@@ -45,7 +45,7 @@ data:
             {{- end }}
             includeAllData: true
 
-        {{- if eq (include "router-diagnostics-chart.useNodeMetricsCollector" .) "true" }}
+        {{- if ne .Values.mode "job" }}
         - nodeMetrics:
             collectorName: router-resource-usage
         {{- end }}
@@ -76,9 +76,9 @@ data:
               - -c
               - |
                 {{- tpl (.Files.Get "files/router-metrics-collect.sh") . | nindent 16 }}
-        {{- if eq (include "router-diagnostics-chart.useNodeMetricsCollector" .) "false" }}
-        # mode: job, nodeStatsSource: kubelet. Reads the kubelet from the Job's pod, so the
-        # API server's nodes/proxy grant is not needed.
+        {{- if eq .Values.mode "job" }}
+        # Reads the kubelet from the Job's pod, so the API server's nodes/proxy grant is not
+        # needed.
         - run:
             collectorName: router-resource-usage
             outputDir: nodes
@@ -87,7 +87,7 @@ data:
             args:
               - -c
               - |
-                NAMESPACE={{ include "router-diagnostics-chart.shellQuote" .Values.namespace }} SELECTOR={{ include "router-diagnostics-chart.shellQuote" (.Values.selector | default "app.kubernetes.io/name=router") }} KUBELET_DECLINED={{ if .Values.job.collectNodeMetrics }}0{{ else }}1{{ end }} CADVISOR={{ if and .Values.job.collectNodeMetrics .Values.job.collectCadvisorMetrics }}1{{ else }}0{{ end }} exec python3 -I - <<'PY'
+                NAMESPACE={{ include "router-diagnostics-chart.shellQuote" .Values.namespace }} SELECTOR={{ include "router-diagnostics-chart.shellQuote" (.Values.selector | default "app.kubernetes.io/name=router") }} KUBELET_DECLINED={{ if .Values.job.collectNodeMetrics }}0{{ else }}1{{ end }} exec python3 -I - <<'PY'
                 {{- .Files.Get "files/router-resource-usage.py" | nindent 16 }}
                 PY
         {{- end }}
