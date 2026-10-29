@@ -33,9 +33,13 @@ support-bundle-2026-08-11T14_23_00/
 ├── meta.json
 ├── host-collectors/
 │   └── run-host/
-│       └── router-metrics/
-│           └── pods/
-│               └── <router-pod-name>.txt
+│       ├── router-metrics/
+│       │   └── pods/
+│       │       └── <router-pod-name>.txt
+│       └── router-resource-usage/
+│           └── nodes/
+│               └── <node-name>/
+│                   └── stats-summary.json
 ├── router-logs/
 │   └── <router-pod-name>/
 │       └── router.log -> ../../cluster-resources/pods/logs/production/<router-pod-name>/router.log
@@ -47,8 +51,6 @@ support-bundle-2026-08-11T14_23_00/
 │   ├── events/production.json
 │   ├── nodes.json
 │   └── ...
-├── node-metrics/
-│   └── <node-name>.json
 └── configmaps/
     └── production/
         └── <configmap-name>.json
@@ -72,3 +74,19 @@ host-collectors/run-host/
 ```
 
 Each file is that pod's raw `/metrics` response, in Prometheus text format. A pod with no file was not scraped; the collector's own output carries the line saying why (`specs/collection/base_spec.md` → Per-pod metrics collection lists each case). There is no top-level `router-metrics-<pod-name>/` directory in either mode.
+
+## `router-resource-usage` layout
+
+Under `mode: job`, `router-resource-usage` is a `hostCollectors.run` collector (`specs/collection/base_spec.md` → Kubelet stats collection), so troubleshoot.sh nests its `outputDir` under `host-collectors/run-host/<collectorName>/`. Its `outputDir` is `nodes`:
+
+```
+host-collectors/run-host/
+├── router-resource-usage.txt
+├── router-resource-usage-stderr.txt
+└── router-resource-usage/
+    └── nodes/
+        └── <node-name>/
+            └── stats-summary.json
+```
+
+One directory per node that runs a router pod. `stats-summary.json` is the kubelet's `/stats/summary` response reduced to the node-level figures and the router's pods. A node with no file was not read; `router-resource-usage.txt` carries the line saying why (`specs/collection/base_spec.md` → Kubelet stats collection lists each case). As with `router-metrics`, this path is pinned to the troubleshoot.sh version the chart bundles. Under `mode: local`, there is no such directory: the `nodeMetrics` collector writes `node-metrics/<node-name>.json` instead, with every pod on every node in the cluster.

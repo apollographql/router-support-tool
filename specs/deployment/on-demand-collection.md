@@ -190,6 +190,8 @@ The image also needs `aws-cli` and `gcloud` bundled alongside the support-bundle
 
 The image also bundles `kubectl` and `curl`, which the `router-metrics` script uses to list router pods and scrape each one when collection runs (`specs/collection/base_spec.md` → Per-pod metrics collection).
 
+The `router-resource-usage` script (`specs/collection/base_spec.md` → Kubelet stats collection) is written in Python and needs only `python3`, not `kubectl` or `curl`. `python3` must be installed explicitly and pinned like the image's other packages, not left to arrive as a dependency of `aws-cli`.
+
 ### Chart values specific to `mode: job`
 
 | Value | Required | Default | Purpose |
@@ -197,6 +199,7 @@ The image also bundles `kubectl` and `curl`, which the `router-metrics` script u
 | `job.podAnnotations` | No | `{sidecar.istio.io/inject: "false", linkerd.io/inject: disabled}` | Annotations merged onto the Job's pod template, customer values win over the defaults — see [Service mesh environments](#service-mesh-environments) below |
 | `job.podLabels` | No | `{}` | Arbitrary labels merged onto the Job's pod template |
 | `job.ttlSecondsAfterFinished` | No | `3600` | Maps to the Job's `ttlSecondsAfterFinished` — how long after completion Kubernetes automatically deletes the Job and its pod object. See [Cluster footprint for `mode: job`](#cluster-footprint-for-mode-job) below for what this window is actually for. |
+| `job.collectNodeMetrics` | No | `true` | Create the ClusterRole/ClusterRoleBinding for the kubelet read (`nodes/stats` get and `nodes` list) and collect container stats and node pressure conditions. `false` skips the ClusterRole and the kubelet read. The bundle says what was declined — see [Kubelet stats RBAC](#kubelet-stats-rbac) |
 
 ```yaml
 # templates/job.yaml — only rendered if mode: job
@@ -236,25 +239,28 @@ Given that, the chart sets `job.podAnnotations` to disable injection by default,
 
 ### Permissions for `mode: job`
 
-Additionally requires creating a Job, a namespace-scoped ServiceAccount, a Role/RoleBinding, and a ClusterRole/ClusterRoleBinding (for `nodeMetrics`'s cluster-scoped grants). Running the collection uses **a namespace-scoped ServiceAccount created by the chart**, run on the customer's behalf by a platform team member via the Job. Its Role's `get`/`list` on pods is also what `router-metrics` uses to find router pods at collection time; unlike `mode: local`, no `pods/portforward` grant is needed.
+Additionally requires creating a Job, a namespace-scoped ServiceAccount, a Role/RoleBinding, and a ClusterRole/ClusterRoleBinding (for the cluster-scoped kubelet grants). Running the collection uses **a namespace-scoped ServiceAccount created by the chart**, run on the customer's behalf by a platform team member via the Job. Its Role's `get`/`list` on pods is also what `router-metrics` and `router-resource-usage` use to find router pods, and from their `status.hostIP` the nodes they run on, at collection time; unlike `mode: local`, no `pods/portforward` grant is needed.
 
-#### `nodeMetrics` RBAC
+The Job's pod sets `automountServiceAccountToken: false` and mounts a projected volume at the standard ServiceAccount path: a token with `expirationSeconds: 600`, the namespace, and `ca.crt` from `kube-root-ca.crt`. troubleshoot.sh and the script read it from the same place as before. The reason is in `specs/collection/base_spec.md` → Kubelet stats collection.
 
-`nodeMetrics` needs three separate grants to reach `/api/v1/nodes/<node>/proxy/stats/summary`:
+#### Kubelet stats RBAC
 
-- **`nodes` (list)** — to resolve node names when neither `nodeNames` nor `selector` is set.
-- **`nodes/proxy` (get)** — required unconditionally by the API server for any request matching the `/nodes/{name}/proxy/{path}` URL pattern. This is a broad grant: Kubernetes' own RBAC good-practices documentation states it "provides access to privileged kubelet APIs that can retrieve container logs or execute and attach to pod processes... bypasses audit logging and admission control," and is explicitly "not a read-only permission." What this tool does with it is read-only, but the grant itself authorizes more than that one use, and it cannot be scoped to just the router's nodes.
-- **`nodes/stats` (get)** — required separately by the kubelet's own authorization check, layered on top of `nodes/proxy`, not a substitute for it.
+Under `mode: job`, `router-resource-usage` calls the kubelet directly at `https://<node-ip>:10250` from the Job's pod, so the kubelet's own authorization applies rather than the API server's proxy rules. The kubelet authorizes `/stats/*` as the `nodes/stats` subresource (Kubernetes' kubelet authentication and authorization reference). The ClusterRole therefore holds:
 
-Declining only `nodes/proxy`/`nodes/stats` (possible when you manage the RBAC yourself) still leaves `nodes` access (node pressure conditions) and everything `clusterResources` provides — OOM kill occurrences and last state, restart counts, configured limits. What's lost is container memory and CPU usage, and the router's own Prometheus endpoint serves jemalloc memory gauges but no container RSS, working-set or CPU figures, so it is not a substitute. See `specs/collection/base_spec.md` → footnote \[2\].
+- **`nodes/stats` (get)**: the kubelet's `/stats/summary`, with per-pod and per-container memory, CPU and pressure stall figures. Always, unless declined.
+- **`nodes` (list)**: an ordinary, low-risk read of node objects. `clusterResources` uses it for node pressure conditions (`MemoryPressure`, `DiskPressure`). The kubelet read does not need it: the node to ask comes from each router pod's `status.hostIP`, which the namespaced Role's `get`/`list` on pods already covers.
 
-The chart currently only supports declining all three grants together via `job.collectNodeMetrics: false` at install time. This skips creating the ClusterRole/ClusterRoleBinding entirely and the `nodeMetrics` collector itself then comes back empty rather than the install failing. Node pressure conditions then come back empty too since the `nodes` list grant is part of that ClusterRole.
+**`nodes/proxy` is not granted.** It is only required when a request goes through the API server's proxy (`/api/v1/nodes/<node>/proxy/...`), which is what the `nodeMetrics` collector does. Kubernetes' documentation states that `get` on `nodes/proxy` is "not a read-only permission" and authorizes executing commands in any container running on the node. Dropping it is the point of reading the kubelet directly. None of the grants above can be scoped to just the router's nodes, because the node names aren't known when the chart is installed.
+
+The chart only supports declining the whole ClusterRole, via `job.collectNodeMetrics: false` at install time. That skips creating the ClusterRole/ClusterRoleBinding entirely. `router-resource-usage` still runs, and writes a line saying the kubelet read was declined. Node pressure conditions come back empty, since `nodes` (list) is part of that ClusterRole; `cluster-resources/nodes-errors.json` records the refusal. What's lost is container memory and CPU usage, and node pressure conditions.
+
+Under `mode: local` nothing changes: the `nodeMetrics` collector goes through the API server's proxy using the invoking user's own kubectl credentials, which needs `nodes` and `nodes/proxy`. A user's machine generally can't reach node IPs, so the direct route is not available there.
 
 See `specs/collection/base_spec.md` for the rest of the permission set the collectors need.
 
 ### Cluster footprint for `mode: job`
 
-Spec ConfigMap + Helm release metadata + ServiceAccount/Role/RoleBinding. The Job itself is transient: it sets `ttlSecondsAfterFinished: 3600` (see `job.ttlSecondsAfterFinished` above), so Kubernetes automatically deletes the Job and its pod an hour after it completes — nothing to clean up by hand. Customers who want nothing left behind entirely (including the spec ConfigMap and RBAC) can `helm uninstall` after collecting.
+Spec ConfigMap + Helm release metadata + ServiceAccount/Role/RoleBinding, plus the ClusterRole/ClusterRoleBinding unless `job.collectNodeMetrics` is `false`. The Job itself is transient: it sets `ttlSecondsAfterFinished: 3600` (see `job.ttlSecondsAfterFinished` above), so Kubernetes automatically deletes the Job and its pod an hour after it completes — nothing to clean up by hand. Customers who want nothing left behind entirely (including the spec ConfigMap and RBAC) can `helm uninstall` after collecting.
 
 Each collection gets its own Job, named `router-diagnostics-job-{{ .Release.Revision }}`. The Job carries `helm.sh/resource-policy: keep` so that Helm doesn't prune the previous revision's Job the moment a new one supersedes it in the rendered manifest.
 
@@ -264,7 +270,7 @@ That same annotation also stops `helm uninstall` from deleting the Job early. Th
 
 ## Running outside the mesh doesn't have to mean losing metrics
 
-This applies to both modes — neither `mode: local` (the customer's own machine) nor an un-injected `mode: job` Job pod is inside the mesh. `logs`, `clusterResources`, `nodeMetrics`, `configMap` all reach their data through the Kubernetes API server or the kubelet, which the mesh does not sit in front of, so running outside it doesn't affect them. The Prometheus scrape is the one collector that talks directly to a router port, and a mesh enforcing strict mTLS will reject it from a pod outside the mesh, so the metrics port needs an explicit exception.
+This applies to both modes — neither `mode: local` (the customer's own machine) nor an un-injected `mode: job` Job pod is inside the mesh. `logs`, `clusterResources`, `nodeMetrics`, `router-resource-usage`, `configMap` all reach their data through the Kubernetes API server or the kubelet, which the mesh does not sit in front of, so running outside it doesn't affect them. The Prometheus scrape is the one collector that talks directly to a router port, and a mesh enforcing strict mTLS will reject it from a pod outside the mesh, so the metrics port needs an explicit exception.
 
 The fix is on the router's side: the customer exempts its metrics port from mTLS — Istio's `PeerAuthentication: PERMISSIVE` scoped to that port (or `traffic.sidecar.istio.io/excludeInboundPorts`), Linkerd's `config.linkerd.io/skip-inbound-ports`. This is platform-team guidance to apply once, not a chart setting.
 
