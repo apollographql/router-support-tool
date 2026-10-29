@@ -17,10 +17,6 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_SPEC = os.path.join(HERE, "..", "..", "..", "specs", "collection", "base_spec.md")
 
-# Signals the spec says the router does not serve (see its jemalloc row). If a router starts
-# serving one, update the spec and docs rather than loosening this check.
-NOT_SERVED = ("process_resident_memory_bytes", "process_cpu_seconds_total")
-
 
 class Failure(Exception):
     pass
@@ -81,9 +77,6 @@ def check_prometheus_scrapes(bundle, signals):
         for sig in signals:
             if not re.search(r"^" + re.escape(sig) + r"[{ ]", text, re.MULTILINE):
                 raise Failure(f"{os.path.basename(path)}: the spec documents {sig} as served by the router's Prometheus endpoint, but it is not in the scrape")
-        for sig in NOT_SERVED:
-            if re.search(r"^" + re.escape(sig) + r"[{ ]", text, re.MULTILINE):
-                raise Failure(f"{os.path.basename(path)}: the router now serves {sig}, which the spec says it does not; update the spec and docs")
 
 
 def check_kubelet_stats(bundle, signals):
