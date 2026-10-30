@@ -53,7 +53,7 @@ Both paths collect the same information, only how and where the tool runs and wh
 | | `mode: local` | `mode: job` |
 | --- | --- | --- |
 | Who runs collection | You, from your own machine with your own kubectl access | A Kubernetes Job, in-cluster, using its own ServiceAccount |
-| What gets installed | Spec ConfigMap only | Spec ConfigMap + Job + ServiceAccount/RBAC (namespace-scoped and cluster-scoped) |
+| What gets installed | Spec ConfigMap only | Spec ConfigMap + Job + ServiceAccount/RBAC (namespace-scoped and cluster-scoped), or just the Job and spec ConfigMap if you supply your own ServiceAccount |
 | `support-bundle` binary | Pinned by the router-diagnostics collect script | Pinned by Apollo's published Job image |
 | Where the bundle lands | Your current directory | In-cluster; your platform team retrieves it (`specs/storage/`) |
 | Use when | You have kubectl access to production | Your kubectl access is restricted and a platform team runs it on your behalf |
@@ -117,7 +117,7 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
 
 If you're on a raw-manifest or custom deployment, also set `selector` and `configMapName` as shown above.
 
-The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle. See `specs/storage/`. Installing this mode needs someone who can create Jobs, namespace RBAC, *and* cluster-scoped RBAC — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below for the full grant list.
+The Job runs the collection automatically using a namespace-scoped ServiceAccount, and the platform team retrieves the completed bundle. See `specs/storage/`. Installing this mode needs someone who can create Jobs and RBAC, or only a Job and the spec ConfigMap if you supply your own ServiceAccount — see [Permissions for on-demand collection](#permissions-for-on-demand-collection) below for the full grant list.
 
 **If your cluster runs a service mesh, the Job's pod doesn't join it by default.** Sidecar injection is disabled automatically so the Job reliably reaches `Completed` instead of getting stuck in `Running` waiting on a long-lived sidecar. If your platform team's policy requires every pod to be in the mesh, this can be overridden. See `specs/deployment/on-demand-collection.md` → Service mesh environments for how to override it.
 
@@ -181,7 +181,9 @@ If you expect to run diagnostics more than once, you may prefer to leave it inst
 
 Installing with `mode: local` requires permission to create a ConfigMap in the target namespace — the same level of access needed to install the router itself. `collect.sh` then runs using your existing kubectl credentials; no additional ServiceAccount is created for that step. Reaching `router-metrics` also needs `create` on the `pods/portforward` subresource in the router's namespace because `router-metrics` port-forwards directly to each matching pod under the hood as part of running `support-bundle` itself. Declining it doesn't fail collection. Each pod's "no response" line in the bundle includes the port-forward's error.
 
-Installing with `mode: job` requires more: creating a Job, a ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
+Installing with `mode: job` requires more: creating a Job, a ServiceAccount, a Role/RoleBinding, and — because container memory/CPU come from the kubelet — cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so by default whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
+
+To keep the permissions in your own hands, install with `job.serviceAccount.name` set to a ServiceAccount you already own, in the namespace you install the chart into. The chart then creates no ServiceAccount, Role, RoleBinding, ClusterRole or ClusterRoleBinding, so installing it needs only permission to create the Job and the spec ConfigMap. You provide the grants listed in `specs/deployment/on-demand-collection.md` → Running under your own ServiceAccount: the namespaced read access plus the cluster-scoped grants below. `job.serviceAccount.annotations` can't be combined with a name, since the chart doesn't create that ServiceAccount, so put IRSA or Workload Identity annotations on your own. `job.collectNodeMetrics: false` declines the cluster-scoped read, so you can skip those grants.
 
 Collection itself needs read access in the router's namespace to pods, pod logs, ConfigMaps, and deployments — standard permissions for anyone managing a k8s workload — plus three separate cluster-scoped grants, deliberately kept independent so you can decline the more sensitive ones without losing the others:
 
