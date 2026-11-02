@@ -34,7 +34,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: router-diagnostics-job
+      serviceAccountName: {{ include "router-diagnostics-chart.serviceAccountName" . }}
       restartPolicy: Never
       containers:
         - name: support-bundle
