@@ -71,3 +71,18 @@ quoted string early.
 {{- define "router-diagnostics-chart.shellQuote" -}}
 {{- . | toString | replace "'" "'\\''" | squote -}}
 {{- end -}}
+
+{{/*
+The ServiceAccount the Job's pod runs as: job.serviceAccount.name when the customer
+supplies one, otherwise the chart-created router-diagnostics-job.
+*/}}
+{{- define "router-diagnostics-chart.serviceAccountName" -}}
+{{- if .Values.job.serviceAccount.name -}}
+{{- if .Values.job.serviceAccount.annotations -}}
+{{- fail "job.serviceAccount.name and job.serviceAccount.annotations cannot be set together -- the chart does not create the ServiceAccount. Put the annotations on your own ServiceAccount." }}
+{{- end -}}
+{{- .Values.job.serviceAccount.name -}}
+{{- else -}}
+router-diagnostics-job
+{{- end -}}
+{{- end -}}
