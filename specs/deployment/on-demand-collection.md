@@ -200,8 +200,9 @@ The `router-resource-usage` script (`specs/collection/base_spec.md` → Kubelet 
 | `job.podLabels` | No | `{}` | Arbitrary labels merged onto the Job's pod template |
 | `job.ttlSecondsAfterFinished` | No | `3600` | Maps to the Job's `ttlSecondsAfterFinished` — how long after completion Kubernetes automatically deletes the Job and its pod object. See [Cluster footprint for `mode: job`](#cluster-footprint-for-mode-job) below for what this window is actually for. |
 | `job.collectNodeMetrics` | No | `true` | Create the ClusterRole/ClusterRoleBinding for the kubelet read (`nodes/stats` get and `nodes` list) and collect container stats and node pressure conditions. `false` skips the ClusterRole and the kubelet read. The bundle says what was declined — see [Kubelet stats RBAC](#kubelet-stats-rbac) |
-| `job.serviceAccount.name` | No | When unset the chart creates `router-diagnostics-job` | Name of an existing ServiceAccount in the release namespace for the Job's pod to run as. When set, the chart creates no ServiceAccount, Role, RoleBinding, ClusterRole or ClusterRoleBinding, and the customer provides the grants in [Running under your own ServiceAccount](#running-under-your-own-serviceaccount). |
-| `job.serviceAccount.annotations` | No | `{}` | Annotations merged onto the ServiceAccount the chart creates (IRSA or Workload Identity, see `specs/storage/object_storage.md` → Credentials). Setting it together with `job.serviceAccount.name` fails the render because the chart doesn't create that ServiceAccount and the annotations would have no effect |
+| `job.serviceAccount.create` | No | `true` | Whether the chart creates the Job's ServiceAccount (`router-diagnostics-job`) and the Role, RoleBinding, ClusterRole and ClusterRoleBinding that go with it. `false` creates none of them and the customer provides the grants in [Running under your own ServiceAccount](#running-under-your-own-serviceaccount). |
+| `job.serviceAccount.name` | Only when `job.serviceAccount.create` is `false` | Unset | Name of an existing ServiceAccount in the release namespace for the Job's pod to run as. With `job.serviceAccount.create: false` and no name, the render fails. Setting it together with `job.serviceAccount.create: true` fails the render because the chart would create its own ServiceAccount and the name would have no effect. |
+| `job.serviceAccount.annotations` | No | `{}` | Annotations merged onto the ServiceAccount the chart creates (IRSA or Workload Identity, see `specs/storage/object_storage.md` → Credentials). Setting it together with `job.serviceAccount.create: false` fails the render because the chart doesn't create that ServiceAccount and the annotations would have no effect |
 
 ```yaml
 # templates/job.yaml — only rendered if mode: job
@@ -241,7 +242,7 @@ Given that, the chart sets `job.podAnnotations` to disable injection by default,
 
 ### Permissions for `mode: job`
 
-Additionally requires creating a Job and, unless `job.serviceAccount.name` is set, a namespace-scoped ServiceAccount, a Role/RoleBinding, and a ClusterRole/ClusterRoleBinding (for the cluster-scoped kubelet grants). By default, running the collection uses **a namespace-scoped ServiceAccount created by the chart**, run on the customer's behalf by a platform team member via the Job. With `job.serviceAccount.name` set, the chart creates none of these RBAC objects and the platform team provides the grants instead, see [Running under your own ServiceAccount](#running-under-your-own-serviceaccount). Its Role's `get`/`list` on pods is also what `router-metrics` and `router-resource-usage` use to find router pods, and from their `status.hostIP` the nodes they run on, at collection time; unlike `mode: local`, no `pods/portforward` grant is needed.
+Additionally requires creating a Job and, unless `job.serviceAccount.create` is `false`, a namespace-scoped ServiceAccount, a Role/RoleBinding, and a ClusterRole/ClusterRoleBinding (for the cluster-scoped kubelet grants). By default, running the collection uses **a namespace-scoped ServiceAccount created by the chart**, run on the customer's behalf by a platform team member via the Job. With `job.serviceAccount.create: false`, the chart creates none of these RBAC objects and the platform team provides the grants instead, see [Running under your own ServiceAccount](#running-under-your-own-serviceaccount). Its Role's `get`/`list` on pods is also what `router-metrics` and `router-resource-usage` use to find router pods, and from their `status.hostIP` the nodes they run on, at collection time; unlike `mode: local`, no `pods/portforward` grant is needed.
 
 The Job's pod sets `automountServiceAccountToken: false` and mounts a projected volume at the standard ServiceAccount path: a token with `expirationSeconds: 600`, the namespace, and `ca.crt` from `kube-root-ca.crt`. troubleshoot.sh and the script read it from the same place as before. The reason is in `specs/collection/base_spec.md` → Kubelet stats collection.
 
@@ -262,11 +263,11 @@ See `specs/collection/base_spec.md` for the rest of the permission set the colle
 
 #### Running under your own ServiceAccount
 
-Creating cluster-scoped RBAC is a large permission to ask of whoever installs the chart, and a platform team may prefer to own the permissions itself. Setting `job.serviceAccount.name` moves that responsibility to the customer:
+Creating cluster-scoped RBAC is a large permission to ask of whoever installs the chart, and a platform team may prefer to own the permissions itself. Setting `job.serviceAccount.create: false` and `job.serviceAccount.name` moves that responsibility to the customer:
 
 ```mermaid
 flowchart TD
-  A["job.serviceAccount.name set?"] -->|no| B["Chart creates ServiceAccount, Role, RoleBinding, ClusterRole, ClusterRoleBinding"]
+  A["job.serviceAccount.create is false?"] -->|no| B["Chart creates ServiceAccount, Role, RoleBinding, ClusterRole, ClusterRoleBinding"]
   A -->|yes| C["Chart creates no RBAC; the Job's pod runs as the named ServiceAccount"]
   C --> D["Customer grants the list below"]
 ```
@@ -329,7 +330,7 @@ A grant the ServiceAccount lacks is reported in the bundle the same as it is und
 
 ### Cluster footprint for `mode: job`
 
-Spec ConfigMap + Helm release metadata + ServiceAccount/Role/RoleBinding, plus the ClusterRole/ClusterRoleBinding unless `job.collectNodeMetrics` is `false`. With `job.serviceAccount.name` set, only the spec ConfigMap and the Job. The Job itself is transient: it sets `ttlSecondsAfterFinished: 3600` (see `job.ttlSecondsAfterFinished` above), so Kubernetes automatically deletes the Job and its pod an hour after it completes — nothing to clean up by hand. Customers who want nothing left behind entirely (including the spec ConfigMap and RBAC) can `helm uninstall` after collecting.
+Spec ConfigMap + Helm release metadata + ServiceAccount/Role/RoleBinding, plus the ClusterRole/ClusterRoleBinding unless `job.collectNodeMetrics` is `false`. With `job.serviceAccount.create: false`, only the spec ConfigMap and the Job. The Job itself is transient: it sets `ttlSecondsAfterFinished: 3600` (see `job.ttlSecondsAfterFinished` above), so Kubernetes automatically deletes the Job and its pod an hour after it completes — nothing to clean up by hand. Customers who want nothing left behind entirely (including the spec ConfigMap and RBAC) can `helm uninstall` after collecting.
 
 Each collection gets its own Job, named `router-diagnostics-job-{{ .Release.Revision }}`. The Job carries `helm.sh/resource-policy: keep` so that Helm doesn't prune the previous revision's Job the moment a new one supersedes it in the rendered manifest.
 
