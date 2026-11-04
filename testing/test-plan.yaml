@@ -150,6 +150,16 @@ scenario:
         kind: relative_path
         path: "{{ expected_redacted_router_config_path }}"
 
+      - name: assert_documented_memory_cpu_signals.py
+        env_var: ASSERT_MEMORY_CPU_SIGNALS
+        kind: relative_path
+        path: chainsaw/scripts/assert_documented_memory_cpu_signals.py
+
+      - name: base_spec.md
+        env_var: BASE_SPEC
+        kind: relative_path
+        path: ../specs/collection/base_spec.md
+
       - name: router-diagnostics-chart
         env_var: CHART_DIR
         kind: relative_dir
@@ -164,3 +174,4 @@ scenario:
           - "templates/job.yaml"
           - "files/collect-and-upload.sh"
           - "files/router-metrics-collect.sh"
+          - "files/router-resource-usage.py"
