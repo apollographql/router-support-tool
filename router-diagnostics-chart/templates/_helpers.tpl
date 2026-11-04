@@ -73,16 +73,23 @@ quoted string early.
 {{- end -}}
 
 {{/*
-The ServiceAccount the Job's pod runs as: job.serviceAccount.name when the customer
-supplies one, otherwise the chart-created router-diagnostics-job.
+The ServiceAccount the Job's pod runs as: the chart-created router-diagnostics-job or
+job.serviceAccount.name when job.serviceAccount.create is false. Rejects combinations
+where one of the two values would have no effect.
 */}}
 {{- define "router-diagnostics-chart.serviceAccountName" -}}
+{{- if .Values.job.serviceAccount.create -}}
 {{- if .Values.job.serviceAccount.name -}}
+{{- fail "job.serviceAccount.name cannot be set while job.serviceAccount.create is true -- the chart creates its own ServiceAccount. Set job.serviceAccount.create=false to use yours." }}
+{{- end -}}
+router-diagnostics-job
+{{- else -}}
+{{- if not .Values.job.serviceAccount.name -}}
+{{- fail "job.serviceAccount.name is required when job.serviceAccount.create is false." }}
+{{- end -}}
 {{- if .Values.job.serviceAccount.annotations -}}
-{{- fail "job.serviceAccount.name and job.serviceAccount.annotations cannot be set together -- the chart does not create the ServiceAccount. Put the annotations on your own ServiceAccount." }}
+{{- fail "job.serviceAccount.annotations cannot be set while job.serviceAccount.create is false -- the chart does not create the ServiceAccount. Put the annotations on your own ServiceAccount." }}
 {{- end -}}
 {{- .Values.job.serviceAccount.name -}}
-{{- else -}}
-router-diagnostics-job
 {{- end -}}
 {{- end -}}
