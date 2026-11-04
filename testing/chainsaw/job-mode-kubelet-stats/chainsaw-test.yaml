@@ -1,0 +1,122 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: job-mode-kubelet-stats
+spec:
+  # The positive control for mode: job's container memory and CPU
+  # (specs/collection/base_spec.md -> Kubelet stats collection). RTF can't provide it: its
+  # environment can't be granted the cluster-scoped nodes/stats the Job needs, so every RTF
+  # job-mode scenario declines the kubelet read. This runs the real Job, built from this
+  # checkout, against a real kubelet and a real router.
+  #
+  # All paths here are relative to this test's own directory, because that's how Chainsaw
+  # resolves them.
+  #
+  # Not concurrency-safe: the Job image is built and loaded into the cluster under one tag.
+  concurrent: false
+  steps:
+    - try:
+        - script:
+            # Builds the Job image (the first build pulls the gcloud base image) and loads it
+            # into the kind node.
+            timeout: 600s
+            content: |
+              ../scripts/load_job_image.sh "$JOB_IMAGE"
+            env:
+              - name: JOB_IMAGE
+                value: router-diagnostics-job:chainsaw
+        - script:
+            timeout: 120s
+            content: |
+              mise exec "helm@$HELM_VERSION" -- helm install router oci://ghcr.io/apollographql/helm-charts/router \
+                --version "${ROUTER_CHART_VERSION:-2.17.0}" \
+                -n "$NAMESPACE" \
+                --values ../official-chart/values.yaml \
+                --set-file supergraphFile=../../fixtures/supergraph.graphql
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - assert:
+            timeout: 90s
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: router
+              status:
+                (conditions[?type == 'Available']):
+                - status: "True"
+        - script:
+            timeout: 120s
+            content: |
+              kubectl create configmap mock-backend-script -n "$NAMESPACE" \
+                --from-file=server.py=../../data/mock_backend_server.py
+              kubectl apply -n "$NAMESPACE" -f mock-backend.yaml
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - assert:
+            timeout: 120s
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: mock-backend
+              status:
+                (conditions[?type == 'Available']):
+                - status: "True"
+        # Available only means the readiness probe target (:8088) answered; the Prometheus
+        # exporter (:9090) can start a beat later, and the Job scrapes it.
+        - script:
+            timeout: 210s
+            content: |
+              ../scripts/wait_for_metrics.sh "$NAMESPACE"
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        # The kubelet's per-container PSI and page-fault figures need a stats-collection
+        # cycle to populate for a container this fresh; collecting earlier would leave the
+        # positive control looking at a half-empty container.
+        - sleep:
+            duration: 15s
+        - script:
+            timeout: 120s
+            content: |
+              mise exec "helm@$HELM_VERSION" -- helm install router-diagnostics ../../../router-diagnostics-chart \
+                -n "$NAMESPACE" \
+                --set namespace="$NAMESPACE" \
+                --set mode=job \
+                --set job.image.repository=router-diagnostics-job \
+                --set job.image.tag=chainsaw \
+                --set job.image.pullPolicy=IfNotPresent \
+                --set job.storage.provider=url \
+                --set job.storage.url.endpoint="http://mock-backend.$NAMESPACE.svc.cluster.local:8080/bundle.tar.gz"
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - script:
+            timeout: 240s
+            content: |
+              kubectl wait --for=condition=complete job/router-diagnostics-job-1 -n "$NAMESPACE" --timeout=220s \
+                || { kubectl logs job/router-diagnostics-job-1 -n "$NAMESPACE" --tail=50 >&2; exit 1; }
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+        - script:
+            timeout: 120s
+            content: |
+              ../scripts/verify_job_mode_kubelet_stats.sh "$NAMESPACE"
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+      finally:
+        # The chart's ClusterRole and ClusterRoleBinding are cluster-scoped, so deleting the
+        # namespace doesn't remove them; uninstalling the release does.
+        - script:
+            timeout: 60s
+            content: |
+              mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics -n "$NAMESPACE" || true
+              mise exec "helm@$HELM_VERSION" -- helm uninstall router -n "$NAMESPACE" || true
+            env:
+              - name: NAMESPACE
+                value: ($namespace)

@@ -1,0 +1,48 @@
+# The upload target for the Job's bundle (job.storage.provider: url). It stores whatever is
+# PUT and serves it back on GET. Its script comes from testing/data/mock_backend_server.py,
+# which the test turns into the mock-backend-script ConfigMap before applying this.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-backend
+  labels:
+    app: mock-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-backend
+  template:
+    metadata:
+      labels:
+        app: mock-backend
+    spec:
+      # python as PID 1 ignores SIGTERM, so without this the pod waits out the default 30s
+      # grace period and namespace cleanup times out.
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: mock-backend
+          image: python:3.14-slim
+          command: ["python3", "/script/server.py"]
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: script
+              mountPath: /script
+      volumes:
+        - name: script
+          configMap:
+            name: mock-backend-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-backend
+spec:
+  selector:
+    app: mock-backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

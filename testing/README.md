@@ -13,6 +13,12 @@ collected bundle — real collection, real redaction, not just a rendered spec.
 - **`official-chart/`**, **`raw-manifest/`**, **`multi-release/`**, **`official-chart-metrics-no-servicemonitor/`**
   — one test directory per deployment-tier/scenario combination, each with its own
   `chainsaw-test.yaml`.
+- **`job-mode-kubelet-stats/`** — This test runs a real `mode: job` collection. It builds the Job
+  image from this checkout, loads it into the cluster, installs the official router chart and a mock upload
+  backend, installs the chart with `mode: job`, and asserts on the bundle the Job uploads: the kubelet memory
+  and CPU signals the spec documents are present for the router container, only the router's pods are in the
+  stats file, and no token or `APOLLO_KEY` is in the bundle. This can't be run in RTF
+  because its environment can't be granted the cluster-scoped `nodes/stats` the Job needs.
 - **`scripts/`** — the `verify_*.sh` scripts each test's last step runs against the extracted
   bundle, plus shared helpers (`wait_for_metrics.sh`,
   `assert_host_collector_diagnostics_redacted.sh`) used by more than one of them.

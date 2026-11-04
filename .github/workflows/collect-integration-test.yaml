@@ -41,6 +41,7 @@ jobs:
             testing/chainsaw/official-chart-metrics-no-servicemonitor
             testing/chainsaw/job-mode-rbac
             testing/chainsaw/job-storage-credentials
+            testing/chainsaw/job-mode-kubelet-stats
 
       - name: Upload bundle for inspection
         if: always()
@@ -53,6 +54,7 @@ jobs:
             testing/chainsaw/raw-manifest/support-bundle-*.tar.gz
             testing/chainsaw/multi-release/support-bundle-*.tar.gz
             testing/chainsaw/official-chart/support-bundle-*.tar.gz
+            testing/chainsaw/job-mode-kubelet-stats/support-bundle-*.tar.gz
           retention-days: 3
 
   exercise_helm_version_install_tests:
