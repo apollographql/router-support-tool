@@ -55,7 +55,15 @@ job:
   # pod). Keeps the cluster from accumulating a completed Job/pod per collection.
   ttlSecondsAfterFinished: 3600
   serviceAccount:
-    # -- Merged onto the Job's ServiceAccount. Carries `eks.amazonaws.com/role-arn` for
+    # -- Whether the chart creates the Job's ServiceAccount (`router-diagnostics-job`) and the
+    # Role, RoleBinding, ClusterRole and ClusterRoleBinding that go with it. Set to `false` to
+    # run under your own ServiceAccount, named in `name`, which must hold the grants in
+    # specs/deployment/on-demand-collection.md -> Running under your own ServiceAccount.
+    create: true
+    # -- Name of an existing ServiceAccount in the release namespace for the Job's pod to run
+    # as. Required when `create` is `false` and must be unset when `create` is `true`.
+    name: ""
+    # -- Merged onto the Job's ServiceAccount. Cannot be combined with `create: false`. Carries `eks.amazonaws.com/role-arn` for
     # IRSA or `iam.gke.io/gcp-service-account` for Workload Identity, whichever matches
     # `job.storage.provider` — the recommended credential path for `job.storage`, needing
     # no Secret. See specs/storage/object_storage.md -> Credentials.
