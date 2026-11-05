@@ -24,7 +24,7 @@ ENV PATH="/google-cloud-sdk/bin:$PATH"
 # Prevent gcloud from trying to write logs back into the (read-only) container filesystem.
 ENV CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true
 
-ARG SUPPORT_BUNDLE_VERSION="0.134.1"
+ARG SUPPORT_BUNDLE_VERSION="0.134.3"
 ARG TARGETARCH
 ADD https://github.com/replicatedhq/troubleshoot/releases/download/v${SUPPORT_BUNDLE_VERSION}/support-bundle_linux_${TARGETARCH}.tar.gz /tmp/sb.tar.gz
 RUN tar xzf /tmp/sb.tar.gz -C /usr/local/bin support-bundle && \
