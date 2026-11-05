@@ -7,7 +7,7 @@
 set -eu
 
 # renovate: datasource=github-releases depName=replicatedhq/troubleshoot
-SUPPORT_BUNDLE_VERSION="0.134.1"
+SUPPORT_BUNDLE_VERSION="0.134.3"
 
 NAMESPACE=""
 
