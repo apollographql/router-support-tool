@@ -77,17 +77,21 @@ data:
               - |
                 {{- tpl (.Files.Get "files/router-metrics-collect.sh") . | nindent 16 }}
         {{- if eq .Values.mode "job" }}
-        # Reads the kubelet from the Job's pod, so the API server's nodes/proxy grant is not
-        # needed.
+        # Reads the kubelet from the Job's pod.
         - run:
             collectorName: router-resource-usage
             outputDir: nodes
             ignoreParentEnvs: true
             command: sh
+            # namespace and selector are customer-supplied and end up in a shell command,
+            # shellQuote wraps each in single quotes.
             args:
               - -c
               - |
-                NAMESPACE={{ include "router-diagnostics-chart.shellQuote" .Values.namespace }} SELECTOR={{ include "router-diagnostics-chart.shellQuote" (.Values.selector | default "app.kubernetes.io/name=router") }} KUBELET_DECLINED={{ if .Values.job.collectNodeMetrics }}0{{ else }}1{{ end }} exec python3 -I - <<'PY'
+                export NAMESPACE={{ include "router-diagnostics-chart.shellQuote" .Values.namespace }}
+                export SELECTOR={{ include "router-diagnostics-chart.shellQuote" (.Values.selector | default "app.kubernetes.io/name=router") }}
+                export KUBELET_DECLINED={{ if .Values.job.collectNodeMetrics }}0{{ else }}1{{ end }}
+                exec python3 -I - <<'PY'
                 {{- .Files.Get "files/router-resource-usage.py" | nindent 16 }}
                 PY
         {{- end }}
