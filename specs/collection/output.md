@@ -38,8 +38,7 @@ support-bundle-2026-08-11T14_23_00/
 │       │       └── <router-pod-name>.txt
 │       └── router-resource-usage/
 │           └── nodes/
-│               └── <node-name>/
-│                   └── stats-summary.json
+│               └── <node-name>.json
 ├── router-logs/
 │   └── <router-pod-name>/
 │       └── router.log -> ../../cluster-resources/pods/logs/production/<router-pod-name>/router.log
@@ -87,8 +86,7 @@ host-collectors/run-host/
 ├── router-resource-usage-stderr.txt
 └── router-resource-usage/
     └── nodes/
-        └── <node-name>/
-            └── stats-summary.json
+        └── <node-name>.json
 ```
 
-One directory per node that runs a router pod. `stats-summary.json` is the kubelet's `/stats/summary` response reduced to the node-level figures and the router's pods. A node with no file was not read; `router-resource-usage.txt` carries the line saying why (`specs/collection/base_spec.md` → Kubelet stats collection lists each case). As with `router-metrics`, this path is pinned to the troubleshoot.sh version the chart bundles. Under `mode: local`, there is no such directory: the `nodeMetrics` collector writes `node-metrics/<node-name>.json` instead, with every pod on every node in the cluster.
+One file per node that runs a router pod. `<node-name>.json` is the kubelet's `/stats/summary` response reduced to the node-level figures and the router's pods. A node with no file was not read; `router-resource-usage.txt` carries the line saying why (`specs/collection/base_spec.md` → Kubelet stats collection lists each case). As with `router-metrics`, this path is pinned to the troubleshoot.sh version the chart bundles. Under `mode: local`, there is no such directory: the `nodeMetrics` collector writes `node-metrics/<node-name>.json` instead, with every pod on every node in the cluster.
