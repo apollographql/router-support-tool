@@ -1,8 +1,8 @@
 # Only rendered for mode: job. The namespace-scoped Role covers everything
-# clusterResources/logs/configMap/nodeMetrics need within .Values.namespace.
-# The ClusterRole below is only for nodeMetrics's cluster-scoped grants (nodes,
-# nodes/proxy, nodes/stats) and is independently gated by job.collectNodeMetrics,
-# since the installing identity may not be grantable cluster-scoped RBAC.
+# clusterResources/logs/configMap/router-metrics/router-resource-usage need within
+# .Values.namespace.
+# The ClusterRole below is only for the cluster-scoped kubelet grants and is independently
+# gated by job.collectNodeMetrics.
 {{- if eq .Values.mode "job" }}
 apiVersion: v1
 kind: ServiceAccount
@@ -92,8 +92,9 @@ rules:
   - apiGroups: [""]
     resources: ["nodes"]
     verbs: ["list"]
+  # The kubelet authorizes /stats/* as nodes/stats.
   - apiGroups: [""]
-    resources: ["nodes/proxy", "nodes/stats"]
+    resources: ["nodes/stats"]
     verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

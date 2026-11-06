@@ -199,7 +199,7 @@ The `router-resource-usage` script (`specs/collection/base_spec.md` → Kubelet 
 | `job.podAnnotations` | No | `{sidecar.istio.io/inject: "false", linkerd.io/inject: disabled}` | Annotations merged onto the Job's pod template, customer values win over the defaults — see [Service mesh environments](#service-mesh-environments) below |
 | `job.podLabels` | No | `{}` | Arbitrary labels merged onto the Job's pod template |
 | `job.ttlSecondsAfterFinished` | No | `3600` | Maps to the Job's `ttlSecondsAfterFinished` — how long after completion Kubernetes automatically deletes the Job and its pod object. See [Cluster footprint for `mode: job`](#cluster-footprint-for-mode-job) below for what this window is actually for. |
-| `job.collectNodeMetrics` | No | `true` | Create the ClusterRole/ClusterRoleBinding for the kubelet read (`nodes/stats` get and `nodes` list) and collect container stats and node pressure conditions. `false` skips the ClusterRole and the kubelet read. The bundle says what was declined — see [Kubelet stats RBAC](#kubelet-stats-rbac) |
+| `job.collectNodeMetrics` | No | `true` | `false` skips creating the cluster-scoped ClusterRole and ClusterRoleBinding (`nodes` list and `nodes/stats` get). Without them the Job cannot read container memory and CPU usage from the kubelet or collect node pressure conditions, and the bundle says what was declined — see [Kubelet stats RBAC](#kubelet-stats-rbac) |
 
 ```yaml
 # templates/job.yaml — only rendered if mode: job
