@@ -88,7 +88,7 @@ spec:
             {{- end }}
       volumes:
         # A short-lived token at the standard ServiceAccount path. The kubelet read sends it
-        # to each node, so it expires in 10 minutes instead of lasting as long as the pod.
+        # to each node so it expires in 10 minutes instead of lasting as long as the pod.
         - name: kube-api-access
           projected:
             sources:

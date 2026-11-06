@@ -39,9 +39,9 @@ job:
   # standard Kubernetes `imagePullSecrets` shape (e.g. `[{name: my-registry-secret}]`).
   # Only needed if you've overridden `job.image.repository` to point at a private mirror.
   imagePullSecrets: []
-  # -- Optional. Set false to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding
-  # and the kubelet read. Declining loses container memory and CPU usage and node pressure
-  # conditions. Defaults to true.
+  # -- Optional. Set to false to skip creating the cluster-scoped ClusterRole and ClusterRoleBinding.
+  # Without them the Job cannot read container memory and CPU usage from the kubelet or
+  # collect node pressure conditions. Everything else is still collected.
   collectNodeMetrics: true
   # -- Annotations merged onto the Job's pod template. Customer-supplied keys win over
   # the defaults below (sidecar.istio.io/inject: "false", linkerd.io/inject: disabled)
