@@ -203,11 +203,15 @@ find "$BUNDLE_DIR/router-logs" -name '*.log' -size +0 | grep -q .               
 RUN_HOST="$BUNDLE_DIR/host-collectors/run-host"
 STATS_DIR="$RUN_HOST/router-resource-usage/nodes"
 
-# Check that every signal the spec documents is present for the router container. It
-# also reads the router's Prometheus scrapes so it skips the condition with none.
-if [ "$CONDITION" != "all-metrics-misconfigured" ]; then
-  MEMORY_CPU_SPEC_FILE="$BASE_SPEC" python3 -I "$ASSERT_MEMORY_CPU_SIGNALS" "$BUNDLE_DIR"
+# Check that every signal the spec documents is present for the router container. The
+# Prometheus signals are only expected where the router serves them: v2.5.0 or later
+# (specs/collection/base_spec.md -> Memory and CPU information collected) with its exporter on.
+SKIP_PROMETHEUS_SIGNALS=
+if [ "$CONDITION" = "all-metrics-misconfigured" ] ||
+  [ "$(printf '%s\n' 2.5.0 "${ROUTER_VERSION#v}" | sort -V | head -n1)" != 2.5.0 ]; then
+  SKIP_PROMETHEUS_SIGNALS=1
 fi
+SKIP_PROMETHEUS_SIGNALS="$SKIP_PROMETHEUS_SIGNALS" MEMORY_CPU_SPEC_FILE="$BASE_SPEC" python3 -I "$ASSERT_MEMORY_CPU_SIGNALS" "$BUNDLE_DIR"
 
 # At least one <node-name>.json, and every pod in each is one of this namespace's router pods.
 ROUTER_PODS=$(jq -c '[.items[] | select(.metadata.labels.app == "router") | .metadata.name]' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json")

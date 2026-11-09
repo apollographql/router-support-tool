@@ -92,6 +92,9 @@ case "$CONDITION" in
       sleep 1
     done
     [ "$ready" = "True" ]
+    # The kubelet's stats for a container that has just started lack availableBytes, the page
+    # fault counters and psi. Wait so the kubelet stats check has data.
+    sleep 30
     ;;
   *)
     echo "unknown or not-yet-implemented condition: $CONDITION" >&2
