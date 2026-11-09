@@ -16,58 +16,11 @@ import os
 import re
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_SPEC = os.path.join(HERE, "..", "..", "..", "specs", "collection", "base_spec.md")
+from memory_cpu_signals import DEFAULT_SPEC, documented_signals, lookup
 
 
 class Failure(Exception):
     pass
-
-
-def documented_signals(spec_text, source):
-    """
-    Collects every signal the spec says to expect from a given source.
-
-    The spec's "Memory and CPU information collected" table in specs/collection/base_spec.md
-    lists what the bundle should contain. This reads the expected signals from that table.
-    It returns the names in the rows whose Source cell contains `source`.
-    """
-    signals = []
-    base = ""
-    for line in spec_text.splitlines():
-        cells = line.split("|")
-        # cells[0] is what precedes the row's leading pipe, cells[1] is Signal, cells[2] Source.
-        if len(cells) < 3 or source not in cells[2]:
-            continue
-        # A row's first cell lists signal names in backticks. A name that starts with "_" is
-        # shorthand for the previous full name with its last word swapped. For example, the cell
-        # `apollo_router_jemalloc_allocated`, `_active` names two signals:
-        # apollo_router_jemalloc_allocated and apollo_router_jemalloc_active.
-        for token in re.findall(r"`([^`]*)`", cells[1]):
-            if token.startswith("_"):
-                signals.append(base + token)
-            else:
-                signals.append(token)
-                base = token.rsplit("_", 1)[0]
-    return signals
-
-
-def lookup(stats, signal):
-    """
-    Finds a documented kubelet signal in a container's stats.
-
-    The spec names kubelet signals as dotted paths, for example, `memory.workingSetBytes`,
-    that match the nesting in the kubelet's Summary API JSON. This follows that path through the
-    container's stats and returns the value, or None if any step is missing, so that the caller
-    can detect a documented signal the bundle lacks.
-    """
-    for key in signal.split("."):
-        # stats is the part of the record reached so far. A step can land on something that isn't
-        # a dict, such as "memory": null, so check before every lookup.
-        if not isinstance(stats, dict) or key not in stats:
-            return None
-        stats = stats[key]
-    return stats
 
 
 def check_prometheus_scrapes(bundle, signals):
@@ -117,7 +70,7 @@ def check_kubelet_stats(bundle, signals):
 
 def main(argv):
     if len(argv) != 2:
-        print(__doc__, file=sys.stderr)
+        print(f"usage: {os.path.basename(argv[0])} <bundle-dir>, got {len(argv) - 1} argument(s)", file=sys.stderr)
         return 2
     bundle = argv[1]
     spec = os.environ.get("MEMORY_CPU_SPEC_FILE") or DEFAULT_SPEC

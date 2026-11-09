@@ -32,6 +32,14 @@ SELECTOR_FLAG="--set selector=app=router"
 if [ "$CONDITION" = "selector-mismatch" ]; then
   SELECTOR_FLAG=""
 fi
+# The kubelet reports some of a container's stats late so a router container read too soon lacks
+# some of the documented signals. Wait for them before collecting. If the wait runs out, the
+# kubelet stats check below reports what is missing.
+# Collection that reads no stats has nothing to wait for.
+if [ "$CONDITION" != "selector-mismatch" ]; then
+  MEMORY_CPU_SPEC_FILE="$BASE_SPEC" python3 "$WAIT_FOR_KUBELET_STATS" "$NAMESPACE" app=router
+fi
+
 helm install router-diagnostics "$CHART_DIR" \
   --namespace "$NAMESPACE" \
   --set namespace="$NAMESPACE" \
@@ -211,7 +219,7 @@ if [ "$CONDITION" = "all-metrics-misconfigured" ] ||
   [ "$(printf '%s\n' 2.5.0 "${ROUTER_VERSION#v}" | sort -V | head -n1)" != 2.5.0 ]; then
   SKIP_PROMETHEUS_SIGNALS=1
 fi
-SKIP_PROMETHEUS_SIGNALS="$SKIP_PROMETHEUS_SIGNALS" MEMORY_CPU_SPEC_FILE="$BASE_SPEC" python3 -I "$ASSERT_MEMORY_CPU_SIGNALS" "$BUNDLE_DIR"
+SKIP_PROMETHEUS_SIGNALS="$SKIP_PROMETHEUS_SIGNALS" MEMORY_CPU_SPEC_FILE="$BASE_SPEC" python3 "$ASSERT_MEMORY_CPU_SIGNALS" "$BUNDLE_DIR"
 
 # At least one <node-name>.json, and every pod in each is one of this namespace's router pods.
 ROUTER_PODS=$(jq -c '[.items[] | select(.metadata.labels.app == "router") | .metadata.name]' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json")

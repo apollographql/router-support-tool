@@ -155,6 +155,16 @@ scenario:
         kind: relative_path
         path: chainsaw/scripts/assert_documented_memory_cpu_signals.py
 
+      - name: wait_for_kubelet_stats.py
+        env_var: WAIT_FOR_KUBELET_STATS
+        kind: relative_path
+        path: chainsaw/scripts/wait_for_kubelet_stats.py
+
+      - name: memory_cpu_signals.py
+        env_var: MEMORY_CPU_SIGNALS_MODULE
+        kind: relative_path
+        path: chainsaw/scripts/memory_cpu_signals.py
+
       - name: base_spec.md
         env_var: BASE_SPEC
         kind: relative_path
