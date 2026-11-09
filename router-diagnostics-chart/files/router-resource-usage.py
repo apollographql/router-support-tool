@@ -20,8 +20,8 @@ import urllib.parse
 SA_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
 API_HOST = "kubernetes.default.svc"
 KUBELET_PORT = 10250
-CONNECT_TIMEOUT = 5
-REQUEST_TIMEOUT = 30
+CONNECT_TIMEOUT_SECONDS = 5
+REQUEST_TIMEOUT_SECONDS = 30
 BATCH = 10
 
 @dataclasses.dataclass
@@ -39,7 +39,7 @@ def warn(line):
 
 def request(host, port, path, token, context):
     """Makes a GET request over HTTPS. Returns (status, body)."""
-    conn = http.client.HTTPSConnection(host, port, timeout=CONNECT_TIMEOUT, context=context)
+    conn = http.client.HTTPSConnection(host, port, timeout=CONNECT_TIMEOUT_SECONDS, context=context)
     expired = threading.Event()
 
     def expire():
@@ -53,18 +53,21 @@ def request(host, port, path, token, context):
                 # that the blocked read is using.
                 socket.socket.shutdown(sock, socket.SHUT_RDWR)
             except OSError:
+                # The socket is already closed or was never connected. Therefore, the
+                # request is over and nothing is left to cut short.
+                # The caller reports the outcome.
                 pass
 
-    # REQUEST_TIMEOUT covers the whole request. A socket timeout alone wouldn't because it
+    # REQUEST_TIMEOUT_SECONDS covers the whole request. A socket timeout alone wouldn't because it
     # restarts on every read. Therefore, a server sending a byte at a time would never trip it.
     # This timer shuts the socket down at the deadline.
-    timer = threading.Timer(REQUEST_TIMEOUT, expire)
+    timer = threading.Timer(REQUEST_TIMEOUT_SECONDS, expire)
     timer.start()
     try:
         conn.connect()
         if expired.is_set():
             return 0, b"timed out"
-        conn.sock.settimeout(REQUEST_TIMEOUT)
+        conn.sock.settimeout(REQUEST_TIMEOUT_SECONDS)
         conn.request("GET", path, headers={"Authorization": "Bearer " + token, "Accept": "*/*"})
         resp = conn.getresponse()
         return resp.status, resp.read()
@@ -152,6 +155,10 @@ def collect(cfg, get_api, get_kubelet):
 
 def config(env):
     """The settings the chart's wrapper and troubleshoot.sh pass in."""
+    # A missing var means the wrapper is broken. 
+    missing = [name for name in ("NAMESPACE", "SELECTOR", "KUBELET_DECLINED", "TS_OUTPUT_DIR") if name not in env]
+    if missing:
+        raise SystemExit("router-resource-usage: missing environment variable(s): " + ", ".join(missing))
     return {
         "namespace": env["NAMESPACE"],
         "selector": env["SELECTOR"],
@@ -170,10 +177,9 @@ def create_contexts():
     return (api_ctx, kubelet_ctx)
 
 def main():
+    cfg = config(os.environ)
     with open(os.path.join(SA_DIR, "token")) as f:
         token = f.read().strip()
-
-    cfg = config(os.environ)
     api_ctx, kubelet_ctx = create_contexts()
 
     collect(

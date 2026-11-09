@@ -219,9 +219,9 @@ class RequestTests(unittest.TestCase):
         plain_http = lambda host, port, timeout, context: http.client.HTTPConnection(host, port, timeout=timeout)
         # Two patches that are undone when this block ends:
         # 1. HTTPSConnection becomes plain_http so request() connects without TLS.
-        # 2. REQUEST_TIMEOUT becomes limit so the timeout tests don't wait the full 30 seconds.
+        # 2. REQUEST_TIMEOUT_SECONDS becomes limit so the timeout tests don't wait the full 30 seconds.
         with mock.patch.object(rru.http.client, "HTTPSConnection", plain_http), \
-                mock.patch.object(rru, "REQUEST_TIMEOUT", limit):
+                mock.patch.object(rru, "REQUEST_TIMEOUT_SECONDS", limit):
             return rru.request(LOCALHOST, port, "/", TOKEN, None)
 
     def test_returns_the_status_and_body(self):
@@ -277,9 +277,10 @@ class ConfigTests(unittest.TestCase):
         for name in self.ENV:
             # The standard environment minus this one setting.
             env_with_missing_var = {k: v for k, v in self.ENV.items() if k != name}
-            # config must raise a KeyError and not fall back to a default.
-            with self.subTest(missing=name), self.assertRaises(KeyError):
+            # config must exit naming the variable and not fall back to a default.
+            with self.subTest(missing=name), self.assertRaises(SystemExit) as raised:
                 rru.config(env_with_missing_var)
+            self.assertIn(name, str(raised.exception))
 
 
 if __name__ == "__main__":
