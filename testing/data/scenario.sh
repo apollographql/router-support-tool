@@ -32,11 +32,18 @@ SELECTOR_FLAG="--set selector=app=router"
 if [ "$CONDITION" = "selector-mismatch" ]; then
   SELECTOR_FLAG=""
 fi
+
+# kubelet-declined installs with the kubelet read turned off
+NODE_METRICS_FLAG="--set job.collectNodeMetrics=true"
+if [ "$CONDITION" = "kubelet-declined" ]; then
+  NODE_METRICS_FLAG="--set job.collectNodeMetrics=false"
+fi
+
 # The kubelet reports some of a container's stats late so a router container read too soon lacks
 # some of the documented signals. Wait for them before collecting. If the wait runs out, the
 # kubelet stats check below reports what is missing.
 # Collection that reads no stats has nothing to wait for.
-if [ "$CONDITION" != "selector-mismatch" ]; then
+if [ "$CONDITION" != "selector-mismatch" ] && [ "$CONDITION" != "kubelet-declined" ]; then
   MEMORY_CPU_SPEC_FILE="$BASE_SPEC" python3 "$WAIT_FOR_KUBELET_STATS" "$NAMESPACE" app=router
 fi
 
@@ -45,6 +52,7 @@ helm install router-diagnostics "$CHART_DIR" \
   --set namespace="$NAMESPACE" \
   --set mode=job \
   $SELECTOR_FLAG \
+  $NODE_METRICS_FLAG \
   --set job.image.repository=us-central1-docker.pkg.dev/platform-cross-environment/apollo-private-docker/router-diagnostics \
   --set job.image.tag="$JOB_IMAGE_TAG" \
   --set job.image.pullPolicy=IfNotPresent \
@@ -88,8 +96,11 @@ grep -q "\"version\": *\"$EXPECTED_VERSION\"" "$BUNDLE_DIR/meta.json"
 # --- router-metrics: the run collector's own output names every missing pod's reason
 # (specs/collection/base_spec.md -> Per-pod metrics collection). Scraped pods land in
 # pods/<pod-name>.txt (specs/collection/output.md -> router-metrics layout).
-METRICS_OUTPUT="$BUNDLE_DIR/host-collectors/run-host/router-metrics.txt"
-METRICS_DIR="$BUNDLE_DIR/host-collectors/run-host/router-metrics/pods"
+RUN_HOST="$BUNDLE_DIR/host-collectors/run-host"
+METRICS_OUTPUT="$RUN_HOST/router-metrics.txt"
+KUBELET_OUTPUT="$RUN_HOST/router-resource-usage.txt"
+STATS_DIR="$RUN_HOST/router-resource-usage/nodes"
+METRICS_DIR="$RUN_HOST/router-metrics/pods"
 test -f "$METRICS_OUTPUT"
 if find "$BUNDLE_DIR" -maxdepth 1 -name 'router-metrics-*' | grep -q .; then
   echo "router-metrics: found a top-level router-metrics-<pod> directory from the old http collectors" >&2
@@ -157,6 +168,12 @@ if [ "$CONDITION" = "selector-mismatch" ]; then
     echo "router-metrics: per-pod files found although no pod matched the selector" >&2
     exit 1
   fi
+  # The kubelet collector uses the same selector so it names the same reason and writes no stats.
+  grep -qxF "kubelet stats not collected: no pods matched selector app.kubernetes.io/name=router in namespace $NAMESPACE" "$KUBELET_OUTPUT"
+  if [ -n "$(ls "$STATS_DIR" 2>/dev/null)" ]; then
+    echo "router-resource-usage: stats files found although no pod matched the selector" >&2
+    exit 1
+  fi
   # router-logs and configMap share the same selector, so they're empty here too and the
   # checks below that read them don't apply.
   tar tzf /tmp/bundle.tar.gz > /tmp/bundle-contents.txt
@@ -208,35 +225,41 @@ esac
 find "$BUNDLE_DIR/router-logs" -name '*.log' -size +0 | grep -q .               # router container logs
 
 # --- Kubelet stats (specs/collection/base_spec.md -> Kubelet stats collection) ---
-RUN_HOST="$BUNDLE_DIR/host-collectors/run-host"
-STATS_DIR="$RUN_HOST/router-resource-usage/nodes"
+if [ "$CONDITION" = "kubelet-declined" ]; then
+  # Declined at install, no stats are written.
+  grep -qxF "kubelet stats not collected: declined at install (job.collectNodeMetrics is false)" "$KUBELET_OUTPUT"
+  if [ -n "$(ls "$STATS_DIR" 2>/dev/null)" ]; then
+    echo "router-resource-usage: stats files found although collection was declined" >&2
+    exit 1
+  fi
+else
+  # Check that every signal the spec documents is present for the router container. The
+  # Prometheus signals are only expected where the router serves them: v2.5.0 or later
+  # (specs/collection/base_spec.md -> Memory and CPU information collected) with its exporter on.
+  SKIP_PROMETHEUS_SIGNALS=
+  if [ "$CONDITION" = "all-metrics-misconfigured" ] ||
+    [ "$(printf '%s\n' 2.5.0 "${ROUTER_VERSION#v}" | sort -V | head -n1)" != 2.5.0 ]; then
+    SKIP_PROMETHEUS_SIGNALS=1
+  fi
+  SKIP_PROMETHEUS_SIGNALS="$SKIP_PROMETHEUS_SIGNALS" MEMORY_CPU_SPEC_FILE="$BASE_SPEC" python3 "$ASSERT_MEMORY_CPU_SIGNALS" "$BUNDLE_DIR"
 
-# Check that every signal the spec documents is present for the router container. The
-# Prometheus signals are only expected where the router serves them: v2.5.0 or later
-# (specs/collection/base_spec.md -> Memory and CPU information collected) with its exporter on.
-SKIP_PROMETHEUS_SIGNALS=
-if [ "$CONDITION" = "all-metrics-misconfigured" ] ||
-  [ "$(printf '%s\n' 2.5.0 "${ROUTER_VERSION#v}" | sort -V | head -n1)" != 2.5.0 ]; then
-  SKIP_PROMETHEUS_SIGNALS=1
-fi
-SKIP_PROMETHEUS_SIGNALS="$SKIP_PROMETHEUS_SIGNALS" MEMORY_CPU_SPEC_FILE="$BASE_SPEC" python3 "$ASSERT_MEMORY_CPU_SIGNALS" "$BUNDLE_DIR"
+  # At least one <node-name>.json, and every pod in each is one of this namespace's router pods.
+  ROUTER_PODS=$(jq -c '[.items[] | select(.metadata.labels.app == "router") | .metadata.name]' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json")
+  find "$STATS_DIR" -name '*.json' | grep -q .
+  for stats_file in "$STATS_DIR"/*.json; do
+    jq -e --argjson routers "$ROUTER_PODS" --arg namespace "$NAMESPACE" '
+      (.pods | length) > 0
+      and all(.pods[].podRef; .namespace == $namespace and (.name | IN($routers[])))
+    ' "$stats_file"
+  done
 
-# At least one <node-name>.json, and every pod in each is one of this namespace's router pods.
-ROUTER_PODS=$(jq -c '[.items[] | select(.metadata.labels.app == "router") | .metadata.name]' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json")
-find "$STATS_DIR" -name '*.json' | grep -q .
-for stats_file in "$STATS_DIR"/*.json; do
-  jq -e --argjson routers "$ROUTER_PODS" --arg namespace "$NAMESPACE" '
-    (.pods | length) > 0
-    and all(.pods[].podRef; .namespace == $namespace and (.name | IN($routers[])))
-  ' "$stats_file"
-done
-
-# Nothing was declined, the named-reasons file is empty.
-test -f "$RUN_HOST/router-resource-usage.txt"
-if [ -s "$RUN_HOST/router-resource-usage.txt" ]; then
-  echo "router-resource-usage named reasons although nothing was declined:" >&2
-  cat "$RUN_HOST/router-resource-usage.txt" >&2
-  exit 1
+  # Nothing was declined, the named-reasons file is empty.
+  test -f "$KUBELET_OUTPUT"
+  if [ -s "$KUBELET_OUTPUT" ]; then
+    echo "router-resource-usage named reasons although nothing was declined:" >&2
+    cat "$KUBELET_OUTPUT" >&2
+    exit 1
+  fi
 fi
 
 # The token the script sends to the kubelet must never be written down.
