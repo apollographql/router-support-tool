@@ -6,7 +6,9 @@ Tests that every memory/CPU signal the spec documents (specs/collection/base_spe
 Usage: assert_documented_memory_cpu_signals.py <bundle-dir>
 
 Run only against bundles that collected kubelet stats.
-MEMORY_CPU_SPEC_FILE points the check at another copy of the spec,
+MEMORY_CPU_SPEC_FILE points the check at another copy of the spec.
+SKIP_PROMETHEUS_SIGNALS=1 skips the Prometheus signals check for a router that does not serve
+them.
 """
 import glob
 import json
@@ -130,7 +132,8 @@ def main(argv):
         kube = documented_signals(text, "kubelet Summary API")
         if not kube:
             raise Failure(f"no 'kubelet Summary API' signals found in {spec} - did the Memory and CPU table change shape?")
-        check_prometheus_scrapes(bundle, prom)
+        if not os.environ.get("SKIP_PROMETHEUS_SIGNALS"):
+            check_prometheus_scrapes(bundle, prom)
         check_kubelet_stats(bundle, kube)
     except Failure as e:
         print(f"FAIL: {e}", file=sys.stderr)
