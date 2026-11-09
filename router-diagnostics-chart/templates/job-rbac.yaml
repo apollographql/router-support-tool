@@ -3,7 +3,8 @@
 # The ClusterRole below is only for nodeMetrics's cluster-scoped grants (nodes,
 # nodes/proxy, nodes/stats) and is independently gated by job.collectNodeMetrics,
 # since the installing identity may not be grantable cluster-scoped RBAC.
-{{- if eq .Values.mode "job" }}
+{{- /* job.serviceAccount.create false: the customer owns the ServiceAccount and its grants. */}}
+{{- if and (eq .Values.mode "job") .Values.job.serviceAccount.create }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
