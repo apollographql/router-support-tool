@@ -96,7 +96,7 @@ These are also just matrix dimension values on the same templated manifests. Eve
 
 - **Selector matches no router pods** — the `selector-mismatch` condition installs the chart with `selector` unset, so its default `app.kubernetes.io/name=router` misses the environment's `app: router` pods. `router-logs` and `configMap` share that selector, so the checks that read them are skipped. It asserts the `no pods matched` line and the absence of per-pod files, and still runs the checks that read `clusterResources` (which is collected by namespace) and the `APOLLO_KEY` absence check.
 
-- **RBAC permission declined** — the RTF environment cannot be granted the cluster-scoped permissions the kubelet stats collector needs (`nodes/stats`, and `nodes` for node conditions), so this will be declined across all runs. The positive control for those signals therefore lives in the chainsaw tests. `testing/chainsaw/scripts/assert_documented_memory_cpu_signals.py` currently reads only `node-metrics/*.json`, so it is extended to read `host-collectors/run-host/router-resource-usage/nodes/*.json` under `mode: job`.
+- **Kubelet stats under `mode: job`** — In every variant the Job reads container memory and CPU from the kubelet. The bundle must contain every memory and CPU signal the spec documents for the router container. The Prometheus-sourced ones are expected only where the router serves them, so they are not checked in `all-metrics-misconfigured` or on routers older than the spec's minimum version. The stats cover only the router's pods, no collection is declined, and no token reaches the bundle. RTF runs the Job under the scenario's own ServiceAccount.
 
 #### Redaction verification technique
 
