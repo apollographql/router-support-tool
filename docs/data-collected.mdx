@@ -4,7 +4,7 @@ subtitle: Exactly what the base spec gathers and what each signal requires
 description: A per-collector breakdown of what the GraphOS Router Support Tool collects, what it requires to return anything, and what's lost if you decline a permission.
 ---
 
-import NodeMetricsRBAC from './resources/nodemetrics-rbac.mdx';
+import KubeletStatsRBAC from './resources/kubelet-stats-rbac.mdx';
 import BeforeYouShare from './resources/before-you-share.mdx';
 
 These tables outline everything we collect with the GraphOS Router Support Tool. This page is meant to be shared with your platform team so they can review it, grant the access needed for the collectors they want, and know exactly data won't be collected if they decline a collector.
@@ -66,25 +66,25 @@ The data collected with the support tool is sufficient to detect, confirm, and c
 
 | Signal | Source | Collected via | What it tells you | Requires | Resource consumed | Where |
 | ----- | ----- | ----- | ----- | ----- | ----- | ----- |
-| `memory.workingSetBytes` | kubelet Summary API | `nodeMetrics` collector | How much memory k8s counts against the limit — the OOM kill threshold | `nodes`/`nodes/proxy`/`nodes/stats` RBAC grant [2] | API server + kubelet CPU | k8s control plane → kubelet [1] |
+| `memory.workingSetBytes` | kubelet Summary API | `router-resource-usage` (`mode: job`), `nodeMetrics` (`mode: local`) | How much memory k8s counts against the limit — the OOM kill threshold | `nodes/stats` RBAC grant (`mode: job`), or `nodes` and `nodes/proxy` (`mode: local`) [2] | Kubelet CPU (plus API server CPU in `mode: local`) | Cluster network → kubelet (`mode: job`); k8s control plane → kubelet (`mode: local`) [1] |
 | Configured `resources.limits` / `requests` | Pod spec | `clusterResources` collector | What the usage numbers above should be compared against | None additional | API server CPU | k8s control plane |
 | OOM kill **occurrences** | Kubernetes events (`OOMKilling`, evictions) | `clusterResources` collector | That OOM kills happened, when, and how often | None additional | API server CPU | k8s control plane |
 | OOM kill **last state** | Pod status `lastState.terminated.reason: OOMKilled`, `restartCount` | `clusterResources` collector | Whether the most recent restart was an OOM kill | None additional | API server CPU | k8s control plane |
 | Node `MemoryPressure` / `DiskPressure` conditions | Node objects | `clusterResources` collector | Whether the node itself is under pressure, distinguishing a router problem from a neighbor's | `nodes` (list) RBAC grant, cluster-scoped [2] | API server CPU | k8s control plane |
 | `apollo_router_jemalloc_allocated`, `_active`, `_resident`, `_mapped`, `_metadata`, `_retained` | Router Prometheus endpoint, per pod | `run` collector (`router-metrics`) | Router's own allocator view of memory: separates real heap growth (`allocated`) from allocator retention (`resident`, `retained`). | Prometheus exporter enabled and reachably bound, on Router v2.16.3 or later built with jemalloc, as the official release builds are. See [Prometheus exporter setup for metrics collection](/router-support-tool/collecting-metrics). | Network, Router HTTP handler | Router network |
-| `memory.rssBytes` | kubelet Summary API | `nodeMetrics` collector | Physical RAM in use | `nodes`/`nodes/proxy`/`nodes/stats` RBAC grant [2] | API server + kubelet CPU | k8s control plane → kubelet [1] |
-| `memory.usageBytes`, `memory.availableBytes` | kubelet Summary API | `nodeMetrics` collector | Usage, and headroom remaining against the limit | `nodes`/`nodes/proxy`/`nodes/stats` RBAC grant [2] | API server + kubelet CPU | k8s control plane → kubelet [1] |
-| `memory.pageFaults`, `memory.majorPageFaults` | kubelet Summary API | `nodeMetrics` collector | Major faults indicate real paging pressure rather than growth alone | `nodes`/`nodes/proxy`/`nodes/stats` RBAC grant [2] | API server + kubelet CPU | k8s control plane → kubelet [1] |
-| `cpu.usageNanoCores`, `cpu.usageCoreNanoSeconds` | kubelet Summary API | `nodeMetrics` collector | CPU consumed by the router container | `nodes`/`nodes/proxy`/`nodes/stats` RBAC grant [2] | API server + kubelet CPU | k8s control plane → kubelet [1] |
-| `cpu.psi`, `memory.psi` (pressure stall information) | kubelet Summary API | `nodeMetrics` collector | Whether the container is *stalling* on CPU or memory | `nodes`/`nodes/proxy`/`nodes/stats` RBAC grant [2], plus the `KubeletPSI` feature gate on your cluster | API server + kubelet CPU | k8s control plane → kubelet [1] |
+| `memory.rssBytes` | kubelet Summary API | `router-resource-usage` (`mode: job`), `nodeMetrics` (`mode: local`) | Physical RAM in use | `nodes/stats` RBAC grant (`mode: job`), or `nodes` and `nodes/proxy` (`mode: local`) [2] | Kubelet CPU (plus API server CPU in `mode: local`) | Cluster network → kubelet (`mode: job`); k8s control plane → kubelet (`mode: local`) [1] |
+| `memory.usageBytes`, `memory.availableBytes` | kubelet Summary API | `router-resource-usage` (`mode: job`), `nodeMetrics` (`mode: local`) | Usage, and headroom remaining against the limit | `nodes/stats` RBAC grant (`mode: job`), or `nodes` and `nodes/proxy` (`mode: local`) [2] | Kubelet CPU (plus API server CPU in `mode: local`) | Cluster network → kubelet (`mode: job`); k8s control plane → kubelet (`mode: local`) [1] |
+| `memory.pageFaults`, `memory.majorPageFaults` | kubelet Summary API | `router-resource-usage` (`mode: job`), `nodeMetrics` (`mode: local`) | Major faults indicate real paging pressure rather than growth alone | `nodes/stats` RBAC grant (`mode: job`), or `nodes` and `nodes/proxy` (`mode: local`) [2] | Kubelet CPU (plus API server CPU in `mode: local`) | Cluster network → kubelet (`mode: job`); k8s control plane → kubelet (`mode: local`) [1] |
+| `cpu.usageNanoCores`, `cpu.usageCoreNanoSeconds` | kubelet Summary API | `router-resource-usage` (`mode: job`), `nodeMetrics` (`mode: local`) | CPU consumed by the router container | `nodes/stats` RBAC grant (`mode: job`), or `nodes` and `nodes/proxy` (`mode: local`) [2] | Kubelet CPU (plus API server CPU in `mode: local`) | Cluster network → kubelet (`mode: job`); k8s control plane → kubelet (`mode: local`) [1] |
+| `cpu.psi`, `memory.psi` (pressure stall information) | kubelet Summary API | `router-resource-usage` (`mode: job`), `nodeMetrics` (`mode: local`) | Whether the container is *stalling* on CPU or memory | `nodes/stats` RBAC grant (`mode: job`), or `nodes` and `nodes/proxy` (`mode: local`) [2], plus the `KubeletPSI` feature gate on your cluster | Kubelet CPU (plus API server CPU in `mode: local`) | Cluster network → kubelet (`mode: job`); k8s control plane → kubelet (`mode: local`) [1] |
 
 **[1]** The kubelet Summary API reports per node, per pod, and per container — this assumes one router process per container.
 
-**[2]** `nodeMetrics` reads the router container's memory and CPU from the kubelet and needs cluster-scoped RBAC grants. The Router's Prometheus exporter needs no grant and provides the Router's own jemalloc memory data, but not container RSS, working set, or CPU. `nodeMetrics` ignores your `selector` and `namespace` so `node-metrics/` lists every pod on every node in the cluster, including other workloads' pod names, namespaces, and container CPU and memory usage. If you decline the grants (`job.collectNodeMetrics: false`), you lose container memory and CPU data and node pressure conditions. For what these grants authorize, see [`nodeMetrics` RBAC](#nodemetrics-rbac).
+**[2]** Container memory and CPU come from the kubelet, never from inside the router container. `mode: job` reads the kubelet directly and needs the `nodes/stats` grant. `mode: local` goes through the API server's proxy with your own credentials, which needs `nodes` and `nodes/proxy`. The Router's Prometheus exporter needs no grant and provides the Router's own jemalloc memory data, but not container RSS, working set, or CPU. Under `mode: local`, `nodeMetrics` can't be narrowed to the router, so `node-metrics/` lists every pod on every node in the cluster, including other workloads' pod names, namespaces, and container CPU and memory usage. Under `mode: job`, only the router's pods are kept. If you decline the grants (`job.collectNodeMetrics: false`), you lose container memory and CPU data and node pressure conditions. For what these grants authorize, see [Kubelet stats RBAC](#kubelet-stats-rbac).
 
-### `nodeMetrics` RBAC
+### Kubelet stats RBAC
 
-<NodeMetricsRBAC />
+<KubeletStatsRBAC />
 
 ### Running a service mesh or sidecar proxy?
 

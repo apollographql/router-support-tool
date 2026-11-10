@@ -1,0 +1,12 @@
+Under `mode: job`, the Job reads the kubelet directly from its pod, so the kubelet's own authorization applies and the broad `nodes/proxy` grant isn't needed. The chart's ClusterRole grants two things:
+
+- **`nodes/stats` (get)**: The kubelet's `/stats/summary`, with per-pod and per-container memory, CPU, and pressure stall figures. This is the grant that surfaces container memory and CPU usage.
+- **`nodes` (list)**: Lists node objects. This is what surfaces node pressure conditions (`MemoryPressure`, `DiskPressure`). Container memory and CPU don't need it. If you manage the ServiceAccount yourself you can leave it out and lose only those conditions.
+
+Neither grant can be scoped to only the router's nodes, because the node names aren't known when the chart is installed. The tool keeps only the router pods' entries from each kubelet response so other workloads' pods never reach the bundle.
+
+**Credentials sent to the kubelet.** The Job sends its ServiceAccount token to each router node's kubelet, and doesn't verify the kubelet's TLS certificate, because kubelet certificates are commonly self-signed or signed by a CA other than the cluster's. Anyone who could intercept traffic between the Job's pod and the node could capture the token, so it expires after 10 minutes. Until then, it can do only what the ServiceAccount is allowed to. With the ServiceAccount the chart creates, that is read-only access to the namespace's pods, pod logs, ConfigMaps, deployments, and a few other resource types (the full list is in [Kubernetes RBAC](/router-support-tool/job-mode-details#kubernetes-rbac)), plus `nodes` and `nodes/stats` across the cluster. That ServiceAccount has no access to Secrets. The token is never written to the bundle.
+
+To keep container memory and CPU usage in the bundle, leave these grants in place. Declining them still leaves everything `clusterResources` provides: OOM kill occurrences and last state, restart counts, and configured limits. `job.collectNodeMetrics: false` skips creating the ClusterRole and ClusterRoleBinding at install time, so container memory and CPU usage and node pressure conditions are missing, and the bundle says the kubelet read was declined. The install doesn't fail.
+
+For what each grant collects, see [Memory and CPU information collected](/router-support-tool/data-collected#memory-and-cpu-information-collected). For what `mode: local` needs, see [Kubernetes RBAC](/router-support-tool/local-mode-details#kubernetes-rbac).

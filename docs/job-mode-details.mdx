@@ -26,7 +26,7 @@ The image bundles a pinned version of troubleshoot's `support-bundle` binary as 
 | `job.image.repository` | No | `apollograph/router-diagnostics` | The Job's container image, published by Apollo. Override only to pin an older version or point at a private mirror. |
 | `job.image.tag` | No | Matches this chart's release version | The troubleshoot.sh version it bundles is a separate, independently-pinned detail, recorded in a collected bundle's `meta.json`. Override only to pin an older release or point at a private mirror. |
 | `job.image.pullPolicy` | No | `IfNotPresent` | Standard Kubernetes image pull policy |
-| `job.collectNodeMetrics` | No | `true` | Set `false` to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding entirely and decline `nodeMetrics` data up front. For more information, go to [Data Collected → Memory and CPU information collected](/router-support-tool/data-collected#memory-and-cpu-information-collected). |
+| `job.collectNodeMetrics` | No | `true` | Set `false` to skip creating the cluster-scoped ClusterRole/ClusterRoleBinding and decline the kubelet read up front. Without them the Job can't read container memory and CPU usage from the kubelet or collect node pressure conditions, and the bundle says the kubelet read was declined. Everything else is still collected. For more information, go to [Data Collected → Memory and CPU information collected](/router-support-tool/data-collected#memory-and-cpu-information-collected). |
 | `job.podAnnotations` | No | `{sidecar.istio.io/inject: "false", linkerd.io/inject: disabled}` | Annotations merged onto the Job's pod template—customer values win over these defaults. For more information, go to [Job Mode → Service mesh environments](/router-support-tool/getting-started/job-mode#service-mesh-environments) |
 | `job.podLabels` | No | `{}` | Arbitrary labels merged onto the Job's pod template |
 | `job.ttlSecondsAfterFinished` | No | `3600` | Maps to the Job's `ttlSecondsAfterFinished`—how long after completion Kubernetes automatically deletes the Job and its pod |
@@ -53,7 +53,7 @@ By default, collection runs using a namespace-scoped ServiceAccount the chart cr
 - **`discovery.k8s.io`**: `endpointslices`
 - **`coordination.k8s.io`**: `leases`
 
-Three separate cluster-scoped grants apply for `nodeMetrics`, deliberately kept independent so you can decline the more sensitive ones without losing the others. What each grant permits is listed in [Data Collected → `nodeMetrics` RBAC](/router-support-tool/data-collected#nodemetrics-rbac).
+Two cluster-scoped grants apply for the kubelet read: `nodes` (list) and `nodes/stats` (get). The broad `nodes/proxy` grant isn't needed. What each grant permits is listed in [Data Collected → Kubelet stats RBAC](/router-support-tool/data-collected#kubelet-stats-rbac). To decline both, set `job.collectNodeMetrics: false`.
 
 **`pods/exec` is not required**: nothing this tool does runs inside your router container.
 
@@ -76,7 +76,7 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
 The chart then creates no ServiceAccount, Role, RoleBinding, ClusterRole or ClusterRoleBinding, so installing it needs only permission to create the Job and the spec ConfigMap. The Job's pod runs as the ServiceAccount you named, and that ServiceAccount must hold the grants the chart would otherwise create. A grant it lacks doesn't fail collection, the bundle reports what couldn't be read.
 
 - **Namespaced**: a Role in the router's namespace (the `namespace` value), bound to your ServiceAccount, with `get` and `list` on the resources listed above.
-- **Cluster-scoped**: a ClusterRole and ClusterRoleBinding with the `nodeMetrics` grants described in [Data Collected → `nodeMetrics` RBAC](/router-support-tool/data-collected#nodemetrics-rbac). Skip these if you set `job.collectNodeMetrics: false`.
+- **Cluster-scoped**: a ClusterRole and ClusterRoleBinding with `nodes` (list) and `nodes/stats` (get), described in [Data Collected → Kubelet stats RBAC](/router-support-tool/data-collected#kubelet-stats-rbac). Skip these if you set `job.collectNodeMetrics: false`.
 
 ```yaml
 # Namespaced: a Role in the router's namespace, bound to your ServiceAccount
@@ -123,11 +123,26 @@ rules:
     resources: ["nodes"]
     verbs: ["list"]
   - apiGroups: [""]
-    resources: ["nodes/proxy", "nodes/stats"]
+    resources: ["nodes/stats"]
     verbs: ["get"]
 ```
 
 <ConfirmingRBAC />
+
+## Kubelet stats and missing data
+
+Container memory and CPU usage are read from each router node's kubelet. If any of it can't be collected, the Job writes one line saying why to `host-collectors/run-host/router-resource-usage.txt`, instead of leaving the section silently empty. The file is empty when everything was collected. A node the Job can't read loses only the usage figures: `cluster-resources` still provides limits and requests, OOM kills, and restart counts.
+
+| Line written | What it means |
+| --- | --- |
+| `kubelet stats not collected: declined at install (job.collectNodeMetrics is false)` | You installed with `job.collectNodeMetrics: false`. This isn't a failure. |
+| `kubelet stats not collected: no pods matched selector <selector> in namespace <namespace>` | The `selector` or `namespace` doesn't match any router pod. |
+| `kubelet stats not collected: could not list pods matching selector <selector> in namespace <namespace>` | The ServiceAccount can't `get`/`list` pods, or the API server was unreachable. The details are in `host-collectors/run-host/router-resource-usage-stderr.txt`. |
+| `kubelet stats not collected for pod <pod-name>: pod has no node yet` | The pod is `Pending`, so there's no node to ask. |
+| `kubelet stats not collected for node <node-name>: could not reach the kubelet at <node-ip>:10250` | The network path from the Job's pod to the node's kubelet is blocked, for example by a NetworkPolicy or a firewall. This isn't an RBAC problem. |
+| `kubelet stats not collected for node <node-name>: kubelet returned HTTP <code>` | `401` or `403` means the ServiceAccount lacks the `nodes/stats` grant. |
+| `kubelet stats not collected for node <node-name>: the kubelet's response could not be read` | The kubelet answered `200` with something that isn't its stats. |
+| `kubelet stats not collected for pod <pod-name>: not in node <node-name>'s stats` | The pod was replaced or deleted between listing it and reading its node. |
 
 ## Cluster footprint
 
@@ -167,8 +182,13 @@ support-bundle-2026-08-11T14_23_00/
 │   ├── events/production.json
 │   ├── nodes.json
 │   └── ...
-├── node-metrics/
-│   └── <node-name>.json
+├── host-collectors/
+│   └── run-host/
+│       ├── router-resource-usage.txt
+│       ├── router-resource-usage-stderr.txt
+│       └── router-resource-usage/
+│           └── nodes/
+│               └── <node-name>.json
 └── configmaps/
     └── production/
         └── <configmap-name>.json
@@ -183,7 +203,7 @@ support-bundle-2026-08-11T14_23_00/
       ├── <configmap-1-name>.json
       └── <configmap-2-name>.json
   ```
-- **`node-metrics/<node-name>.json`** — one file for every node in the cluster, not only the nodes that run router pods. `nodeMetrics` ignores your `selector` and `namespace` so each file lists every pod on that node. The files contain pod names, namespaces, and container CPU and memory usage, but no logs, configuration, or secrets.
+- **`host-collectors/run-host/router-resource-usage/nodes/<node-name>.json`** — one file for each node that runs a router pod, holding that node's figures and the kubelet's per-container memory and CPU usage for the router's pods only. No other workload's pods are included. The files contain pod names, namespaces, and container CPU and memory usage, but no logs, configuration, or secrets. A node with no file wasn't read, and `host-collectors/run-host/router-resource-usage.txt` says why. See [Kubelet stats and missing data](#kubelet-stats-and-missing-data).
 - `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace. `configmaps/production/<configmap-name>.json` is the dedicated `configMap` collector's own output.
 
 <Note>

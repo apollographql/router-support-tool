@@ -32,6 +32,8 @@ Installing the chart requires permission to create a ConfigMap in the target nam
 
 Running `./collect.sh` uses **your own existing kubectl credentials**; no additional ServiceAccount is created for this step. Reaching the metrics collector additionally needs `create` on the `pods/portforward` subresource in the router's namespace. For more information, go to [Collecting Metrics](/router-support-tool/collecting-metrics#mode-local). Declining this doesn't fail collection; it only means that section comes back empty.
 
+Container memory and CPU usage come from the kubelet through the API server's proxy, using your own credentials, because your machine can't reach node addresses directly. That needs `nodes` (list) and `nodes/proxy` (get) on your user. `nodes/proxy` is a broad grant: Kubernetes' own RBAC good-practices documentation states it "provides access to privileged kubelet APIs that can retrieve container logs or execute and attach to pod processes... bypasses audit logging and admission control," and is explicitly "not a read-only permission." What this tool does with it is read-only, but the grant itself authorizes more than that one use, and it can't be scoped to only the router's nodes. `node-metrics/<node-name>.json` lists every pod on every node in the cluster, not only the router's. If you don't have these grants, collection still completes. There is no `node-metrics/` directory, and when `nodes/proxy` is the missing grant, `collector-errors/node-metrics-error.json` records the refusal.
+
 **`pods/exec` isn't required**: nothing this tool does runs inside your router container.
 
 <ConfirmingRBAC />
