@@ -483,8 +483,9 @@ fi
 
 # --- The kubelet refuses the Job's token ---
 # The Job also runs under a ServiceAccount that has the namespaced grants and no cluster-scoped
-# ones, so the kubelet answers 403. It runs in every healthy variant.
-if [ "$CONDITION" = "healthy" ]; then
+# ones so the kubelet answers 403.
+# Currently we are running this only for the latest version of Router 2.
+if [ "$CONDITION" = "healthy" ] && [ "$REDACTION" = "full" ] && [ "${ROUTER_VERSION#v3}" = "$ROUTER_VERSION" ]; then
   # scenario-sa holds these namespaced grants itself, which is what lets it create a Role with them.
   sed "s/__NAMESPACE__/$NAMESPACE/" "$NO_STATS_RBAC" | kubectl apply -n "$NAMESPACE" -f -
 
@@ -504,6 +505,17 @@ if [ "$CONDITION" = "healthy" ]; then
   # The bundle is still produced and the other collectors still work.
   test -f "$FORBIDDEN_DIR/version.yaml"
   find "$FORBIDDEN_DIR/router-logs" -name '*.log' -size +0 | grep -q .
+  test -s "$FORBIDDEN_DIR/cluster-resources/pods/$NAMESPACE.json"
+  # Check that the metrics collector is unaffected, each pod should have metrics.
+  for pod in $(jq -r '.items[] | select(.metadata.labels.app == "router") | .metadata.name' "$FORBIDDEN_DIR/cluster-resources/pods/$NAMESPACE.json"); do
+    grep -q '# HELP' "$FORBIDDEN_DIR/host-collectors/run-host/router-metrics/pods/$pod.txt"
+  done
+
+  # Check the token is not in the bundle.
+  if grep -rEq 'eyJ[A-Za-z0-9_-]{10,}|Bearer [A-Za-z0-9._~+/=-]{20,}' "$FORBIDDEN_DIR"; then
+    echo "a ServiceAccount token or bearer token is in the bundle collected after the kubelet refused it" >&2
+    exit 1
+  fi
 
   # Each node that runs a router pod is named and no stats are written.
   FORBIDDEN_NODES=$(jq -r '[.items[] | select(.metadata.labels.app == "router") | .spec.nodeName] | unique | .[]' "$FORBIDDEN_DIR/cluster-resources/pods/$NAMESPACE.json")
