@@ -64,7 +64,7 @@ router-diagnostics-storage-credentials
 {{- end -}}
 
 {{/*
-Wraps a value in single quotes for the router-metrics shell script, escaping any single
+Wraps a value in single quotes for the chart's shell commands, escaping any single
 quote inside it. Helm's squote alone leaves an embedded ' unescaped, which would end the
 quoted string early.
 */}}

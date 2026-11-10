@@ -2,7 +2,7 @@
 
 The router-resource-usage collector of mode: job (specs/collection/base_spec.md ->
 Kubelet stats collection). troubleshoot.sh runs it as a hostCollectors.run script inside
-the Job's pod, started by a one-line sh wrapper that sets NAMESPACE, SELECTOR and
+the Job's pod, started by a wrapper that exports NAMESPACE, SELECTOR and
 KUBELET_DECLINED. It lists the pods matching SELECTOR through the API server, asks each
 distinct node's kubelet once, and keeps only those pods.
 """
