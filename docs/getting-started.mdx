@@ -16,8 +16,8 @@ There are two independent things you need to determine before installing anythin
 
 | | `mode: local` | `mode: job` |
 | --- | --- | --- |
-| Who runs collection | You, from your own machine, with your own `kubectl` access | A Kubernetes Job, in-cluster, using its own ServiceAccount |
-| What gets installed | Spec ConfigMap only | Spec ConfigMap + Job + ServiceAccount/RBAC (namespace-scoped and cluster-scoped) |
+| Who runs collection | You, from your own machine, with your own `kubectl` access | A Kubernetes Job, in-cluster, using its own ServiceAccount (chart-created, or yours) |
+| What gets installed | Spec ConfigMap only | Spec ConfigMap + Job + ServiceAccount/RBAC (namespace-scoped and cluster-scoped), or just the Job and ConfigMap if you supply your own ServiceAccount |
 | Where the bundle lands | Your current directory | S3 (or S3-compatible), GCS, or a bare HTTP(S) endpoint you configure. For more information, go to [Bundle storage and retrieval](/router-support-tool/bundle-storage) |
 | Use when | You have `kubectl` access to production | Your `kubectl` access is restricted and a platform team runs collection on your behalf |
 
