@@ -481,6 +481,42 @@ $FOUND_IN"
   fi
 fi
 
+# --- The kubelet refuses the Job's token ---
+# The Job also runs under a ServiceAccount that has the namespaced grants and no cluster-scoped
+# ones, so the kubelet answers 403. It runs in every healthy variant.
+if [ "$CONDITION" = "healthy" ]; then
+  # scenario-sa holds these namespaced grants itself, which is what lets it create a Role with them.
+  sed "s/__NAMESPACE__/$NAMESPACE/" "$NO_STATS_RBAC" | kubectl apply -n "$NAMESPACE" -f -
+
+  # An upgrade is the second revision, so the chart runs a second Job.
+  helm upgrade router-diagnostics "$CHART_DIR" --namespace "$NAMESPACE" --reuse-values \
+    --set job.serviceAccount.name=scenario-no-stats --wait --timeout=60s
+  kubectl wait --for=condition=complete job/router-diagnostics-job-2 -n "$NAMESPACE" --timeout=120s
+  kubectl logs -n "$NAMESPACE" job/router-diagnostics-job-2 --all-containers --timestamps || true
+
+  curl -sf "http://mock-backend.${NAMESPACE}.svc.cluster.local:8080/bundle.tar.gz" -o /tmp/bundle-forbidden.tar.gz
+  cp /tmp/bundle-forbidden.tar.gz "$(dirname "$RTF_OUTPUT")/bundle-forbidden.tar.gz"
+  mkdir -p /tmp/extracted-forbidden
+  tar xzf /tmp/bundle-forbidden.tar.gz -C /tmp/extracted-forbidden
+  FORBIDDEN_DIR=$(find /tmp/extracted-forbidden -maxdepth 1 -type d -name 'support-bundle-*')
+  test -n "$FORBIDDEN_DIR"
+
+  # The bundle is still produced and the other collectors still work.
+  test -f "$FORBIDDEN_DIR/version.yaml"
+  find "$FORBIDDEN_DIR/router-logs" -name '*.log' -size +0 | grep -q .
+
+  # Each node that runs a router pod is named and no stats are written.
+  FORBIDDEN_NODES=$(jq -r '[.items[] | select(.metadata.labels.app == "router") | .spec.nodeName] | unique | .[]' "$FORBIDDEN_DIR/cluster-resources/pods/$NAMESPACE.json")
+  test -n "$FORBIDDEN_NODES"
+  for node in $FORBIDDEN_NODES; do
+    grep -qxF "kubelet stats not collected for node $node: kubelet returned HTTP 403" "$FORBIDDEN_DIR/host-collectors/run-host/router-resource-usage.txt"
+  done
+  if [ -n "$(ls "$FORBIDDEN_DIR/host-collectors/run-host/router-resource-usage/nodes" 2>/dev/null)" ]; then
+    echo "router-resource-usage: stats files found although the kubelet refused the token" >&2
+    exit 1
+  fi
+fi
+
 tar tzf /tmp/bundle.tar.gz > /tmp/bundle-contents.txt
 {
   echo "Bundle retrieved and verified. Contents:"

@@ -98,6 +98,8 @@ These are also just matrix dimension values on the same templated manifests. Eve
 
 - **Kubelet stats declined** — the `kubelet-declined` condition turns the kubelet read off at install.
 
+- **Kubelet stats refused** — The Job runs under a ServiceAccount that has the namespaced grants but no cluster-scoped ones so the kubelet refuses its token.
+
 - **Kubelet stats under `mode: job`** — In every variant the Job reads container memory and CPU from the kubelet. The bundle must contain every memory and CPU signal the spec documents for the router container. The Prometheus-sourced ones are expected only where the router serves them, so they are not checked in `all-metrics-misconfigured` or on routers older than the spec's minimum version. The stats cover only the router's pods, nothing is declined (except in `kubelet-declined`), and no token reaches the bundle. RTF runs the Job under the scenario's own ServiceAccount.
 
 #### Redaction verification technique
