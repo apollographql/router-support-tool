@@ -84,7 +84,7 @@ Everything that makes a test case *not* healthy happens after that, from the Sce
 
 The environment itself is the same across every test case, and so is the Scenario's `command`. What varies is the matrix's scenario value, passed into that same script via `env_vars` (e.g. `SCENARIO: "{{ scenario }}"`). The script branches internally on that value to put the environment into whatever shape the test case needs, then runs the actual collection/verification commands. "All routers healthy" is simply the no-op branch.
 
-The environment does differ for the Routers under-resourced test case, where `resources.limits` will be set tight from the start. We can verify this by reading the kubelet stats (`node-metrics/*.json` under `mode: local`, `host-collectors/run-host/router-resource-usage/nodes/*/stats-summary.json` under `mode: job`) and the per-pod files under `host-collectors/run-host/router-metrics/pods/` (raw Prometheus text, one `<pod-name>.txt` per pod) against `resources.limits`. Note: the `pods/` files only appear if the router's Prometheus exporter is enabled in this scenario's config and its worth checking whether the router can prioritize serving `/metrics` even under memory pressure, so this signal doesn't just go dark exactly when it matters most.
+The environment does differ for the Routers under-resourced test case, where `resources.limits` will be set tight from the start. We can verify this by reading the kubelet stats (`node-metrics/*.json` under `mode: local`, `host-collectors/run-host/router-resource-usage/nodes/*.json` under `mode: job`) and the per-pod files under `host-collectors/run-host/router-metrics/pods/` (raw Prometheus text, one `<pod-name>.txt` per pod) against `resources.limits`. Note: the `pods/` files only appear if the router's Prometheus exporter is enabled in this scenario's config and its worth checking whether the router can prioritize serving `/metrics` even under memory pressure, so this signal doesn't just go dark exactly when it matters most.
 
 #### Applying the collector attribution scenarios to RTF
 
@@ -94,9 +94,13 @@ These are also just matrix dimension values on the same templated manifests. Eve
 
 - **One router's metrics endpoint not responding** — the `some-metrics-misconfigured` condition does the same to exactly one router, so exactly one pod has a `no response` line and the rest have files.
 
-- **Selector matches no router pods** — the `selector-mismatch` condition installs the chart with `selector` unset, so its default `app.kubernetes.io/name=router` misses the environment's `app: router` pods. `router-logs` and `configMap` share that selector, so the checks that read them are skipped. It asserts the `no pods matched` line and the absence of per-pod files, and still runs the checks that read `clusterResources` (which is collected by namespace) and the `APOLLO_KEY` absence check.
+- **Selector matches no router pods** — the `selector-mismatch` condition installs the chart with `selector` unset so its default `app.kubernetes.io/name=router` misses the environment's `app: router` pods. `router-logs` and `configMap` share that selector, so the checks that read them are skipped. It asserts that each collector says why it collected nothing and writes no files.
 
-- **RBAC permission declined** — the RTF environment cannot be granted the cluster-scoped permissions the kubelet stats collector needs (`nodes/stats`, and `nodes` for node conditions), so this will be declined across all runs. The positive control for those signals therefore lives in the chainsaw tests. `testing/chainsaw/scripts/assert_documented_memory_cpu_signals.py` currently reads only `node-metrics/*.json`, so it is extended to read `host-collectors/run-host/router-resource-usage/nodes/*/stats-summary.json` under `mode: job`.
+- **Kubelet stats declined** — the `kubelet-declined` condition turns the kubelet read off at install.
+
+- **Kubelet stats refused** — Once, in `healthy` on the newest Router 2 variant, the Job also runs under a ServiceAccount that has the namespaced grants but no cluster-scoped ones so the kubelet refuses its token. The kubelet stats collector says so for each node that runs a router pod and writes no stats, the other collectors still produce their output, and no token reaches the bundle.
+
+- **Kubelet stats under `mode: job`** — In every variant the Job reads container memory and CPU from the kubelet. The bundle must contain every memory and CPU signal the spec documents for the router container. The Prometheus-sourced ones are expected only where the router serves them, so they are not checked in `all-metrics-misconfigured` or on routers older than the spec's minimum version. The stats cover only the router's pods, nothing is declined (except in `kubelet-declined`), and no token reaches the bundle. RTF runs the Job under the scenario's own ServiceAccount.
 
 #### Redaction verification technique
 

@@ -52,6 +52,9 @@ case "$CONDITION" in
     # The routers stay healthy; scenario.sh installs the chart with a selector that
     # doesn't match them.
     ;;
+  kubelet-declined)
+    # The routers stay healthy; scenario.sh installs the chart with job.collectNodeMetrics=false.
+    ;;
   some-metrics-misconfigured)
     set -- $(router_pods)
     misconfigure_metrics "$1"
