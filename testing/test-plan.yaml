@@ -6,7 +6,7 @@ description: >
 matrix:
   variant_names: "${condition}_${router_version}"
   dimensions:
-    condition: [healthy, some-metrics-misconfigured, all-metrics-misconfigured, router-recently-restarted, selector-mismatch]
+    condition: [healthy, some-metrics-misconfigured, all-metrics-misconfigured, router-recently-restarted, selector-mismatch, kubelet-declined]
   compound:
     router_version_and_redaction:
       - router_version: "v2.4.0"
@@ -154,6 +154,11 @@ scenario:
         env_var: ASSERT_MEMORY_CPU_SIGNALS
         kind: relative_path
         path: chainsaw/scripts/assert_documented_memory_cpu_signals.py
+
+      - name: no-stats-rbac.yaml
+        env_var: NO_STATS_RBAC
+        kind: relative_path
+        path: data/no-stats-rbac.yaml
 
       - name: wait_for_kubelet_stats.py
         env_var: WAIT_FOR_KUBELET_STATS

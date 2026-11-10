@@ -1,0 +1,51 @@
+# A ServiceAccount with the Job's namespaced grants and none of its cluster-scoped ones (no nodes or
+# nodes/stats) so the kubelet refuses its token. scenario-sa holds these namespaced grants itself,
+# which is what lets it create the Role. scenario.sh replaces __NAMESPACE__ with the scenario's
+# namespace.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: scenario-no-stats
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: scenario-no-stats-read
+rules:
+  - apiGroups: [""]
+    resources: [configmaps, endpoints, events, limitranges, persistentvolumeclaims, pods, pods/log, resourcequotas, serviceaccounts, services]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [daemonsets, deployments, replicasets, statefulsets]
+    verbs: [get, list]
+  - apiGroups: [batch]
+    resources: [cronjobs, jobs]
+    verbs: [get, list]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [rolebindings, roles]
+    verbs: [get, list]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [get, list]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses, networkpolicies]
+    verbs: [get, list]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [get, list]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: scenario-no-stats-read
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: scenario-no-stats-read
+subjects:
+  - kind: ServiceAccount
+    name: scenario-no-stats
+    namespace: __NAMESPACE__

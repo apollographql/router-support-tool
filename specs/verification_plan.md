@@ -94,9 +94,13 @@ These are also just matrix dimension values on the same templated manifests. Eve
 
 - **One router's metrics endpoint not responding** — the `some-metrics-misconfigured` condition does the same to exactly one router, so exactly one pod has a `no response` line and the rest have files.
 
-- **Selector matches no router pods** — the `selector-mismatch` condition installs the chart with `selector` unset, so its default `app.kubernetes.io/name=router` misses the environment's `app: router` pods. `router-logs` and `configMap` share that selector, so the checks that read them are skipped. It asserts the `no pods matched` line and the absence of per-pod files, and still runs the checks that read `clusterResources` (which is collected by namespace) and the `APOLLO_KEY` absence check.
+- **Selector matches no router pods** — the `selector-mismatch` condition installs the chart with `selector` unset so its default `app.kubernetes.io/name=router` misses the environment's `app: router` pods. `router-logs` and `configMap` share that selector, so the checks that read them are skipped. It asserts that each collector says why it collected nothing and writes no files.
 
-- **Kubelet stats under `mode: job`** — In every variant the Job reads container memory and CPU from the kubelet. The bundle must contain every memory and CPU signal the spec documents for the router container. The Prometheus-sourced ones are expected only where the router serves them, so they are not checked in `all-metrics-misconfigured` or on routers older than the spec's minimum version. The stats cover only the router's pods, no collection is declined, and no token reaches the bundle. RTF runs the Job under the scenario's own ServiceAccount.
+- **Kubelet stats declined** — the `kubelet-declined` condition turns the kubelet read off at install.
+
+- **Kubelet stats refused** — Once, in `healthy` on the newest Router 2 variant, the Job also runs under a ServiceAccount that has the namespaced grants but no cluster-scoped ones so the kubelet refuses its token. The kubelet stats collector says so for each node that runs a router pod and writes no stats, the other collectors still produce their output, and no token reaches the bundle.
+
+- **Kubelet stats under `mode: job`** — In every variant the Job reads container memory and CPU from the kubelet. The bundle must contain every memory and CPU signal the spec documents for the router container. The Prometheus-sourced ones are expected only where the router serves them, so they are not checked in `all-metrics-misconfigured` or on routers older than the spec's minimum version. The stats cover only the router's pods, nothing is declined (except in `kubelet-declined`), and no token reaches the bundle. RTF runs the Job under the scenario's own ServiceAccount.
 
 #### Redaction verification technique
 
