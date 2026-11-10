@@ -50,7 +50,7 @@ A second file, `*-info.json`, is also written under `mode: local` and it's fully
 
 ## Running a service mesh?
 
-Neither `mode: local` (your own machine) nor an un-injected `mode: job` Job pod is inside the mesh. `logs`, `clusterResources`, `nodeMetrics`, and `configMap` all reach their data through the Kubernetes API server or the kubelet, which the mesh doesn't sit in front of, so running outside it doesn't affect them. The Prometheus scrape is the one collector that talks directly to a router port and a mesh enforcing strict mTLS will reject it from a pod outside the mesh.
+Neither `mode: local` (your own machine) nor an un-injected `mode: job` Job pod is inside the mesh. `logs`, `clusterResources`, `nodeMetrics`, `router-resource-usage`, and `configMap` all reach their data through the Kubernetes API server or the kubelet, which the mesh doesn't sit in front of, so running outside it doesn't affect them. The Prometheus scrape is the one collector that talks directly to a router port and a mesh enforcing strict mTLS will reject it from a pod outside the mesh.
 To fix that, exempt the metrics port from mTLS. For Istio, `PeerAuthentication: PERMISSIVE` scoped to that port, or the `traffic.sidecar.istio.io/excludeInboundPorts` annotation. For Linkerd, `config.linkerd.io/skip-inbound-ports`. Apply only once to your router deployment, not a setting on this tool's chart.
 
 If you're running `mode: job` in a mesh, go to [Job Mode → Service mesh environments](/router-support-tool/getting-started/job-mode#service-mesh-environments) for an explanation of how the mesh sidecar itself can keep the Job's pod from ever reaching `Completed`, which is a separate problem from whether the scrape succeeds.

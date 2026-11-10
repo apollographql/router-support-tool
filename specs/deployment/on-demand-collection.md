@@ -118,7 +118,7 @@ invokes `support-bundle --load-cluster-specs --namespace <namespace>`:
 
    If the script can't list pods, no pod matches `selector`, or a matched pod doesn't respond, the script writes a plain
    explanation into the bundle instead of leaving the section silently empty (see
-   `specs/collection/base_spec.md` → Per-pod metrics collection for each case). `nodeMetrics` is the only source of container-level memory/CPU figures regardless, since the router's Prometheus endpoint does not serve them (see `specs/collection/base_spec.md` → footnote \[2\]).
+   `specs/collection/base_spec.md` → Per-pod metrics collection for each case). Under `mode: local`, `nodeMetrics` is the only source of container-level memory/CPU figures regardless, since the router's Prometheus endpoint does not serve them (see `specs/collection/base_spec.md` → footnote \[2\]). `mode: job` gets them from `router-resource-usage` instead (see [Kubelet stats RBAC](#kubelet-stats-rbac)).
 
    `mode: job` runs the same script, resolving pods the same way at collection time, but inside
    the Job's pod. That pod is already inside the cluster network, so the script requests each
