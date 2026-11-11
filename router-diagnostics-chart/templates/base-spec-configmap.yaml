@@ -60,7 +60,7 @@ data:
                 {{- if eq .Values.mode "job" }}
                 "sidecar_injection_disabled": {{ include "router-diagnostics-chart.sidecarInjectionDisabled" . }},
                 {{- end }}
-                "troubleshoot_version": "0.134.1"
+                "troubleshoot_version": "0.134.3"
               }
       # Runs wherever support-bundle runs (the user's machine, or the Job's pod) and finds
       # router pods at collection time.

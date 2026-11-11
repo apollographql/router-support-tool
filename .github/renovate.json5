@@ -25,6 +25,7 @@
       ],
       matchStrings: [
         'SUPPORT_BUNDLE_VERSION="(?<currentValue>.*?)"',
+        '\\$SupportBundleVersion = "(?<currentValue>.*?)"',
         '"troubleshoot_version": "(?<currentValue>.*?)"',
       ],
       depNameTemplate: 'replicatedhq/troubleshoot',

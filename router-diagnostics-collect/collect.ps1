@@ -12,7 +12,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # renovate: datasource=github-releases depName=replicatedhq/troubleshoot
-$SupportBundleVersion = "0.134.1"
+$SupportBundleVersion = "0.134.3"
 
 # Fail early if a required tool is missing
 $Missing = @()
