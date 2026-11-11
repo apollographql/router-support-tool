@@ -16,10 +16,10 @@ curl -sk -X POST "https://router.${NAMESPACE}.svc.cluster.local:4000/" \
   -H "Content-Type: application/json" \
   -d '{"query":"query FetchSentinelUser($sentinelId: ID!) { user(id: $sentinelId) { id name } }","variables":{"sentinelId":"SENTINEL_OPERATION_BODY_VALUE"}}'
 
-# job.collectNodeMetrics=false because the scenario service account can't be granted
-# the cluster-scoped ClusterRole/ClusterRoleBinding this collector needs.
-# We decline it up front rather than fail the whole install.
-#
+# The Job runs under this scenario's own ServiceAccount (job.serviceAccount.create=false).
+# The chart creates no RBAC
+SCENARIO_SERVICE_ACCOUNT=scenario-sa
+
 # selector=app=router: our own manifests use "app: router" (raw-manifest/custom tier),
 # not the official chart's "app.kubernetes.io/name: router" convention that the chart's
 # collectors default to when this is left unset - without it, logs/metrics/configMap all
@@ -32,15 +32,32 @@ SELECTOR_FLAG="--set selector=app=router"
 if [ "$CONDITION" = "selector-mismatch" ]; then
   SELECTOR_FLAG=""
 fi
+
+# kubelet-declined installs with the kubelet read turned off
+NODE_METRICS_FLAG="--set job.collectNodeMetrics=true"
+if [ "$CONDITION" = "kubelet-declined" ]; then
+  NODE_METRICS_FLAG="--set job.collectNodeMetrics=false"
+fi
+
+# The kubelet reports some of a container's stats late so a router container read too soon lacks
+# some of the documented signals. Wait for them before collecting. If the wait runs out, the
+# kubelet stats check below reports what is missing.
+# Collection that reads no stats has nothing to wait for.
+if [ "$CONDITION" != "selector-mismatch" ] && [ "$CONDITION" != "kubelet-declined" ]; then
+  MEMORY_CPU_SPEC_FILE="$BASE_SPEC" python3 "$WAIT_FOR_KUBELET_STATS" "$NAMESPACE" app=router
+fi
+
 helm install router-diagnostics "$CHART_DIR" \
   --namespace "$NAMESPACE" \
   --set namespace="$NAMESPACE" \
   --set mode=job \
   $SELECTOR_FLAG \
+  $NODE_METRICS_FLAG \
   --set job.image.repository=us-central1-docker.pkg.dev/platform-cross-environment/apollo-private-docker/router-diagnostics \
   --set job.image.tag="$JOB_IMAGE_TAG" \
   --set job.image.pullPolicy=IfNotPresent \
-  --set job.collectNodeMetrics=false \
+  --set job.serviceAccount.create=false \
+  --set job.serviceAccount.name="$SCENARIO_SERVICE_ACCOUNT" \
   --set job.storage.provider=url \
   --set job.storage.url.endpoint="http://mock-backend.${NAMESPACE}.svc.cluster.local:8080/bundle.tar.gz" \
   --wait --timeout=60s
@@ -79,8 +96,11 @@ grep -q "\"version\": *\"$EXPECTED_VERSION\"" "$BUNDLE_DIR/meta.json"
 # --- router-metrics: the run collector's own output names every missing pod's reason
 # (specs/collection/base_spec.md -> Per-pod metrics collection). Scraped pods land in
 # pods/<pod-name>.txt (specs/collection/output.md -> router-metrics layout).
-METRICS_OUTPUT="$BUNDLE_DIR/host-collectors/run-host/router-metrics.txt"
-METRICS_DIR="$BUNDLE_DIR/host-collectors/run-host/router-metrics/pods"
+RUN_HOST="$BUNDLE_DIR/host-collectors/run-host"
+METRICS_OUTPUT="$RUN_HOST/router-metrics.txt"
+KUBELET_OUTPUT="$RUN_HOST/router-resource-usage.txt"
+STATS_DIR="$RUN_HOST/router-resource-usage/nodes"
+METRICS_DIR="$RUN_HOST/router-metrics/pods"
 test -f "$METRICS_OUTPUT"
 if find "$BUNDLE_DIR" -maxdepth 1 -name 'router-metrics-*' | grep -q .; then
   echo "router-metrics: found a top-level router-metrics-<pod> directory from the old http collectors" >&2
@@ -121,11 +141,11 @@ jq -e '
         and .limits.cpu == "500m" and .limits.memory == "256Mi")
 ' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
 
-# clusterResources collector: node MemoryPressure/DiskPressure - NOT positively testable
-# Listing nodes needs the same cluster-scoped "nodes: list" RBAC that
-# job.collectNodeMetrics=false already declines above so cluster-resources/nodes.json
-# should correctly come back with an empty items array.
-grep -qi "forbidden" "$BUNDLE_DIR/cluster-resources/nodes-errors.json"
+# clusterResources collector: node MemoryPressure/DiskPressure.
+jq -e '
+  [.items[] | [.status.conditions[].type]]
+  | length > 0 and all(index("MemoryPressure") != null and index("DiskPressure") != null)
+' "$BUNDLE_DIR/cluster-resources/nodes.json"
 
 # --- APOLLO_KEY literal-env-value redaction (specs/collection/data_sanitization/secret_shaped_env_vars.md) ---
 PODS_JSON="$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json"
@@ -146,6 +166,12 @@ if [ "$CONDITION" = "selector-mismatch" ]; then
   grep -qxF "metrics not collected: no pods matched selector app.kubernetes.io/name=router in namespace $NAMESPACE" "$METRICS_OUTPUT"
   if [ -n "$(ls "$METRICS_DIR" 2>/dev/null)" ]; then
     echo "router-metrics: per-pod files found although no pod matched the selector" >&2
+    exit 1
+  fi
+  # The kubelet collector uses the same selector so it names the same reason and writes no stats.
+  grep -qxF "kubelet stats not collected: no pods matched selector app.kubernetes.io/name=router in namespace $NAMESPACE" "$KUBELET_OUTPUT"
+  if [ -n "$(ls "$STATS_DIR" 2>/dev/null)" ]; then
+    echo "router-resource-usage: stats files found although no pod matched the selector" >&2
     exit 1
   fi
   # router-logs and configMap share the same selector, so they're empty here too and the
@@ -197,6 +223,50 @@ esac
 
 # Every section below should have data to collect. An empty one here is an error.
 find "$BUNDLE_DIR/router-logs" -name '*.log' -size +0 | grep -q .               # router container logs
+
+# --- Kubelet stats (specs/collection/base_spec.md -> Kubelet stats collection) ---
+if [ "$CONDITION" = "kubelet-declined" ]; then
+  # Declined at install, no stats are written.
+  grep -qxF "kubelet stats not collected: declined at install (job.collectNodeMetrics is false)" "$KUBELET_OUTPUT"
+  if [ -n "$(ls "$STATS_DIR" 2>/dev/null)" ]; then
+    echo "router-resource-usage: stats files found although collection was declined" >&2
+    exit 1
+  fi
+else
+  # Check that every signal the spec documents is present for the router container. The
+  # Prometheus signals are only expected where the router serves them: v2.5.0 or later
+  # (specs/collection/base_spec.md -> Memory and CPU information collected) with its exporter on.
+  SKIP_PROMETHEUS_SIGNALS=
+  if [ "$CONDITION" = "all-metrics-misconfigured" ] ||
+    [ "$(printf '%s\n' 2.5.0 "${ROUTER_VERSION#v}" | sort -V | head -n1)" != 2.5.0 ]; then
+    SKIP_PROMETHEUS_SIGNALS=1
+  fi
+  SKIP_PROMETHEUS_SIGNALS="$SKIP_PROMETHEUS_SIGNALS" MEMORY_CPU_SPEC_FILE="$BASE_SPEC" python3 "$ASSERT_MEMORY_CPU_SIGNALS" "$BUNDLE_DIR"
+
+  # At least one <node-name>.json, and every pod in each is one of this namespace's router pods.
+  ROUTER_PODS=$(jq -c '[.items[] | select(.metadata.labels.app == "router") | .metadata.name]' "$BUNDLE_DIR/cluster-resources/pods/$NAMESPACE.json")
+  find "$STATS_DIR" -name '*.json' | grep -q .
+  for stats_file in "$STATS_DIR"/*.json; do
+    jq -e --argjson routers "$ROUTER_PODS" --arg namespace "$NAMESPACE" '
+      (.pods | length) > 0
+      and all(.pods[].podRef; .namespace == $namespace and (.name | IN($routers[])))
+    ' "$stats_file"
+  done
+
+  # Nothing was declined, the named-reasons file is empty.
+  test -f "$KUBELET_OUTPUT"
+  if [ -s "$KUBELET_OUTPUT" ]; then
+    echo "router-resource-usage named reasons although nothing was declined:" >&2
+    cat "$KUBELET_OUTPUT" >&2
+    exit 1
+  fi
+fi
+
+# The token the script sends to the kubelet must never be written down.
+if grep -rEq 'eyJ[A-Za-z0-9_-]{10,}|Bearer [A-Za-z0-9._~+/=-]{20,}' "$BUNDLE_DIR"; then
+  echo "a ServiceAccount token or bearer token is in the bundle" >&2
+  exit 1
+fi
 
 # configMap collector: assert the collected router.yaml matches the expected config byte
 # for byte, up through (not including) override_subgraph_url. $EXPECTED_REDACTED_ROUTER_CONFIG
@@ -408,6 +478,54 @@ $FOUND_IN"
   # that the non-secret source name survives. It is absent from every other fixture.
   if grep -q "SENTINEL_RESPONSE_CACHE_CONNECTOR" "$ROUTER_CONFIG_CONFIGMAP"; then
     grep -q "accounts.rest_api" "$CONFIGMAP_JSON"
+  fi
+fi
+
+# --- The kubelet refuses the Job's token ---
+# The Job also runs under a ServiceAccount that has the namespaced grants and no cluster-scoped
+# ones so the kubelet answers 403.
+# Currently we are running this only for the latest version of Router 2.
+if [ "$CONDITION" = "healthy" ] && [ "$REDACTION" = "full" ] && [ "${ROUTER_VERSION#v3}" = "$ROUTER_VERSION" ]; then
+  # scenario-sa holds these namespaced grants itself, which is what lets it create a Role with them.
+  sed "s/__NAMESPACE__/$NAMESPACE/" "$NO_STATS_RBAC" | kubectl apply -n "$NAMESPACE" -f -
+
+  # An upgrade is the second revision, so the chart runs a second Job.
+  helm upgrade router-diagnostics "$CHART_DIR" --namespace "$NAMESPACE" --reuse-values \
+    --set job.serviceAccount.name=scenario-no-stats --wait --timeout=60s
+  kubectl wait --for=condition=complete job/router-diagnostics-job-2 -n "$NAMESPACE" --timeout=120s
+  kubectl logs -n "$NAMESPACE" job/router-diagnostics-job-2 --all-containers --timestamps || true
+
+  curl -sf "http://mock-backend.${NAMESPACE}.svc.cluster.local:8080/bundle.tar.gz" -o /tmp/bundle-forbidden.tar.gz
+  cp /tmp/bundle-forbidden.tar.gz "$(dirname "$RTF_OUTPUT")/bundle-forbidden.tar.gz"
+  mkdir -p /tmp/extracted-forbidden
+  tar xzf /tmp/bundle-forbidden.tar.gz -C /tmp/extracted-forbidden
+  FORBIDDEN_DIR=$(find /tmp/extracted-forbidden -maxdepth 1 -type d -name 'support-bundle-*')
+  test -n "$FORBIDDEN_DIR"
+
+  # The bundle is still produced and the other collectors still work.
+  test -f "$FORBIDDEN_DIR/version.yaml"
+  find "$FORBIDDEN_DIR/router-logs" -name '*.log' -size +0 | grep -q .
+  test -s "$FORBIDDEN_DIR/cluster-resources/pods/$NAMESPACE.json"
+  # Check that the metrics collector is unaffected, each pod should have metrics.
+  for pod in $(jq -r '.items[] | select(.metadata.labels.app == "router") | .metadata.name' "$FORBIDDEN_DIR/cluster-resources/pods/$NAMESPACE.json"); do
+    grep -q '# HELP' "$FORBIDDEN_DIR/host-collectors/run-host/router-metrics/pods/$pod.txt"
+  done
+
+  # Check the token is not in the bundle.
+  if grep -rEq 'eyJ[A-Za-z0-9_-]{10,}|Bearer [A-Za-z0-9._~+/=-]{20,}' "$FORBIDDEN_DIR"; then
+    echo "a ServiceAccount token or bearer token is in the bundle collected after the kubelet refused it" >&2
+    exit 1
+  fi
+
+  # Each node that runs a router pod is named and no stats are written.
+  FORBIDDEN_NODES=$(jq -r '[.items[] | select(.metadata.labels.app == "router") | .spec.nodeName] | unique | .[]' "$FORBIDDEN_DIR/cluster-resources/pods/$NAMESPACE.json")
+  test -n "$FORBIDDEN_NODES"
+  for node in $FORBIDDEN_NODES; do
+    grep -qxF "kubelet stats not collected for node $node: kubelet returned HTTP 403" "$FORBIDDEN_DIR/host-collectors/run-host/router-resource-usage.txt"
+  done
+  if [ -n "$(ls "$FORBIDDEN_DIR/host-collectors/run-host/router-resource-usage/nodes" 2>/dev/null)" ]; then
+    echo "router-resource-usage: stats files found although the kubelet refused the token" >&2
+    exit 1
   fi
 fi
 

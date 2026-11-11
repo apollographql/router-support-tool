@@ -45,8 +45,10 @@ data:
             {{- end }}
             includeAllData: true
 
+        {{- if ne .Values.mode "job" }}
         - nodeMetrics:
             collectorName: router-resource-usage
+        {{- end }}
 
         - data:
             name: meta.json
@@ -58,7 +60,7 @@ data:
                 {{- if eq .Values.mode "job" }}
                 "sidecar_injection_disabled": {{ include "router-diagnostics-chart.sidecarInjectionDisabled" . }},
                 {{- end }}
-                "troubleshoot_version": "0.134.1"
+                "troubleshoot_version": "0.134.3"
               }
       # Runs wherever support-bundle runs (the user's machine, or the Job's pod) and finds
       # router pods at collection time.
@@ -74,6 +76,25 @@ data:
               - -c
               - |
                 {{- tpl (.Files.Get "files/router-metrics-collect.sh") . | nindent 16 }}
+        {{- if eq .Values.mode "job" }}
+        # Reads the kubelet from the Job's pod.
+        - run:
+            collectorName: router-resource-usage
+            outputDir: nodes
+            ignoreParentEnvs: true
+            command: sh
+            # namespace and selector are customer-supplied and end up in a shell command,
+            # shellQuote wraps each in single quotes.
+            args:
+              - -c
+              - |
+                export NAMESPACE={{ include "router-diagnostics-chart.shellQuote" .Values.namespace }}
+                export SELECTOR={{ include "router-diagnostics-chart.shellQuote" (.Values.selector | default "app.kubernetes.io/name=router") }}
+                export KUBELET_DECLINED={{ if .Values.job.collectNodeMetrics }}0{{ else }}1{{ end }}
+                exec python3 -I - <<'PY'
+                {{- .Files.Get "files/router-resource-usage.py" | nindent 16 }}
+                PY
+        {{- end }}
   redactor-spec: |
     apiVersion: troubleshoot.sh/v1beta2
     kind: Redactor
@@ -209,6 +230,7 @@ data:
             files:
               - "host-collectors/run-host/*-info.json"
               - "router-metrics/*-info.json"
+              - "router-resource-usage/*-info.json"
           removals:
             regex:
               - redactor: '(?P<mask>.+)'

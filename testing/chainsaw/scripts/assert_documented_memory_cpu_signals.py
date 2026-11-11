@@ -5,8 +5,10 @@ Tests that every memory/CPU signal the spec documents (specs/collection/base_spe
 
 Usage: assert_documented_memory_cpu_signals.py <bundle-dir>
 
-Run only against bundles collected with nodeMetrics enabled.
-MEMORY_CPU_SPEC_FILE points the check at another copy of the spec (to test the check).
+Run only against bundles that collected kubelet stats.
+MEMORY_CPU_SPEC_FILE points the check at another copy of the spec.
+SKIP_PROMETHEUS_SIGNALS=1 skips the Prometheus signals check for a router that does not serve
+them.
 """
 import glob
 import json
@@ -14,56 +16,11 @@ import os
 import re
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_SPEC = os.path.join(HERE, "..", "..", "..", "specs", "collection", "base_spec.md")
+from memory_cpu_signals import DEFAULT_SPEC, documented_signals, lookup
 
 
 class Failure(Exception):
     pass
-
-
-def documented_signals(spec_text, source):
-    """
-    Collects every signal the spec says to expect from a given source.
-
-    The spec's "Memory and CPU information collected" table in specs/collection/base_spec.md
-    lists what the bundle should contain. This reads the expected signals from that table.
-    It returns the names in the rows whose Source cell contains `source`.
-    """
-    signals = []
-    base = ""
-    for line in spec_text.splitlines():
-        cells = line.split("|")
-        # cells[0] is what precedes the row's leading pipe, cells[1] is Signal, cells[2] Source.
-        if len(cells) < 3 or source not in cells[2]:
-            continue
-        # A row's first cell lists signal names in backticks. A name that starts with "_" is
-        # shorthand for the previous full name with its last word swapped. For example, the cell
-        # `apollo_router_jemalloc_allocated`, `_active` names two signals:
-        # apollo_router_jemalloc_allocated and apollo_router_jemalloc_active.
-        for token in re.findall(r"`([^`]*)`", cells[1]):
-            if token.startswith("_"):
-                signals.append(base + token)
-            else:
-                signals.append(token)
-                base = token.rsplit("_", 1)[0]
-    return signals
-
-
-def lookup(obj, dotted):
-    """
-    Finds a documented kubelet signal in a container's stats.
-
-    The spec names kubelet signals as dotted paths, such as `memory.workingSetBytes`, which
-    match the nesting in the kubelet's Summary API JSON. This follows that path through the
-    container's stats and returns the value, or None if any step is missing, so the caller
-    can detect a documented signal the bundle lacks.
-    """
-    for key in dotted.split("."):
-        if not isinstance(obj, dict) or key not in obj:
-            return None
-        obj = obj[key]
-    return obj
 
 
 def check_prometheus_scrapes(bundle, signals):
@@ -80,9 +37,14 @@ def check_prometheus_scrapes(bundle, signals):
 
 
 def check_kubelet_stats(bundle, signals):
-    files = sorted(glob.glob(os.path.join(bundle, "node-metrics", "*.json")))
+    # mode: local writes node-metrics/*.json.
+    # mode: job's router-resource-usage script writes one <node-name>.json per node.
+    files = sorted(
+        glob.glob(os.path.join(bundle, "node-metrics", "*.json"))
+        + glob.glob(os.path.join(bundle, "host-collectors", "run-host", "router-resource-usage", "nodes", "*.json"))
+    )
     if not files:
-        raise Failure("no node-metrics/*.json in the bundle, but the spec documents kubelet memory/CPU signals")
+        raise Failure("no node-metrics/*.json or router-resource-usage/nodes/*.json in the bundle, but the spec documents kubelet memory/CPU signals")
     saw_router = False
     for path in files:
         try:
@@ -90,25 +52,25 @@ def check_kubelet_stats(bundle, signals):
                 data = json.load(f)
         except ValueError:
             continue
-        routers = [
-            c
-            for p in data.get("pods") or []
-            for c in p.get("containers") or []
-            if c.get("name") == "router"
-        ]
+        # Collect the router's container stats from every pod on this node.
+        routers = []
+        for pod in data.get("pods") or []:
+            for container in pod.get("containers") or []:
+                if container.get("name") == "router":
+                    routers.append(container)
         if not routers:
             continue
         saw_router = True
-        for sig in signals:
-            if any(lookup(c, sig) is None for c in routers):
-                raise Failure(f"{os.path.basename(path)}: the spec documents {sig} for the router container, but it is missing (psi also needs the KubeletPSI feature gate, see testing/kind-config.yaml)")
+        for signal in signals:
+            if any(lookup(container, signal) is None for container in routers):
+                raise Failure(f"{os.path.basename(path)}: the spec documents {signal} for the router container, but it is missing (psi also needs the KubeletPSI feature gate, see testing/kind-config.yaml)")
     if not saw_router:
-        raise Failure("no container named router in any node-metrics/*.json")
+        raise Failure("no container named router in the kubelet stats files")
 
 
 def main(argv):
     if len(argv) != 2:
-        print(__doc__, file=sys.stderr)
+        print(f"usage: {os.path.basename(argv[0])} <bundle-dir>, got {len(argv) - 1} argument(s)", file=sys.stderr)
         return 2
     bundle = argv[1]
     spec = os.environ.get("MEMORY_CPU_SPEC_FILE") or DEFAULT_SPEC
@@ -123,7 +85,8 @@ def main(argv):
         kube = documented_signals(text, "kubelet Summary API")
         if not kube:
             raise Failure(f"no 'kubelet Summary API' signals found in {spec} - did the Memory and CPU table change shape?")
-        check_prometheus_scrapes(bundle, prom)
+        if not os.environ.get("SKIP_PROMETHEUS_SIGNALS"):
+            check_prometheus_scrapes(bundle, prom)
         check_kubelet_stats(bundle, kube)
     except Failure as e:
         print(f"FAIL: {e}", file=sys.stderr)
