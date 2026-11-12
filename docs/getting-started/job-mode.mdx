@@ -59,7 +59,30 @@ Once the Job completes, the configured destination has the bundle. Retrieve it t
 Run `helm upgrade` with the same command you installed with (same flags, or changed storage
 settings) to trigger another collection. Each run gets its own uniquely-named Job
 (`router-diagnostics-job-<n>`, incrementing with the release's revision number), so a
-previous run's Job and its logs remain even after you've triggered a new one (for example, `kubectl logs job/router-diagnostics-job-<n>`).
+previous run's Job and its logs remain even after you've triggered a new one (for example, `kubectl logs job/router-diagnostics-job-<n>`). This applies to `helm install` and `helm upgrade`. If you deploy the chart through ArgoCD, go to [Running under ArgoCD](#running-under-argocd).
+
+## Running under ArgoCD
+
+<Caution>
+
+`mode: job` doesn't behave under ArgoCD the way it does under `helm install`. With self-heal turned on:
+
+- **Collection repeats.** When `ttlSecondsAfterFinished` deletes the Job, ArgoCD sees a missing resource and recreates it, which collects and uploads again. With the default TTL, that's roughly once an hour until you remove the Application or turn self-heal off. Each run writes another bundle to your storage destination and runs collection against your router.
+- **Changing the Job fails to sync.** A Job's pod template can't be changed once the Job exists. A value that changes it, for example `job.podLabels` or a `job.storage` setting, makes the sync fail until you revert the change or delete the Job. The Job is always named `router-diagnostics-job-1` under ArgoCD, so the per-revision names described above don't apply.
+- **A re-sync doesn't collect.** Syncing with no changes leaves the existing Job alone.
+
+</Caution>
+
+To avoid this:
+
+- Use [`mode: local`](/router-support-tool/getting-started/local-mode). It only creates the spec `ConfigMap`, so there's no Job for ArgoCD to recreate. Collection happens when you run `collect.sh`.
+- If you need to run under `mode: job`, turn self-heal off on the Application that deploys the chart. A Job removed by its TTL then stays removed.
+
+With self-heal off, delete the Job and sync to collect again:
+
+```bash
+kubectl delete job router-diagnostics-job-1 --namespace production
+```
 
 ## Service mesh environments
 
