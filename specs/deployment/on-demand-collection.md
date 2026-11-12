@@ -217,7 +217,9 @@ kind: Job
 
 A platform team member with cluster access installs the chart with `mode=job` (plus `selector`/`configMapName` if the deployment is raw-manifest). The Job runs the collection using its namespace-scoped ServiceAccount and the platform team retrieves the bundle. Like `collect.sh`, the Job runs `support-bundle` with `--interactive=false`, since the spec carries a `hostCollectors.run` entry (see [Permissions for `mode: local`](#permissions-for-mode-local) for why).
 
-Nothing the chart renders depends on the live cluster, so `mode: job` behaves the same whether the chart is installed with `helm install` or rendered with `helm template` and applied by a GitOps tool such as ArgoCD. See `specs/storage` for details on retrieving the bundle.
+Nothing the chart renders depends on the live cluster so the rendered spec is the same whether the chart is installed with `helm install` or rendered with `helm template` and applied by a GitOps tool such as ArgoCD. See `specs/storage` for details on retrieving the bundle.
+
+The Job’s lifecycle under a GitOps tool is not specified or covered by the tests. Under ArgoCD, for example, the Job is a resource ArgoCD owns. Therefore, what happens to the Job after the first sync depends on ArgoCD. In particular, a Job that is deleted, such as by `ttlSecondsAfterFinished`, can be recreated by self-heal and collect again, and a changed Job template can fail to sync.
 
 ### Service mesh environments
 
