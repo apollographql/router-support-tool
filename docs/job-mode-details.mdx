@@ -30,7 +30,9 @@ The image bundles a pinned version of troubleshoot's `support-bundle` binary as 
 | `job.podAnnotations` | No | `{sidecar.istio.io/inject: "false", linkerd.io/inject: disabled}` | Annotations merged onto the Job's pod template—customer values win over these defaults. For more information, go to [Job Mode → Service mesh environments](/router-support-tool/getting-started/job-mode#service-mesh-environments) |
 | `job.podLabels` | No | `{}` | Arbitrary labels merged onto the Job's pod template |
 | `job.ttlSecondsAfterFinished` | No | `3600` | Maps to the Job's `ttlSecondsAfterFinished`—how long after completion Kubernetes automatically deletes the Job and its pod |
-| `job.serviceAccount.annotations` | Only if using IRSA/Workload Identity | `{}` | Merged onto the Job's ServiceAccount. Carries `eks.amazonaws.com/role-arn` (IRSA) or `iam.gke.io/gcp-service-account` (Workload Identity), whichever matches `job.storage.provider`. For more information, go to [Support bundle storage and retrieval → Credentials](/router-support-tool/bundle-storage#credentials) |
+| `job.serviceAccount.create` | No | `true` | Whether the chart creates the Job's ServiceAccount (`router-diagnostics-job`) and the Role, RoleBinding, ClusterRole and ClusterRoleBinding that go with it. Set `false` to run under your own ServiceAccount, named in `job.serviceAccount.name`. For more information, go to [Running under your own ServiceAccount](#running-under-your-own-serviceaccount) |
+| `job.serviceAccount.name` | Only when `job.serviceAccount.create` is `false` | Unset | Name of an existing ServiceAccount in the release namespace for the Job's pod to run as. The install fails if it's unset while `create` is `false`, or set while `create` is `true`. |
+| `job.serviceAccount.annotations` | Only if using IRSA/Workload Identity | `{}` | Merged onto the ServiceAccount the chart creates. Can't be combined with `job.serviceAccount.create: false`; put the annotations on your own ServiceAccount instead. Carries `eks.amazonaws.com/role-arn` (IRSA) or `iam.gke.io/gcp-service-account` (Workload Identity), whichever matches `job.storage.provider`. For more information, go to [Support bundle storage and retrieval → Credentials](/router-support-tool/bundle-storage#credentials) |
 
 ## Bundle Retrieval
 
@@ -38,9 +40,9 @@ Storage is required for `mode: job` because there is no way to get the bundle ou
 
 ## Kubernetes RBAC
 
-Installing `mode: job` requires creating a Job, a namespace-scoped ServiceAccount, a Role/RoleBinding, and—because container memory/CPU come from the kubelet—cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves.
+Installing `mode: job` requires creating a Job, a namespace-scoped ServiceAccount, a Role/RoleBinding, and—because container memory/CPU come from the kubelet—cluster-scoped RBAC. Creating cluster-scoped RBAC is a broader capability than installing the router needs, so whoever installs the chart in `mode: job` needs more access than someone who could simply run `mode: local` themselves. To avoid that, you can [run the Job under your own ServiceAccount](#running-under-your-own-serviceaccount), in which case installing the chart needs no RBAC permissions.
 
-Collection itself runs using a namespace-scoped ServiceAccount the chart creates. All namespace-scoped access is read-only (`get`/`list`) and covers everything `clusterResources`/`logs`/`configMap` touch:
+By default, collection runs using a namespace-scoped ServiceAccount the chart creates. All namespace-scoped access is read-only (`get`/`list`) and covers everything `clusterResources`/`logs`/`configMap` touch:
 
 - **Core**: `configmaps`, `endpoints`, `events`, `limitranges`, `persistentvolumeclaims`, `pods`, `pods/log`, `resourcequotas`, `serviceaccounts`, `services`
 - **`apps`**: `daemonsets`, `deployments`, `replicasets`, `statefulsets`
@@ -55,11 +57,81 @@ Three separate cluster-scoped grants apply for `nodeMetrics`, deliberately kept 
 
 **`pods/exec` is not required**: nothing this tool does runs inside your router container.
 
+### Running under your own ServiceAccount
+
+If you'd rather own the permissions yourself, install with `job.serviceAccount.create: false` and `job.serviceAccount.name` set to a ServiceAccount that already exists in the namespace you install the chart into:
+
+```bash
+helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-diagnostics-chart \
+  --namespace production \
+  --set namespace=production \
+  --set mode=job \
+  --set job.serviceAccount.create=false \
+  --set job.serviceAccount.name=my-router-diagnostics \
+  --set job.storage.provider=s3 \
+  --set job.storage.bucket=my-router-diagnostics \
+  --set job.storage.s3.region=us-east-1
+```
+
+The chart then creates no ServiceAccount, Role, RoleBinding, ClusterRole or ClusterRoleBinding, so installing it needs only permission to create the Job and the spec ConfigMap. The Job's pod runs as the ServiceAccount you named, and that ServiceAccount must hold the grants the chart would otherwise create. A grant it lacks doesn't fail collection, the bundle reports what couldn't be read.
+
+- **Namespaced**: a Role in the router's namespace (the `namespace` value), bound to your ServiceAccount, with `get` and `list` on the resources listed above.
+- **Cluster-scoped**: a ClusterRole and ClusterRoleBinding with the `nodeMetrics` grants described in [Data Collected → `nodeMetrics` RBAC](/router-support-tool/data-collected#nodemetrics-rbac). Skip these if you set `job.collectNodeMetrics: false`.
+
+```yaml
+# Namespaced: a Role in the router's namespace, bound to your ServiceAccount
+rules:
+  - apiGroups: [""]
+    resources:
+      - configmaps
+      - endpoints
+      - events
+      - limitranges
+      - persistentvolumeclaims
+      - pods
+      - pods/log
+      - resourcequotas
+      - serviceaccounts
+      - services
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs", "jobs"]
+    verbs: ["get", "list"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["rolebindings", "roles"]
+    verbs: ["get", "list"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list"]
+---
+# Cluster-scoped: a ClusterRole, bound to your ServiceAccount with a ClusterRoleBinding.
+# Omit it when job.collectNodeMetrics is false.
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["nodes/proxy", "nodes/stats"]
+    verbs: ["get"]
+```
+
 <ConfirmingRBAC />
 
 ## Cluster footprint
 
-Spec ConfigMap, Helm release metadata, and the ServiceAccount/Role/RoleBinding stays behind after installing. Each Job is transient on its own: `ttlSecondsAfterFinished` (default `3600`) means Kubernetes automatically deletes that Job and its pod an hour after it completes. Collecting more than once creates a new, uniquely-named Job per run (`router-diagnostics-job-<n>`, see [Collecting again](/router-support-tool/getting-started/job-mode#collecting-again)) rather than replacing the previous one, and `helm uninstall` doesn't delete any Job early — each one only ever cleans up via its own TTL. To remove everything else, including the RBAC:
+Spec ConfigMap, Helm release metadata, and the ServiceAccount/Role/RoleBinding stay behind after installing. With `job.serviceAccount.create: false`, the chart creates no RBAC, so only the spec ConfigMap and release metadata remain, and your own ServiceAccount and its grants are left untouched. Each Job is transient on its own: `ttlSecondsAfterFinished` (default `3600`) means Kubernetes automatically deletes that Job and its pod an hour after it completes. Collecting more than once creates a new, uniquely-named Job per run (`router-diagnostics-job-<n>`, see [Collecting again](/router-support-tool/getting-started/job-mode#collecting-again)) rather than replacing the previous one, and `helm uninstall` doesn't delete any Job early — each one only ever cleans up via its own TTL. To remove everything else, including any RBAC the chart created:
 
 ```bash
 helm uninstall router-diagnostics --namespace <namespace>

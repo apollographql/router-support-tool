@@ -4,7 +4,7 @@ subtitle: "Running the tool as a Kubernetes Job (mode: job)"
 description: Install the router-diagnostics chart with mode job so a platform team can run collection on your behalf and configure storage so the bundle can be retrieved.
 ---
 
-Use `mode: job` when your own `kubectl` access to production is restricted and a platform team runs collection on your behalf. A Kubernetes Job runs collection in-cluster, using a namespace-scoped ServiceAccount the chart creates for it.
+Use `mode: job` when your own `kubectl` access to production is restricted and a platform team runs collection on your behalf. A Kubernetes Job runs collection in-cluster, using a namespace-scoped ServiceAccount the chart creates for it, or one of your own if you'd rather manage the permissions yourself.
 
 `job.storage` is required for this mode, and the chart fails the install if `job.storage.provider` is left unset. For the full reference, go to [Support bundle storage and retrieval](/router-support-tool/bundle-storage).
 
@@ -46,6 +46,17 @@ helm install router-diagnostics oci://registry-1.docker.io/apollograph/router-di
 
 The Job runs immediately on install and uploads the bundle as soon as collection finishes.
 
+## Using your own ServiceAccount
+
+By default the chart creates the Job's ServiceAccount along with a Role, RoleBinding, ClusterRole and ClusterRoleBinding, so whoever installs it needs permission to create cluster-scoped RBAC. If that isn't available to you, or your platform team manages permissions itself, add these to the install command:
+
+```bash
+  --set job.serviceAccount.create=false \
+  --set job.serviceAccount.name=my-router-diagnostics
+```
+
+The ServiceAccount must already exist in the namespace you install into, and it must hold the read grants collection needs. The chart then creates no RBAC. Installing the chart needs permissions to create the Job and the spec ConfigMap. `job.serviceAccount.annotations` can't be combined with `create: false`. Put any IRSA or Workload Identity annotations on your own ServiceAccount. For the full list of grants, go to [Job Mode Details → Running under your own ServiceAccount](/router-support-tool/job-mode-details#running-under-your-own-serviceaccount).
+
 ## Choosing a storage destination
 
 The previous example uploads to S3 using IRSA with no credentials to store or rotate. `job.storage` also supports GCS (Workload Identity), an S3-compatible store (MinIO, Ceph RGW, and similar, via `job.storage.s3.endpoint`), or a bare HTTP(S) endpoint (`provider: url`) for a receiver that isn't S3 or GCS at all. For the full set of `job.storage` values, credential options, and worked examples per provider, go to [Support bundle storage and retrieval](/router-support-tool/bundle-storage).
@@ -82,7 +93,7 @@ The bundle's `meta.json` records whether the chart disabled injection (`sidecar_
 
 ## Cleaning up
 
-Installing this mode leaves the spec `ConfigMap`, Helm release metadata, and the ServiceAccount/RBAC in your cluster. Each Job is transient on its own: it's deleted automatically, by default, an hour after completing (`job.ttlSecondsAfterFinished`) — this applies per Job, so if you've collected more than once, each past run cleans up on its own schedule. `helm uninstall` does **not** delete any Job early, specifically so an in-progress investigation using an older run's logs isn't cut short by cleanup. To remove everything else:
+Installing this mode leaves the spec `ConfigMap`, Helm release metadata, and the ServiceAccount/RBAC in your cluster (no ServiceAccount or RBAC if you set `job.serviceAccount.create=false`). Each Job is transient on its own: it's deleted automatically, by default, an hour after completing (`job.ttlSecondsAfterFinished`) — this applies per Job, so if you've collected more than once, each past run cleans up on its own schedule. `helm uninstall` does **not** delete any Job early, specifically so an in-progress investigation using an older run's logs isn't cut short by cleanup. To remove everything else:
 
 ```bash
 helm uninstall router-diagnostics --namespace production
