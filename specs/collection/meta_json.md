@@ -41,7 +41,7 @@ Every field this file actually specifies, for a `mode: job` install:
   "mode": "job",
   "namespace": "production",
   "sidecar_injection_disabled": true,
-  "troubleshoot_version": "0.134.1"
+  "troubleshoot_version": "0.134.3"
 }
 ```
 

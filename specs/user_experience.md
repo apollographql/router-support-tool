@@ -153,7 +153,7 @@ If the exporter is off, or bound somewhere the collector can't reach, the bundle
 
 **Under `mode: local`, your machine can't reach pod IPs directly**, so the `router-metrics` script port-forwards to each matching pod in turn, scrapes its metrics port, and closes the forward before moving to the next. This happens automatically during collection, but it needs `create` on `pods/portforward` in the router's namespace. Without it, collection still completes and the bundle says no pod responded.
 
-**Under `mode: job`, no port-forward is needed.** The Job's pod is already inside the cluster, so the same script requests each matching pod's IP directly. In both modes, pods are found each time collection runs, so the chart works the same whether it's installed with `helm install` or rendered by a GitOps tool such as ArgoCD.
+**Under `mode: job`, no port-forward is needed.** The Job's pod is already inside the cluster, so the same script requests each matching pod's IP directly. In both modes, pods are found each time collection runs, so the chart renders the same spec whether it's installed with `helm install` or rendered by a GitOps tool such as ArgoCD.
 
 **If you're on a raw-manifest or custom deployment**, the `selector` you already set to locate your router is also what picks the pods to scrape. The same applies on the official chart if your router's `app.kubernetes.io/name` label isn't `router`, for example with `router.nameOverride` set. If no pods match, the bundle says so and names the selector it used, so you know to set `selector`. If your exporter listens on a port other than `9090`, also set `metricsPort`. Under `mode: local`, the collector always targets `localhost:<metricsPort>` (default `9090`) once a pod is bridged.
 

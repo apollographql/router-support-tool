@@ -73,3 +73,7 @@ The reasoning:
 ## Storage
 
 Only customer-provided object storage (`specs/storage/object_storage.md`) is in scope, and only for `mode: job`. `mode: local` needs nothing from this tool to reach object storage: the bundle already lands as a plain file the customer holds and they can push it wherever they like with their own tooling.
+
+## GitOps tools (ArgoCD)
+
+The chart renders the same spec under `helm template` as under `helm install`. A GitOps tool such as ArgoCD therefore applies the same spec. **How `mode: job`'s Job behaves once a GitOps tool owns it is not specified or tested.** In particular, a Job that is deleted, for example by `ttlSecondsAfterFinished`, can be recreated and collect again, and a changed Job template can fail to sync. See `specs/deployment/on-demand-collection.md` → Invocation for `mode: job`.
