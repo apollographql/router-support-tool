@@ -48,6 +48,12 @@ This is different from `mode: job`'s layout, where each pod gets its own top-lev
 
 A second file, `*-info.json`, is also written under `mode: local` and it's fully masked. troubleshoot.sh writes this diagnostic sidecar for every `hostCollectors.run` collector and it records the full exec invocation, including the process environment of the machine `collect.sh` ran on. Two things limit what ends up in your bundle: the chart sets `ignoreParentEnvs: true`, which narrows that captured environment down to just `PATH`/`KUBECONFIG`/`PWD` before the file is even written and a redactor masks the entire file's contents.
 
+### If the bundle says it "could not list pods"
+
+The router-metrics script runs with a minimal environment: of your shell’s variables, it keeps only KUBECONFIG. A kubeconfig that needs other environment variables to authenticate, for example an auth plugin that reads credentials from `AWS_PROFILE`, cannot authenticate there. The script then writes `metrics not collected: could not list pods matching selector …` and saves kubectl’s error in `router-metrics-stderr.txt` next to it.
+
+To get metrics, point `KUBECONFIG` at a kubeconfig whose credentials don't depend on other environment variables, then run the collection script again.
+
 ## Running a service mesh?
 
 Neither `mode: local` (your own machine) nor an un-injected `mode: job` Job pod is inside the mesh. `logs`, `clusterResources`, `nodeMetrics`, and `configMap` all reach their data through the Kubernetes API server or the kubelet, which the mesh doesn't sit in front of, so running outside it doesn't affect them. The Prometheus scrape is the one collector that talks directly to a router port and a mesh enforcing strict mTLS will reject it from a pod outside the mesh.

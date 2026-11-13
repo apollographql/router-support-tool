@@ -1,0 +1,20 @@
+Fix local mode metrics for users on the default kubeconfig
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# Date:      Fri Nov 13 16:37:10 2026 -0500
+#
+# On branch fix/local-metrics-kubeconfig
+# Your branch is ahead of 'origin/main' by 1 commit.
+#   (use "git push" to publish your local commits)
+#
+# Changes to be committed:
+#	new file:   .changeset/pass-default-kubeconfig-to-metrics-collector.md
+#	modified:   docs/collecting-metrics.mdx
+#	modified:   mise-tasks/test-collect-script
+#	modified:   router-diagnostics-collect/collect.ps1
+#	modified:   router-diagnostics-collect/collect.sh
+#	modified:   specs/collection/base_spec.md
+#	modified:   specs/deployment/on-demand-collection.md
+#
