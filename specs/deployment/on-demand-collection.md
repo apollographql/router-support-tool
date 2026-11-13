@@ -92,12 +92,18 @@ chmod +x collect.sh
 Invoke-WebRequest -Uri https://router.apollo.dev/router-diagnostics-collect-ps1/latest -OutFile collect.ps1
 ```
 
-Both scripts **cache a pinned `support-bundle` binary locally** (in `~/.router-diagnostics/bin`
-on Unix, `%USERPROFILE%\.router-diagnostics\bin` on Windows, or the path in
-`ROUTER_DIAGNOSTICS_CACHE_DIR`), keyed by version so a pin bump downloads a fresh binary rather
-than reusing a stale one — **Apollo controls this version** — then run it non-interactively
-(`--interactive=false`), see [Permissions for `mode: local`](#permissions-for-mode-local) for
-why, against the cluster's discoverable specs.
+Both scripts:
+
+1. Cache a pinned `support-bundle` binary locally (in `~/.router-diagnostics/bin` on Unix,
+   `%USERPROFILE%\.router-diagnostics\bin` on Windows, or the path in
+   `ROUTER_DIAGNOSTICS_CACHE_DIR`), keyed by version so a pin bump downloads a fresh binary
+   rather than reusing a stale one. **Apollo controls this version.**
+2. Set `KUBECONFIG` to the default kubeconfig when the user hasn't. `router-metrics` runs with
+   `ignoreParentEnvs: true`, which drops `HOME`, so `kubectl` can't find `~/.kube/config` on its
+   own there. A `KUBECONFIG` the user already set is left alone.
+3. Run `support-bundle` against the cluster's discoverable specs, non-interactively
+   (`--interactive=false`. See [Permissions for `mode: local`](#permissions-for-mode-local)
+   for why).
 
 **Reaching the router's metrics port is handled by the spec itself** The
 router's metrics port is only reachable through in-cluster pod IPs, which don't resolve from the

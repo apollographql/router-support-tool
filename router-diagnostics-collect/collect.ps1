@@ -65,5 +65,15 @@ if (-not (Test-Path $Bin)) {
     }
 }
 
+# The spec's router-metrics script runs with a stripped environment that keeps KUBECONFIG but
+# drops the user profile. Thus, a `kubectl` that finds its default kubeconfig through it would have
+# none. Point KUBECONFIG at the default one when the user hasn't set it.
+if (-not $env:KUBECONFIG) {
+    $DefaultKubeconfig = Join-Path $env:USERPROFILE '.kube\config'
+    if (Test-Path $DefaultKubeconfig) {
+        $env:KUBECONFIG = $DefaultKubeconfig
+    }
+}
+
 & $Bin --load-cluster-specs --namespace $Namespace --auto-update=false --interactive=false
 exit $LASTEXITCODE
