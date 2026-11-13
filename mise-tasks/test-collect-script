@@ -3,16 +3,7 @@
 #
 # collect.sh never invokes a bare `support-bundle` command - it always calls its own cached
 # binary by full path ("$BIN" ..., keyed by SUPPORT_BUNDLE_VERSION). This test proves this,
-# with no real cluster or network call involved. Steps:
-#
-#   1. Read the pinned troubleshoot.sh version straight out of collect.sh itself.
-#   2. Set up two fake binaries: one "correct" support-bundle, pre-placed exactly where
-#      collect.sh's own cache lookup expects it and one "old" support-bundle, placed on PATH
-#      instead, standing in for whatever a customer might already have installed locally.
-#      Each just writes its own marker file when run, so we can tell which one fired.
-#   3. Stub kubectl too, so collect.sh can run start-to-finish with no real cluster.
-#   4. Run collect.sh for real, pointed at our fake cache dir and with the fake PATH first.
-#   5. Check the marker files: the "correct" one must exist, the "old" one must not.
+# with no real cluster or network call involved.
 set -euo pipefail
 
 # --- Step 1: read the pinned version ---------------------------------------------------
@@ -40,6 +31,7 @@ REAL_BIN="$CACHE_DIR/bin/support-bundle-v${PINNED_VERSION}"
 cat > "$REAL_BIN" <<EOF
 #!/bin/sh
 touch "$WORKDIR/real-binary-invoked"
+printf '%s' "\${KUBECONFIG-unset}" > "$WORKDIR/kubeconfig-seen"
 exit 0
 EOF
 chmod +x "$REAL_BIN"
@@ -104,3 +96,41 @@ if [ "$FAILED" -ne 0 ]; then
 fi
 
 echo "collect.sh correctly used its own cached support-bundle v${PINNED_VERSION}, ignoring PATH"
+
+# --- Step 6: check the KUBECONFIG collect.sh passes to support-bundle ---------------------
+
+# The router-metrics script runs without HOME so `kubectl` can only find a kubeconfig through
+# KUBECONFIG. If the user hasn't set it, collect.sh must set it to ~/.kube/config.
+# This step runs collect.sh twice, once with KUBECONFIG unset and once with it set, and reads
+# back the KUBECONFIG the stub support-bundle was started with.
+kubeconfig_seen() {
+  rm -f "$WORKDIR/kubeconfig-seen"
+  env "$@" "$SCRIPT" --namespace test-ns >/dev/null
+  cat "$WORKDIR/kubeconfig-seen"
+}
+
+FAKE_HOME="$WORKDIR/home"
+mkdir -p "$FAKE_HOME/.kube"
+: > "$FAKE_HOME/.kube/config"
+# The runner's own KUBECONFIG must not leak into the "unset" case.
+unset KUBECONFIG
+
+# Case 1: KUBECONFIG unset, default kubeconfig exists -> collect.sh sets it to that file.
+SEEN=$(kubeconfig_seen HOME="$FAKE_HOME")
+if [ "$SEEN" != "$FAKE_HOME/.kube/config" ]; then
+  echo "KUBECONFIG unset with a default kubeconfig: expected $FAKE_HOME/.kube/config, got '$SEEN'" >&2
+  FAILED=1
+fi
+
+# Case 2: KUBECONFIG already set by the user -> collect.sh leaves it alone.
+SEEN=$(kubeconfig_seen HOME="$FAKE_HOME" KUBECONFIG=/custom/kubeconfig)
+if [ "$SEEN" != "/custom/kubeconfig" ]; then
+  echo "A KUBECONFIG the user set must be left alone: expected /custom/kubeconfig, got '$SEEN'" >&2
+  FAILED=1
+fi
+
+if [ "$FAILED" -ne 0 ]; then
+  exit 1
+fi
+
+echo "collect.sh sets KUBECONFIG to the default kubeconfig only when the user hasn't"

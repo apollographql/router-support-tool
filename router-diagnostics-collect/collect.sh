@@ -82,4 +82,12 @@ if [ ! -x "$BIN" ]; then
   echo "router-diagnostics: cached support-bundle v${SUPPORT_BUNDLE_VERSION}" >&2
 fi
 
+# The spec's router-metrics script runs with a stripped environment that keeps KUBECONFIG but
+# drops HOME. Thus, a `kubectl` that finds ~/.kube/config through HOME would have no kubeconfig.
+# Point KUBECONFIG at the default one when the user hasn't set it.
+if [ -z "${KUBECONFIG:-}" ] && [ -f "$HOME/.kube/config" ]; then
+  KUBECONFIG="$HOME/.kube/config"
+  export KUBECONFIG
+fi
+
 "$BIN" --load-cluster-specs --namespace "$NAMESPACE" --auto-update=false --interactive=false
