@@ -55,7 +55,7 @@ By default the chart creates the Job's ServiceAccount along with a Role, RoleBin
   --set job.serviceAccount.name=my-router-diagnostics
 ```
 
-The ServiceAccount must already exist in the namespace you install into, and it must hold the read grants collection needs. The chart then creates no RBAC. Installing the chart needs permissions to create the Job and the spec ConfigMap. `job.serviceAccount.annotations` can't be combined with `create: false`. Put any IRSA or Workload Identity annotations on your own ServiceAccount. For the full list of grants, go to [Job Mode Details → Running under your own ServiceAccount](/router-support-tool/job-mode-details#running-under-your-own-serviceaccount).
+The ServiceAccount must already exist in the namespace you install into, and it must hold the read grants collection needs. The chart then creates no RBAC. Installing the chart needs permissions to create the Job and the spec ConfigMap. `job.serviceAccount.annotations` can't be combined with `create: false`. Put any IRSA or Workload Identity annotations on your own ServiceAccount. For the full list of grants, see [Job Mode Details → Run the support tool under your own ServiceAccount](/router-support-tool/job-mode-details#run-the-support-tool-under-your-own-serviceaccount).
 
 ## Choosing a storage destination
 
