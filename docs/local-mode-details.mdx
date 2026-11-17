@@ -13,7 +13,7 @@ This page is the complete reference for `mode: local`. For the shortest path to 
 
 Collection for `mode: local` runs through a standalone script, available for macOS, Linux, and Windows.
 
-macOS / Linux (requires `kubectl` and `curl`):
+Run the following command on macOS / Linux (requires `kubectl`):
 
 ```bash
 curl -sSLo collect.sh https://router.apollo.dev/router-diagnostics-collect/latest
@@ -26,7 +26,7 @@ Windows (run in PowerShell, requires `kubectl`):
 Invoke-WebRequest -Uri https://router.apollo.dev/router-diagnostics-collect-ps1/latest -OutFile collect.ps1
 ```
 
-This command provides a `./collect.sh` (or `.\collect.ps1` on Windows) script, which caches a pinned `support-bundle` binary locally — in `~/.router-diagnostics/bin` on Unix, `%USERPROFILE%\.router-diagnostics\bin` on Windows, or the path in `ROUTER_DIAGNOSTICS_CACHE_DIR` — keyed by version so a version update downloads a fresh binary instead of using an outdated one. Apollo sets this version, the same way `mode: job`'s image tag does.
+This command provides a `./collect.sh` (or `.\collect.ps1` on Windows) script, which caches a pinned `support-bundle` binary locally — in `~/.router-diagnostics/bin` on Unix, `%USERPROFILE%\.router-diagnostics\bin` on Windows, or the path in `ROUTER_DIAGNOSTICS_CACHE_DIR` — keyed by version so a version update downloads a fresh binary instead of using an outdated one. Apollo sets this version, the same way job mode's image tag does.
 
 **`--namespace` (Unix) / `-Namespace` (Windows) is a plain, required flag**. It must match wherever you actually installed the chart: both the `helm install --namespace` value and the chart's own `--set namespace=<router_namespace>` value (typically the same namespace in practice). The script uses it directly for its `kubectl` calls and for `support-bundle --load-cluster-specs --namespace`, which is what discovers the rendered spec ConfigMap.
 
@@ -38,7 +38,7 @@ This command provides a `./collect.sh` (or `.\collect.ps1` on Windows) script, w
 
 Installing the chart requires permission to create a ConfigMap in the target namespace, which is the same level of access needed to install the router itself.
 
-Running `./collect.sh` (or `.\collect.ps1`) uses **your own existing kubectl credentials**; no additional ServiceAccount is created for this step. Reaching the metrics collector additionally needs `create` on the `pods/portforward` subresource in the router's namespace. For more information, see [Collecting Metrics](/router-support-tool/collecting-metrics#mode-local). Declining this doesn't fail collection; it only means that section comes back empty.
+Run `./collect.sh` (or `.\collect.ps1`) to use your own existing kubectl credentials. This step creates no additional ServiceAccount. Reaching the metrics collector additionally needs `create` on the `pods/portforward` subresource in the router's namespace. For more information, see [Collecting Metrics](/router-support-tool/collecting-metrics#mode-local). Declining this doesn't fail collection. It only means that section comes back empty.
 
 **`pods/exec` isn't required**: nothing this tool does runs inside your router container.
 
@@ -46,7 +46,7 @@ Running `./collect.sh` (or `.\collect.ps1`) uses **your own existing kubectl cre
 
 ## Cluster footprint
 
-Spec `ConfigMap` plus Helm release metadata is left behind after install. After installation, run subsequent collections with `./collect.sh --namespace <namespace>` (or `.\collect.ps1 -Namespace <namespace>` on Windows) again, with no reinstall needed. If you'd rather leave nothing behind:
+Installation leaves behind the spec `ConfigMap` and Helm release metadata. To collect again, run `./collect.sh --namespace <namespace>` (or `.\collect.ps1 -Namespace <namespace>` on Windows). You don't need to reinstall. If you'd rather leave nothing behind, uninstall the release:
 
 ```bash
 helm uninstall router-diagnostics --namespace <namespace>
