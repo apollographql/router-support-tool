@@ -62,6 +62,8 @@ Notes:
 
 - Under `mode: local`, `node-metrics/<node-name>.json` is written for every node in the cluster and each file lists every pod on that node. `nodeMetrics` accepts only node names and node labels so the router's `selector` and `namespace` don't narrow it. Other workloads' pod names, namespaces and container CPU and memory figures are therefore in the bundle.
 
+- Under `mode: local`, if a per-node request fails (for example without `nodes/proxy`), `execution-data/summary.txt` marks `node-metrics` failed and `collector-errors/node-metrics-error.json` names the endpoint. The docs and tests don't rely on its error text. If the `nodes` list is refused, the collector succeeds with no output and leaves no record. Neither case fails the run.
+
 - `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace (schema is found here). `configmaps/production/<configmap-name>.json` is the dedicated `configMap` collector's own output, one file per matched ConfigMap.
 
 ## `router-metrics` layout
