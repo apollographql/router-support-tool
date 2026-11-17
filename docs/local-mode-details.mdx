@@ -40,6 +40,20 @@ Installing the chart requires permission to create a ConfigMap in the target nam
 
 Run `./collect.sh` (or `.\collect.ps1`) to use your own existing `kubectl` credentials. This step creates no additional `ServiceAccount`. To reach the metrics collector, you also need `create` on the `pods/portforward` subresource in the router's namespace. For more information, see [Collecting Metrics](/router-support-tool/collecting-metrics#mode-local). Declining this doesn't fail collection: no metrics are collected, and each pod's line in the bundle includes the port-forward error from `kubectl`.
 
+Container memory and CPU usage come from the kubelet through the API server's proxy, using your own credentials, because your machine can't reach node addresses directly. Ensure your user has these grants:
+
+- `nodes` (list)
+- `nodes/proxy` (get)
+
+`nodes/proxy` is a broad grant: Kubernetes' own RBAC good-practices documentation states it "provides access to privileged kubelet APIs that can retrieve container logs or execute and attach to pod processes... bypasses audit logging and admission control," and is explicitly "not a read-only permission." What this tool does with it is read-only, but the grant itself authorizes more than that one use, and it can't be scoped to only the router's nodes. `node-metrics/<node-name>.json` lists every pod on every node in the cluster, not only the router's.
+
+If you don't have these grants, collection still completes, but there is no `node-metrics/` directory. What the bundle records depends on which grant is missing:
+
+- A request to a node fails, for example because `nodes/proxy` is missing: `execution-data/summary.txt` marks `node-metrics` as failed, and `collector-errors/node-metrics-error.json` names the endpoint that failed.
+- `nodes` (list) is missing: the collector reports success with no output, and the bundle has no record of it.
+
+Check your grants with `kubectl auth can-i get nodes/proxy` and `kubectl auth can-i list nodes`.
+
 **`pods/exec` isn't required**: nothing this tool does runs inside your router container.
 
 <ConfirmingRBAC />
