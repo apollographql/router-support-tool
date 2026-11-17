@@ -111,7 +111,7 @@ What the base spec collects is sufficient to **detect, confirm, and characterize
 
 **\[1\]** The Summary API reports per node, per pod, and per container. This assumes one router process per container.
 
-**\[2\]** Container memory and CPU come from the kubelet, never from inside the router container. `mode: job` needs the `nodes/stats` grant. `mode: local` uses `nodeMetrics` through the API server's proxy which needs `nodes` and `nodes/proxy` on the invoking user's credentials. `nodeMetrics` can't be narrowed to the router: it writes every pod on every node in the cluster to `node-metrics/<node-name>.json`. Node pressure conditions (`clusterResources`) also need `nodes` (list). See [Kubelet stats collection](#kubelet-stats-collection-mode-job).
+**\[2\]** Container memory and CPU come from the kubelet, never from inside the router container. `mode: job` needs the `nodes/stats` grant. `mode: local` uses `nodeMetrics` through the API server's proxy which needs `nodes` and `nodes/proxy` on the invoking user's credentials. `nodeMetrics` can't be narrowed to the router: it writes every pod on every node in the cluster to `node-metrics/<node-name>.json`. Node pressure conditions (`clusterResources`) also need `nodes` (list). What a refused `mode: local` request leaves in the bundle is in `specs/collection/output.md`. See [Kubelet stats collection](#kubelet-stats-collection-mode-job).
 
 #### Kubelet stats collection (`mode: job`)
 
@@ -133,7 +133,7 @@ A node the script can't read loses only the usage figures: `clusterResources` st
 | Declined at install | `kubelet stats not collected: declined at install (job.collectNodeMetrics is false)` | `job.collectNodeMetrics: false`. Not a failure. |
 | Pod has no node yet | `kubelet stats not collected for pod <pod-name>: pod has no node yet` | The pod is `Pending`. |
 | Kubelet unreachable | `kubelet stats not collected for node <node-name>: could not reach the kubelet at <hostIP>:10250` | The network path (NetworkPolicy, firewall, port), not RBAC. |
-| Kubelet refused | `kubelet stats not collected for node <node-name>: kubelet returned HTTP <code>` | `401`/`403`: missing `nodes/stats`. |
+| Kubelet refused | `kubelet stats not collected for node <node-name>: kubelet returned HTTP <code>` | The kubelet refused the request. `nodes/stats` is the grant to check first. |
 | Response unreadable | `kubelet stats not collected for node <node-name>: the kubelet's response could not be read` | A `200` that isn't Summary API JSON. |
 | Pod missing from node's stats | `kubelet stats not collected for pod <pod-name>: not in node <node-name>'s stats` | Replaced or deleted between listing and reading. |
 
