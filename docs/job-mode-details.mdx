@@ -139,7 +139,7 @@ rules:
 
 ## Kubelet stats and missing data
 
-Container memory and CPU usage are read from each router node's kubelet. If any of it can't be collected, the Job writes a line for each case, saying why, to `host-collectors/run-host/router-resource-usage.txt`, instead of leaving the section silently empty. The file is empty when everything was collected. A node the Job can't read loses only the usage figures: `cluster-resources` still provides limits and requests, OOM kills, and restart counts.
+The Job reads container memory and CPU usage from each router node's kubelet. If any of it can't be collected, the Job writes a line for each case, saying why, to `host-collectors/run-host/router-resource-usage.txt`, instead of leaving the section silently empty. The file is empty when everything was collected. A node the Job can't read loses only the usage figures: `cluster-resources` still provides limits and requests, OOM kills, and restart counts.
 
 | Line written | What it means |
 | --- | --- |
@@ -220,7 +220,7 @@ support-bundle-2026-08-11T14_23_00/
       ├── <configmap-1-name>.json
       └── <configmap-2-name>.json
   ```
-- **`host-collectors/run-host/router-resource-usage/nodes/<node-name>.json`** — one file for each node that runs a router pod, holding that node's figures and the kubelet's per-container memory and CPU usage for the router's pods only. No other workload's pods are included. The files contain pod names, namespaces, and container CPU and memory usage, but no logs, configuration, or secrets. A node with no file wasn't read, and `host-collectors/run-host/router-resource-usage.txt` says why. See [Kubelet stats and missing data](#kubelet-stats-and-missing-data).
+- **`host-collectors/run-host/router-resource-usage/nodes/<node-name>.json`** — one file for each node that runs a router pod, holding that node's figures and the kubelet's per-container memory and CPU usage for the router's pods only. No other workload's pods are included. The files contain pod names, namespaces, and container CPU and memory usage, but no logs, configuration, or secrets. If a node has no file, it wasn't read, and `host-collectors/run-host/router-resource-usage.txt` says why. See [Kubelet stats and missing data](#kubelet-stats-and-missing-data).
 - `cluster-resources/configmaps/production.json` is `clusterResources`'s full, unfiltered sweep of every ConfigMap in the namespace. `configmaps/production/<configmap-name>.json` is the dedicated `configMap` collector's own output.
 
 <Note>
