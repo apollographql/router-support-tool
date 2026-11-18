@@ -2,7 +2,7 @@
 
 **One release, one version, published everywhere** — One GitHub Release, tagged `X.Y.Z`,
 publishes every artifact under that same version. The release version is the single number
-that identifies "what a customer gets" across the image, the chart, and the collect script. See
+that identifies "what a customer gets" across the image, the chart, and the collect scripts. See
 `specs/artifact-distribution.md` for what each artifact is and where it's published.
 
 **Cutting a release means choosing the troubleshoot.sh version it pins.** The pinned
@@ -28,7 +28,7 @@ commit and overwrites the GitHub Release's notes with it.
    image and publishes it internally, keyed by commit SHA — that internal build is what gets
    republished to Docker Hub later, so it must have already succeeded for this commit.
 2. **Confirm the troubleshoot.sh pin.** The Renovate-driven lock-step PR (Dockerfile ARG,
-   `router-diagnostics-collect/collect.sh`'s own pin, chart's `troubleshoot_version`) should
+   `router-diagnostics-collect/collect.sh`'s and `collect.ps1`'s own pins, chart's `troubleshoot_version`) should
    already be merged and tested.
 3. **Choose the release version** (`X.Y.Z`, no leading `v`) — ordinary semver judgment about
    what changed.
@@ -46,13 +46,16 @@ commit and overwrites the GitHub Release's notes with it.
      `docker.io/apollograph/router-diagnostics`, tagged `X.Y.Z`.
    - `publish_helm_chart` — packages the chart from the tagged commit and publishes it to
      `oci://registry-1.docker.io/apollograph/router-diagnostics-chart`.
-   - `attach_collect_script` — uploads `router-diagnostics-collect/collect.sh` from the tagged
-     commit as a downloadable Release asset.
+   - `attach_collect_scripts` — uploads `router-diagnostics-collect/collect.sh` and
+     `collect.ps1` from the tagged commit as downloadable Release assets.
 
 7. **Verify the actual published artifacts** — `docker pull` the image,
    `helm show chart oci://registry-1.docker.io/apollograph/router-diagnostics-chart
-   --version X.Y.Z`, and download the script through the customer-facing Orbiter URL.
-   Confirm each reports the version expected. Also confirm an *unpinned* `helm show chart
+   --version X.Y.Z`, and check both collect scripts: confirm `collect.sh` and `collect.ps1` are
+   attached to the GitHub Release, then download each through its customer-facing Orbiter URL
+   (`router-diagnostics-collect/latest` for `collect.sh`, `router-diagnostics-collect-ps1/latest`
+   for `collect.ps1`) and confirm it matches the Release asset. Compare checksums and confirm each pins the expected `support-bundle`
+   version. Confirm the image and chart report the version expected. Also confirm an *unpinned* `helm show chart
    oci://registry-1.docker.io/apollograph/router-diagnostics-chart` (no `--version` at all)
    resolves to this release — if it fails with "unable to locate any tags," some published tag
    in the repository isn't valid semver (see the warning above).
