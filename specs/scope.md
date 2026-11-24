@@ -15,7 +15,7 @@ Detail lives with the layer it belongs to:
 | Chart, tiers, RBAC, execution location | `specs/deployment/on-demand-collection.md` |
 | Customer-facing flows | `specs/user_experience.md`|
 | Storage | `specs/storage/object_storage.md` |
-| Apollo Operator specifics | Coming soon |
+| Apollo Operator | `specs/deployment/operator.md` |
 
 ---
 
