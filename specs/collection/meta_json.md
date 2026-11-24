@@ -22,9 +22,11 @@ We generate this content **before** collection runs. The consequence is the cent
 | Field | Source | Why it matters |
 | --- | --- | --- |
 | `version` | `.Chart.Version` | Which release of router-support-tool rendered this spec — the same `X.Y.Z` published across the image, chart, and collect script. |
-| `mode` | Chart value | `local` or `job`. Establishes where collection ran |
+| `mode` | Chart value | `local`, `job` or `operator`. Establishes how collection was run: from the customer's machine, as a Job from the customer's `helm install`, or as a Job created by the Apollo Operator (`specs/deployment/operator.md`) |
 | `namespace` | Chart value | The namespace collection was scoped to |
-| `sidecar_injection_disabled` | Chart, `mode: job` only | Records that the Job ran outside the mesh.|
+| `sidecar_injection_disabled` | Chart, `mode: job` and `mode: operator` only | Records that the Job ran outside the mesh.|
+| `supergraph` | Chart value, `mode: operator` only | The name of the `Supergraph` the Operator collected |
+| `metrics_enabled` | Chart value, `mode: operator` only | Whether the `Supergraph` configures a metrics port. |
 | `troubleshoot_version` | Spec | The pinned version from `specs/deployment/on-demand-collection.md` → troubleshoot.sh support-bundle version. Compared against `version.yaml` by whoever reads the bundle. |
 
 ### Multiple router releases in one namespace
@@ -45,4 +47,4 @@ Every field this file actually specifies, for a `mode: job` install:
 }
 ```
 
-A `mode: local` install omits `sidecar_injection_disabled` (it only applies to the Job path).
+A `mode: local` install omits `sidecar_injection_disabled` (it only applies to the Job path). A `mode: operator` bundle also has `supergraph` and `metrics_enabled`.

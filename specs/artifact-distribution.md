@@ -8,7 +8,7 @@ cut a release, see `specs/release-process.md`.
 ## The Job image
 
 **Source:** `router-diagnostics-job-image/` (Dockerfile bundling `support-bundle`, `aws-cli`,
-`gcloud`, `curl`).
+`gcloud`, `curl`, and, for the Apollo Operator, `helm`, a copy of `router-diagnostics-chart` and a render-and-collect script).
 
 **Internal build:** the `build_job_image` job in `.github/workflows/run-rtf-test-plan.yaml`, on
 every PR and every push to `main`, unconditionally.
