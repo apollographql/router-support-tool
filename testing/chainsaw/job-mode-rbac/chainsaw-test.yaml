@@ -27,11 +27,19 @@ spec:
               - name: SECOND_NAMESPACE
                 value: (join('-', [$namespace, 'second']))
         - assert:
+            # Fails if any ClusterRole rule is added, removed or changed.
             resource:
               apiVersion: rbac.authorization.k8s.io/v1
               kind: ClusterRole
               metadata:
                 name: (join('-', ['router-diagnostics', $namespace, 'nodemetrics']))
+              rules:
+                - apiGroups: [""]
+                  resources: ["nodes"]
+                  verbs: ["list"]
+                - apiGroups: [""]
+                  resources: ["nodes/stats"]
+                  verbs: ["get"]
         - assert:
             resource:
               apiVersion: rbac.authorization.k8s.io/v1
@@ -60,3 +68,48 @@ spec:
                 value: ($namespace)
               - name: SECOND_NAMESPACE
                 value: (join('-', [$namespace, 'second']))
+    - try:
+        - script:
+            # job.collectNodeMetrics=false is how a customer declines the cluster-scoped
+            # grants. In this case the chart must not render ClusterRole or ClusterRoleBinding.
+            timeout: 60s
+            content: |
+              kubectl create namespace "$DECLINED_NAMESPACE"
+
+              mise exec "helm@$HELM_VERSION" -- helm install router-diagnostics-declined ../../../router-diagnostics-chart \
+                -n "$DECLINED_NAMESPACE" --set namespace="$DECLINED_NAMESPACE" --set mode=job \
+                --set job.collectNodeMetrics=false \
+                --set job.image.repository=ci-placeholder --set job.image.tag=v0.0.0 \
+                --set job.storage.provider=s3 --set job.storage.bucket=ci-test
+            env:
+              - name: DECLINED_NAMESPACE
+                value: (join('-', [$namespace, 'declined']))
+        - assert:
+            # The Role is always created so this proves the install succeeded.
+            resource:
+              apiVersion: rbac.authorization.k8s.io/v1
+              kind: Role
+              metadata:
+                name: router-diagnostics-job
+                namespace: (join('-', [$namespace, 'declined']))
+        - error:
+            resource:
+              apiVersion: rbac.authorization.k8s.io/v1
+              kind: ClusterRole
+              metadata:
+                name: (join('-', ['router-diagnostics', $namespace, 'declined', 'nodemetrics']))
+        - error:
+            resource:
+              apiVersion: rbac.authorization.k8s.io/v1
+              kind: ClusterRoleBinding
+              metadata:
+                name: (join('-', ['router-diagnostics', $namespace, 'declined', 'nodemetrics']))
+      finally:
+        - script:
+            timeout: 60s
+            content: |
+              mise exec "helm@$HELM_VERSION" -- helm uninstall router-diagnostics-declined -n "$DECLINED_NAMESPACE" || true
+              kubectl delete namespace "$DECLINED_NAMESPACE" --ignore-not-found
+            env:
+              - name: DECLINED_NAMESPACE
+                value: (join('-', [$namespace, 'declined']))
