@@ -6,6 +6,8 @@ This is the trigger-layer spec for flare (on-demand) trigger. This is distinct f
 
 **Exactly one thing: a human decides to run it.** There is no schedule, no threshold, no watched metric, and no event of any kind that starts a collection on its own. Every invocation documented in `specs/user_experience.md` → On-demand (flare-style) collection reduces to the same underlying act: **a human deciding, at a moment of their own choosing, that collection should happen now** — whether by running `kubectl support-bundle --load-cluster-specs` directly, or by installing a chart that runs it on their behalf immediately upon install (`mode: job` — see `specs/deployment/on-demand-collection.md` for how that delegation works). What's constant across every tier is that a human, not a clock or a watched condition determines the timing.
 
+For routers managed by the Apollo Operator, a support bundle collection is triggered by the creation of a `RouterDiagnostics` resource. Each resource is one collection. See `specs/deployment/operator.md` → Collecting a support bundle for more details.
+
 ## What on-demand entails
 
 - **No schedule.** No CronJob, no periodic collection, no "every N hours" cadence. A collection happens exactly as many times as a human runs the command.

@@ -13,7 +13,7 @@ The tool deploys on-demand (flare-style) support bundle collection for Kubernete
 
 ## Collection modes
 
-Every non-Operator deployment runs collection in one of two modes, set via the chart's `mode` value.
+Every non-Operator deployment runs collection in one of two modes, set via the chart's `mode` value. Operator-managed routers are collected through the Operator which runs the same Job as `mode: job` (`specs/deployment/operator.md`).
 
 - **`mode: local`** — you run the collection yourself, with your own kubectl access. See [`mode: local`](#mode-local).
 - **`mode: job`** — a Kubernetes Job runs the collection in-cluster, for teams whose kubectl access to production is restricted and who need a platform team to run it on their behalf. See [`mode: job`](#mode-job).
@@ -59,7 +59,7 @@ data:
 | Value | Required | Default | Applies to | Purpose |
 | --- | --- | --- | --- | --- |
 | `namespace` | Yes | — | Official chart, raw manifest / custom | The router's namespace. Rendered into every collector that accepts it, including `clusterResources.namespaces` as a single-element list. Never rely on the kubectl context fallback. |
-| `mode` | Yes | — | Official chart, raw manifest / custom | `local` or `job` |
+| `mode` | Yes | — | Official chart, raw manifest / custom | `local` or `job`. The Apollo Operator sets `operator` when it renders the chart inside its Job (`specs/deployment/operator.md`). Customers do not set it |
 | `selector` | Raw-manifest tier only | The official chart's `app.kubernetes.io/name=router` label | Raw manifests / custom | Pod label selector, e.g. `app=my-router`. Also selects which pods `router-metrics` scrapes and is resolved each time collection runs. Set it on the official chart too if the router's `app.kubernetes.io/name` label isn't `router` (for example, with `router.nameOverride` or an aliased install). See `specs/collection/base_spec.md` → Per-pod metrics collection |
 | `configMapName` | Raw-manifest tier only | Label-based targeting, no name needed | Raw manifests / custom | Name of the ConfigMap holding the router config |
 | `metricsPort` | No | `9090` | Official chart, raw manifest / custom | Port the router's metrics endpoint is reachable on, if not `9090`. |
@@ -197,6 +197,8 @@ The image also needs `aws-cli` and `gcloud` bundled alongside the support-bundle
 The image also bundles `kubectl` and `curl`, which the `router-metrics` script uses to list router pods and scrape each one when collection runs (`specs/collection/base_spec.md` → Per-pod metrics collection).
 
 The `router-resource-usage` script (`specs/collection/base_spec.md` → Kubelet stats collection) is written in Python and needs only `python3`, not `kubectl` or `curl`. `python3` must be installed explicitly and pinned like the image's other packages, not left to arrive as a dependency of `aws-cli`.
+
+The image also bundles the `helm` binary, a copy of `router-diagnostics-chart` and a script that renders the chart, collects and uploads. Only the Apollo Operator uses them (see `specs/deployment/operator.md`).
 
 ### Chart values specific to `mode: job`
 
